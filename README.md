@@ -29,7 +29,7 @@ sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
 Server = https://github.com/josemiguelo/t2-arch-packages/releases/download/repo
 ```
 
-Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-fan-control t2bce-audio-ucm t2-dkms-guard linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
+Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-bluetooth-dkms t2-fan-control t2bce-audio-ucm t2-dkms-guard t2-arch-packages-keyring linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
 `linux-t2` must not be installed on the same kernel: it has its own t2bce. See
 [Omarchy's `fix-t2.sh` on the `t2-kait2en` branch](#port-status) for the module,
 initramfs and kernel-argument setup.
