@@ -9,11 +9,14 @@
 # them to /usr. The daemon runs as `t2-fancontrol-gtk --daemon` and falls back
 # to built-in defaults (automatic control, 3-point curve) without a config at
 # /etc/t2-fancontrol/config.txt.
+#
+# The KaiT2en wordmark is removed from the GUI header (no-wordmark.patch):
+# KaiT2en's trademark terms do not allow its name or logo in redistributions.
 
 pkgname=t2-fan-control
 _ver=0.1.0
 pkgver=0.1.0.r24.27fd5c9
-pkgrel=3
+pkgrel=4
 pkgdesc="Fan control daemon and GTK app for Apple T2 Macs (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -23,10 +26,14 @@ makedepends=('git' 'cargo')
 # No conflicts=(t2fanrd): both can coexist on a dual-kernel system, since the
 # unit only starts where t2smc is loaded. Drop t2fanrd once linux-t2 is gone.
 backup=('etc/t2-fancontrol/config.txt')
-_repo="${KAIT2EN_REPO:-$HOME/Repos/gh/kaiT2en/KaiT2en-Fedora}"
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
 _commit=27fd5c963497556ffc9986779627a0d0f345fbe0
-source=("kait2en::git+file://${_repo}#commit=${_commit}")
-sha256sums=('SKIP')
+source=("kait2en::git+${_repo}#commit=${_commit}"
+        'no-wordmark.patch')
+sha256sums=('SKIP'
+            'SKIP')
 
 pkgver() {
   cd kait2en
@@ -36,8 +43,9 @@ pkgver() {
 }
 
 prepare() {
-  cd kait2en/apps/t2-fan-control
-  sed -i 's|/usr/local/share/kait2en/|/usr/share/kait2en/|g' src/main.rs
+  cd kait2en
+  patch -Np1 -i "$srcdir/no-wordmark.patch"
+  cd apps/t2-fan-control
   sed -i 's|/usr/local/bin/|/usr/bin/|g' org.t2fancontrol.gtk.desktop systemd/t2-fancontrol.service
   grep -rq '/usr/local' src org.t2fancontrol.gtk.desktop systemd &&
     { echo "unpatched /usr/local path left" >&2; return 1; }
@@ -78,9 +86,6 @@ any_sensor_temp_c=100
 curve_sensor_key=
 custom_curve=0:10,70:25,95:65
 EOF
-
-  # The GTK window aborts without the wordmark.
-  install -Dm644 website/static/img/kait2en-wordmark.png "$pkgdir/usr/share/kait2en/kait2en-wordmark.png"
 
   install -Dm644 "$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"

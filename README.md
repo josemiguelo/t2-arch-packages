@@ -1,11 +1,34 @@
 # t2-arch-packages
 
-Arch/Omarchy packages porting [KaiT2en-Fedora](https://github.com/kaiT2en/KaiT2en-Fedora)
-T2 MacBook support to a stock `linux-omarchy` kernel (no `linux-t2`).
+Arch/Omarchy packages of the T2 Mac drivers and tools from
+[KaiT2en-Fedora](https://github.com/kaiT2en/KaiT2en-Fedora), for a stock
+`linux-omarchy` kernel (no `linux-t2`). Tested on a MacBook Pro 16-inch 2019
+(MacBookPro16,1).
 
-Personal port. KaiT2en's trademark terms forbid its name on published forks, and
-its license requires keeping author attribution (see upstream `TRADEMARK.md`,
-`LICENSING.md`). Rename before publishing anything.
+This is an independent repackaging, not a KaiT2en project and not endorsed by
+it. All driver and app code is KaiT2en's: kernel modules under GPL-2.0, userspace
+under GPL-3.0-or-later with a section 7(b) author attribution term (André
+Eikmeyer; 4f1sh3r for the fan and SMC tools). Each package ships KaiT2en's
+`LICENSING.md` and `AUTHORS`. KaiT2en's name and logo are its trademarks; the
+logo is removed from `t2-fan-control` (`no-wordmark.patch`).
+
+## Use the repo
+
+```bash
+# Trust the signing key (fingerprint 077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F)
+curl -fsSL https://github.com/josemiguelo/t2-arch-packages/releases/download/repo/t2-arch-packages.asc |
+  sudo pacman-key --add -
+sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
+
+# /etc/pacman.conf
+[t2-arch-packages]
+Server = https://github.com/josemiguelo/t2-arch-packages/releases/download/repo
+```
+
+Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-fan-control t2bce-audio-ucm t2-dkms-guard`.
+`linux-t2` must not be installed on the same kernel: it has its own t2bce. See
+[Omarchy's `fix-t2.sh` on the `t2-kait2en` branch](#port-status) for the module,
+initramfs and kernel-argument setup.
 
 ## Packages
 
@@ -13,8 +36,8 @@ its license requires keeping author attribution (see upstream `TRADEMARK.md`,
 |---|---|---|
 | `t2bce-stack-dkms` | `modules/t2bce_*`, `t2-services/t2-ave/kernel/*` | **works on MacBookPro16,1**: keyboard/trackpad (incl. LUKS prompt), Touch Bar, audio device |
 | `t2bce-audio-ucm` | `modules/t2bce_audio-alsa-ucm-conf/ucm2` | builds; replaces arch-mact2's older `t2bce_audio-alsa-ucm-conf` |
-| `t2smc-dkms` | `modules/t2smc` | **works** (live-tested on `linux-t2`): 2 fans, 50 temps, charge control on `BAT0`, rtc2, watchdog. Compiles clean vs `linux-omarchy` 7.2.15; blacklists `applesmc` (fails `-EIO` on T2 with a stock kernel) |
-| `t2sbs-dkms` | `modules/t2sbs` | **works** (live-tested): capacity 98% (correct, `charge_now/charge_full`) vs stock `sbs` 78% (design-relative). Needs `sbshc` loaded; blacklists `sbs` |
+| `t2smc-dkms` | `modules/t2smc` | **works**: 2 fans, 50 temps, charge control on `BAT0`, rtc2, watchdog. Skips `applesmc` (fails `-EIO` on T2 with a stock kernel) on kernels that have `t2smc` |
+| `t2sbs-dkms` | `modules/t2sbs` | **works**: capacity 98% (correct, `charge_now/charge_full`) vs stock `sbs` 78% (design-relative). Skips `sbs` on kernels that have `t2sbs` |
 | `t2thunderbolt-dkms` | `modules/t2thunderbolt` | loads (4 PM ordering links on 2× Titan Ridge 4C); autoloads by NHI alias; no wake-time change on its own |
 | `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
 | `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers (tested: pass, fail, no-op) |
@@ -57,21 +80,31 @@ only where `t2smc`/`t2sbs` exist, `t2fanrd` limited to `*-t2` kernels by a
 drop-in, `t2smc?`/`t2sbs?` optional in mkinitcpio. Avoid
 `KERNEL_CMDLINE["linux-omarchy"]` in Limine: it replaces the default cmdline.
 
-## Build
+## Build and release
+
+Sources are pinned to a KaiT2en commit (`_commit` in each PKGBUILD) and fetched
+from GitHub; `KAIT2EN_GIT=file:///path/to/clone` builds from a local checkout.
 
 ```bash
-cd t2bce-stack-dkms
-makepkg -f            # KAIT2EN_REPO=<path> overrides the local KaiT2en clone
+KEY=077D8295CCF834D3F5EC25F70506B72C34EB162F
+for p in */; do (cd "$p" && PKGDEST=$PWD/../out makepkg -f --sign --key $KEY); done
+cd out && repo-add --sign --key $KEY --verify t2-arch-packages.db.tar.zst *.pkg.tar.zst
+# GitHub release assets cannot be symlinks
+for l in t2-arch-packages.{db,files}{,.sig}; do cp --remove-destination "$(readlink -f $l)" $l; done
+gh release upload repo --clobber *.pkg.tar.zst *.sig t2-arch-packages.{db,files}* t2-arch-packages.asc
 ```
 
-Sources are pinned to a KaiT2en commit (`_commit` in each PKGBUILD).
+## Port status
 
-## Port order
+Omarchy integration lives on the `t2-kait2en` branch of an Omarchy clone
+(`install/hardware/apple/fix-t2.sh`): these packages instead of `linux-t2`,
+`t2smc`/`t2sbs` in the initramfs, kernel arguments `pci=noaer pcie_ports=compat`
+without `pm_async=off`.
 
-1. `t2bce-stack-dkms` (keyboard, trackpad, audio transport)
-2. `t2touchbar`, `t2smc`, `t2sbs` + fan control (replaces `t2fanrd`)
-3. UCM + DSP profile `16_1`
-4. Suspend (drop `pm_async=off`)
-5. `t2gmux` + dGPU services, `t2bdrm` + Touch Bar app, trackpad actuator
-6. ACPI autofix (only if its log signatures appear)
-7. In-tree patch series (`patches/runtime/{wireless,gpu-runtime-pm}`)
+1. ✅ `t2bce-stack-dkms` (keyboard, trackpad, audio transport)
+2. ✅ `t2smc`, `t2sbs` + fan control (replaces `t2fanrd`)
+3. ✅ UCM · ⬜ DSP profile `16_1`
+4. ✅ Suspend: deep S3, ~1 s wake (`t2smp`, `t2thunderbolt`, kernel arguments)
+5. ⬜ `t2touchbar`, `t2gmux` + dGPU services, `t2bdrm` + Touch Bar app, trackpad actuator
+6. ⬜ ACPI autofix (only if its log signatures appear)
+7. ⬜ In-tree patch series (`patches/runtime/{wireless,gpu-runtime-pm}`)

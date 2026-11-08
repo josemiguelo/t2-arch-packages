@@ -20,9 +20,10 @@ depends=('alsa-ucm-conf')
 makedepends=('git')
 provides=('t2bce_audio-alsa-ucm-conf' 'apple-t2-audio-config')
 conflicts=('t2bce_audio-alsa-ucm-conf' 'apple-t2-audio-config' 'apple-t2-audio-config-alt')
-_repo="${KAIT2EN_REPO:-$HOME/Repos/gh/kaiT2en/KaiT2en-Fedora}"
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
 _commit=27fd5c963497556ffc9986779627a0d0f345fbe0
-source=("kait2en::git+file://${_repo}#commit=${_commit}")
+source=("kait2en::git+${_repo}#commit=${_commit}")
 sha256sums=('SKIP')
 
 pkgver() {
