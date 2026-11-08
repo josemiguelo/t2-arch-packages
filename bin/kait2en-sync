@@ -4,8 +4,10 @@
 #   kait2en-sync check     what changed upstream since each package's pinned
 #                          commit (exit 0: nothing for the packages, 10: updates)
 #   kait2en-sync kernel    build every published DKMS package against the newest
-#                          linux-omarchy-headers in the pacman sync db (exit 0:
+#                          linux-omarchy-headers of this machine's [omarchy] channel (exit 0:
 #                          all build, 1: some don't — fix before Omarchy ships it)
+#   kait2en-sync notify    for a timer: check, and kernel when [omarchy] has headers
+#                          it hasn't tested yet; desktop notifications to act on
 #   kait2en-sync apply [--yes]
 #                          for each package with upstream changes: pin the new
 #                          commit, build and sign it, build its DKMS modules
@@ -206,9 +208,31 @@ cmd_apply() {
   say "published: ${changed[*]} (KaiT2en ${UPSTREAM:0:7})"
 }
 
+# For a timer: check, and kernel when [omarchy] has headers not tested yet;
+# a desktop notification for anything to act on.
+cmd_notify() {
+  local out rc stamp=$WORK/kernel-tested headers
+  rc=0; out=$(cmd_check 2>&1) || rc=$?
+  if (( rc == 10 )); then
+    notify-send -a kait2en-sync "KaiT2en has updates for the T2 packages" \
+      "$(grep -E '^[^ ].* commits since' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | cut -d' ' -f1-2 | tr '\n' ' ')— kait2en-sync apply"
+  elif (( rc != 0 )); then
+    notify-send -a kait2en-sync -u critical "kait2en-sync check failed" "$(tail -3 <<<"$out")"
+  fi
+  headers=$(latest_headers 2>/dev/null) || return 0
+  [[ $(cat "$stamp" 2>/dev/null) == "${headers##*/}" ]] && return 0
+  if out=$(cmd_kernel 2>&1); then
+    echo "${headers##*/}" > "$stamp"
+  else
+    notify-send -a kait2en-sync -u critical "T2 modules don't build against ${headers##*/}" \
+      "$(grep -E 'FAILED|ABORTING' <<<"$out" | head -3) — t2-dkms-guard will hold that kernel back"
+  fi
+}
+
 case "${1:-check}" in
   check) cmd_check ;;
   kernel) cmd_kernel ;;
+  notify) cmd_notify ;;
   apply) shift; cmd_apply "${1:-}" ;;
   -h|--help|help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) fail "unknown command: $1 (check, kernel, apply)" ;;

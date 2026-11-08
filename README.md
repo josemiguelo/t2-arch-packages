@@ -98,6 +98,9 @@ drop-in, `t2smc?`/`t2sbs?` optional in mkinitcpio. Avoid
 - `kait2en-sync kernel`: builds every published DKMS package against the newest
   `linux-omarchy-headers` of this machine's `[omarchy]` channel, ahead of
   Omarchy shipping that kernel. Exit 1 when one doesn't build.
+- `kait2en-sync notify`: for a timer: `check`, and `kernel` only when
+  `[omarchy]` has headers it hasn't tested yet; desktop notifications for
+  updates and for modules that don't build.
 - `kait2en-sync apply`: for each package with upstream changes, pins the new
   commit, builds and signs it, builds its DKMS modules against the newest
   headers, then, after asking, publishes to the release (replacing the old
