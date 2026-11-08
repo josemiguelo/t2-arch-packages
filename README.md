@@ -15,6 +15,9 @@ its license requires keeping author attribution (see upstream `TRADEMARK.md`,
 | `t2bce-audio-ucm` | `modules/t2bce_audio-alsa-ucm-conf/ucm2` | builds; replaces arch-mact2's older `t2bce_audio-alsa-ucm-conf` |
 | `t2smc-dkms` | `modules/t2smc` | **works** (live-tested on `linux-t2`): 2 fans, 50 temps, charge control on `BAT0`, rtc2, watchdog. Compiles clean vs `linux-omarchy` 7.2.15; blacklists `applesmc` (fails `-EIO` on T2 with a stock kernel) |
 | `t2sbs-dkms` | `modules/t2sbs` | **works** (live-tested): capacity 98% (correct, `charge_now/charge_full`) vs stock `sbs` 78% (design-relative). Needs `sbshc` loaded; blacklists `sbs` |
+| `t2thunderbolt-dkms` | `modules/t2thunderbolt` | loads (4 PM ordering links on 2× Titan Ridge 4C); autoloads by NHI alias; no wake-time change on its own |
+| `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
+| `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers (tested: pass, fail, no-op) |
 | `t2-fan-control` | `apps/t2-fan-control` | **works** with the shipped `/etc/t2-fancontrol/config.txt` (system chill 80 °C). Upstream's default 45 °C pins MacBookPro16,1 fans at 100%. Paths moved `/usr/local` → `/usr`; replaces `t2fanrd` |
 
 ### Notes from testing (MacBookPro16,1)
@@ -27,6 +30,24 @@ its license requires keeping author attribution (see upstream `TRADEMARK.md`,
 - The fan daemon saves its config on every start. Running it before the package
   is installed leaves a `/etc/t2-fancontrol/config.txt` with upstream defaults,
   and pacman then puts the shipped config in `config.txt.pacnew`.
+
+## Resume speed (MacBookPro16,1, linux-omarchy, 2026-11-08)
+
+Kernel/journal timestamps are unreliable across S3 on this Mac; per-device
+times come from `echo 1 > /sys/power/pm_print_times` (`returned 0 after N usecs`).
+
+| Change | Result |
+|---|---|
+| `pm_async=1` (drop `pm_async=off`) | works; devices resume in parallel |
+| `t2thunderbolt` | loads (4 PM ordering links), no wake-time change |
+| `t2smp` | removes the slow early-resume CPU bring-up ("Enabling non-boot CPUs"); wake ~16 s |
+| remaining | Titan Ridge TB upstream bridges ~10.8 s each (`pci_pm_resume_noirq`), TB NHIs ~5 s, chipset root port ~1.4 s, amdgpu ~1.1 s, t2smc ~1.1 s |
+| `pci=noaer pcie_ports=compat` (+ `t2smp`, `pm_async=1`) | **wake ~1 s** (from ~16 s). Trade-off: no native PCIe hotplug on the TB ports |
+
+Still seen after resume: `xHC error in resume ... Reinit` on the Titan Ridge xHCIs
+(harmless), and once a brcmfmac firmware timeout + reload (Wi-Fi reconnected by
+itself; 0 in 5 earlier resumes). If it recurs: KaiT2en's wireless patches or its
+brcmfmac unload/reload around suspend (`kait2en-suspend.service`).
 
 ## Dual-kernel test setup (2026-11-08)
 

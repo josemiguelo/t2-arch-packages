@@ -1,0 +1,102 @@
+#!/bin/bash
+# t2-dkms-guard: refuse a linux-omarchy-headers upgrade whose new headers cannot
+# build every t2-arch-packages DKMS module.
+#
+# Runs as a pacman PreTransaction hook (AbortOnFail). Pacman has downloaded the
+# new packages by then, so the new headers are extracted from the package cache
+# and each module whose dkms.conf carries the "# t2-arch-packages" marker is
+# compiled against them. One failure aborts the whole transaction: the old,
+# working kernel stays installed. Without this, a failed DKMS build leaves the
+# new kernel without t2bce_vhci, so the internal keyboard is gone at the disk
+# unlock prompt.
+#
+#   T2_DKMS_GUARD_SKIP=1 pacman ...     upgrade anyway
+#   t2-dkms-guard <headers.pkg.tar.zst> test against a specific package file
+#   T2_DKMS_GUARD_SRC=<dir>             module sources (default /usr/src)
+
+set -uo pipefail
+
+say() { echo "t2-dkms-guard: $*"; }
+
+if [[ ${T2_DKMS_GUARD_SKIP:-} == 1 ]]; then
+  say "skipped (T2_DKMS_GUARD_SKIP=1)"
+  exit 0
+fi
+
+srcroot=${T2_DKMS_GUARD_SRC:-/usr/src}
+pkgfile=${1:-}
+
+if [[ -z $pkgfile ]]; then
+  newest="" newver=""
+  for dir in $(pacman-conf CacheDir 2>/dev/null || echo /var/cache/pacman/pkg/); do
+    for f in "$dir"/linux-omarchy-headers-*.pkg.tar.*; do
+      [[ -f $f && $f != *.sig ]] || continue
+      v=${f##*/linux-omarchy-headers-}
+      v=${v%.pkg.tar.*}
+      v=${v%-*} # drop -<arch>
+      if [[ -z $newver ]] || (( $(vercmp "$v" "$newver") > 0 )); then
+        newest=$f newver=$v
+      fi
+    done
+  done
+  installed=$(pacman -Q linux-omarchy-headers 2>/dev/null | awk '{print $2}')
+  if [[ -z $newest ]]; then
+    say "WARNING: no linux-omarchy-headers package in the pacman cache; cannot check the KaiT2en modules"
+    exit 0
+  fi
+  if [[ -n $installed ]] && (( $(vercmp "$newver" "$installed") <= 0 )); then
+    say "linux-omarchy-headers $newver is not newer than installed $installed; nothing to check"
+    exit 0
+  fi
+  pkgfile=$newest
+fi
+
+[[ -f $pkgfile ]] || { say "no such package: $pkgfile"; exit 1; }
+
+mapfile -t confs < <(grep -l '^# t2-arch-packages' "$srcroot"/*/dkms.conf 2>/dev/null)
+if (( ${#confs[@]} == 0 )); then
+  say "no t2-arch-packages DKMS sources in $srcroot; nothing to check"
+  exit 0
+fi
+
+tmp=$(mktemp -d /tmp/t2-dkms-guard.XXXXXX)
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/h" "$tmp/src"
+if ! bsdtar -xf "$pkgfile" -C "$tmp/h" usr/lib/modules 2>"$tmp/extract.log"; then
+  say "cannot extract $pkgfile"
+  cat "$tmp/extract.log"
+  exit 1
+fi
+kver=$(ls "$tmp/h/usr/lib/modules" | head -1)
+build=$tmp/h/usr/lib/modules/$kver/build
+[[ -f $build/Makefile ]] || { say "no kernel build tree in $pkgfile"; exit 1; }
+
+say "building ${#confs[@]} KaiT2en modules against $kver"
+failed=()
+for conf in "${confs[@]}"; do
+  dir=$(dirname "$conf")
+  name=$(basename "$dir")
+  regex=$(sed -n 's/^BUILD_EXCLUSIVE_KERNEL="\(.*\)"$/\1/p' "$conf" | tail -1)
+  if [[ -n $regex ]] && ! [[ $kver =~ $regex ]]; then
+    say "  $name: not for $kver (BUILD_EXCLUSIVE_KERNEL), skipped"
+    continue
+  fi
+  cp -a "$dir" "$tmp/src/$name"
+  if make -C "$build" M="$tmp/src/$name" -j"$(nproc)" modules >"$tmp/$name.log" 2>&1; then
+    say "  $name: ok"
+  else
+    say "  $name: FAILED"
+    grep -E 'error|Error' "$tmp/$name.log" | head -15 | sed 's/^/      /'
+    failed+=("$name")
+  fi
+done
+
+if (( ${#failed[@]} )); then
+  echo
+  say "ABORTING the upgrade: ${failed[*]} would not build for $kver."
+  say "The new kernel would boot without them (no internal keyboard at the disk"
+  say "unlock prompt if t2bce_stack is among them). Nothing has been changed."
+  say "Wait for a KaiT2en fix, or upgrade anyway with: sudo env T2_DKMS_GUARD_SKIP=1 pacman ..."
+  exit 1
+fi
+say "all KaiT2en modules build for $kver"

@@ -1,0 +1,20 @@
+# t2-dkms-guard: pacman hook that aborts a linux-omarchy-headers upgrade when
+# the new headers cannot build every t2-arch-packages DKMS module, so a kernel
+# update can never leave a T2 Mac without its internal keyboard at the disk
+# unlock prompt. See the t2-dkms-guard script for details.
+
+pkgname=t2-dkms-guard
+pkgver=0.1
+pkgrel=1
+pkgdesc="Abort linux-omarchy upgrades that would break the KaiT2en T2 DKMS modules"
+arch=('any')
+license=('GPL-3.0-or-later')
+depends=('pacman' 'libarchive' 'make' 'gcc')
+source=('t2-dkms-guard' 't2-dkms-guard.hook')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm755 t2-dkms-guard "$pkgdir/usr/share/libalpm/scripts/t2-dkms-guard"
+  # 60-: after the pacman cache is complete, before any kernel files are touched.
+  install -Dm644 t2-dkms-guard.hook "$pkgdir/usr/share/libalpm/hooks/60-t2-dkms-guard.hook"
+}

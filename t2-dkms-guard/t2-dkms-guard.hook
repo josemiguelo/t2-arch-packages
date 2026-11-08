@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = linux-omarchy-headers
+
+[Action]
+Description = Checking that the KaiT2en DKMS modules build for the new linux-omarchy...
+When = PreTransaction
+Exec = /usr/share/libalpm/scripts/t2-dkms-guard
+AbortOnFail
