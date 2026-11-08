@@ -1,0 +1,45 @@
+# linux-apfs-rw: the out-of-tree APFS driver (https://github.com/linux-apfs/linux-apfs-rw),
+# as vendored by KaiT2en (third-party/linux-apfs-rw, see its UPSTREAM.md), DKMS.
+#
+# linux-t2 builds APFS in; linux-omarchy does not. apple-bcm-firmware-fetcher
+# mounts the macOS volume with it (read-only, the module's default) to copy the
+# T2 Wi-Fi/Bluetooth firmware, so T2 Macs on linux-omarchy need this package.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  third-party/linux-apfs-rw
+
+pkgname=linux-apfs-rw-dkms
+_modname=linux-apfs-rw
+_modver=0.3.22
+pkgver=0.3.22.r1.27fd5c9
+pkgrel=1
+pkgdesc="APFS driver (read-only by default) for mounting the macOS volume, DKMS"
+arch=('any')
+url="https://github.com/linux-apfs/linux-apfs-rw"
+license=('GPL-2.0-only')
+depends=('dkms')
+makedepends=('git')
+provides=('linux-apfs-rw')
+conflicts=('linux-apfs-rw-dkms-git' 'linux-apfs-rw')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_modver" \
+    "$(git rev-list --count HEAD -- third-party/linux-apfs-rw)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd kait2en/third-party/linux-apfs-rw
+  local dst="$pkgdir/usr/src/$_modname-$_modver"
+  install -dm755 "$dst"
+  cp -a --no-preserve=ownership . "$dst/"
+  chmod 755 "$dst/genver.sh"
+  printf '\n# t2-arch-packages: stock Omarchy kernels only (linux-t2 builds APFS in)\nBUILD_EXCLUSIVE_KERNEL="%s"\n' \
+    "${T2_DKMS_KERNEL_REGEX:-.*-omarchy\$}" >> "$dst/dkms.conf"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
