@@ -19,8 +19,10 @@ logo is removed from `t2-fan-control` (`no-wordmark.patch`).
 curl -fsSL https://github.com/josemiguelo/t2-arch-packages/releases/download/repo/t2-arch-packages.asc |
   sudo pacman-key --add -
 sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
-# or install t2-arch-packages-keyring once the repo is configured; it keeps the
-# key trusted through `pacman-key --populate`, like archlinux-keyring
+# then install t2-arch-packages-keyring, which keeps the key trusted through
+# `pacman-key --populate` (like archlinux-keyring). It is signed with this same
+# key, so it cannot replace the two commands above on a first install: pacman
+# would look the key up on a keyserver, where it is not published.
 
 # /etc/pacman.conf
 [t2-arch-packages]
