@@ -29,7 +29,7 @@ sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
 Server = https://github.com/josemiguelo/t2-arch-packages/releases/download/repo
 ```
 
-Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-fan-control t2bce-audio-ucm t2-dkms-guard linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (the fetcher is in `[arch-mact2]`).
+Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-fan-control t2bce-audio-ucm t2-dkms-guard linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
 `linux-t2` must not be installed on the same kernel: it has its own t2bce. See
 [Omarchy's `fix-t2.sh` on the `t2-kait2en` branch](#port-status) for the module,
 initramfs and kernel-argument setup.
@@ -45,7 +45,6 @@ initramfs and kernel-argument setup.
 | `t2thunderbolt-dkms` | `modules/t2thunderbolt` | loads (4 PM ordering links on 2× Titan Ridge 4C); autoloads by NHI alias; no wake-time change on its own |
 | `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
 | `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers (tested: pass, fail, no-op) |
-| `linux-apfs-rw-dkms` | `third-party/linux-apfs-rw` | compiles clean vs `linux-omarchy` 7.2.15. APFS driver (read-only by default) that `apple-bcm-firmware-fetcher` needs to read the Wi-Fi firmware off the macOS volume; `linux-t2` builds APFS in, `linux-omarchy` doesn't |
 | `t2-precision-trackpad-dkms` | `modules/t2_precision_trackpad` | compiles clean vs `linux-omarchy` 7.2.15. Multitouch/Force Touch for the internal trackpad: stock kernels drive it as a plain mouse (no two-finger scroll, no tap to click), `linux-t2` uses a patched `hid_magicmouse`. Must load before `t2bce_vhci` in the initramfs |
 | `t2-bluetooth-dkms` | kernel.org 7.2.15 `drivers/bluetooth` + `patches/runtime/wireless/{0002,0012,0013,0021,0024}` | compiles clean vs `linux-omarchy` 7.2.15. Replaces `btbcm`, `hci_uart`, `hci_bcm4377`: stock `btbcm` drops these Macs' LE advertisements (320 "unknown advertising packet type" in one boot), so LE keyboards/mice don't appear or can't connect. 7.2.x `-omarchy` kernels only |
 | `t2-arch-packages-keyring` | (this repo) | signing key in `/usr/share/pacman/keyrings`, populated on install |
