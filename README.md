@@ -19,6 +19,8 @@ logo is removed from `t2-fan-control` (`no-wordmark.patch`).
 curl -fsSL https://github.com/josemiguelo/t2-arch-packages/releases/download/repo/t2-arch-packages.asc |
   sudo pacman-key --add -
 sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
+# or install t2-arch-packages-keyring once the repo is configured; it keeps the
+# key trusted through `pacman-key --populate`, like archlinux-keyring
 
 # /etc/pacman.conf
 [t2-arch-packages]
@@ -41,6 +43,7 @@ initramfs and kernel-argument setup.
 | `t2thunderbolt-dkms` | `modules/t2thunderbolt` | loads (4 PM ordering links on 2× Titan Ridge 4C); autoloads by NHI alias; no wake-time change on its own |
 | `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
 | `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers (tested: pass, fail, no-op) |
+| `t2-arch-packages-keyring` | (this repo) | signing key in `/usr/share/pacman/keyrings`, populated on install |
 | `t2-fan-control` | `apps/t2-fan-control` | **works** with the shipped `/etc/t2-fancontrol/config.txt` (system chill 80 °C). Upstream's default 45 °C pins MacBookPro16,1 fans at 100%. Paths moved `/usr/local` → `/usr`; replaces `t2fanrd` |
 
 ### Notes from testing (MacBookPro16,1)

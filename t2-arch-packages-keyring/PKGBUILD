@@ -1,0 +1,22 @@
+# Signing key of the t2-arch-packages pacman repo, in the layout pacman-key
+# --populate reads (like archlinux-keyring and omarchy-keyring). Installing it
+# trusts the key; a keyring created later (an image's first boot) picks it up
+# from /usr/share/pacman/keyrings with a plain `pacman-key --populate`.
+#
+# Key: 077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F
+
+pkgname=t2-arch-packages-keyring
+pkgver=20261108
+pkgrel=1
+pkgdesc="Signing key of the t2-arch-packages pacman repository"
+arch=('any')
+url="https://github.com/josemiguelo/t2-arch-packages"
+license=('GPL-3.0-or-later')
+install=t2-arch-packages-keyring.install
+source=('t2-arch-packages.gpg' 't2-arch-packages-trusted' 't2-arch-packages-revoked')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm644 t2-arch-packages.gpg t2-arch-packages-trusted t2-arch-packages-revoked \
+    -t "$pkgdir/usr/share/pacman/keyrings/"
+}
