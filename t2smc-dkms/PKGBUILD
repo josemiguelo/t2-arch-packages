@@ -1,0 +1,49 @@
+# t2smc: KaiT2en's SMC driver for T2 Macs (fans, battery charge limit, hwmon
+# sensors, watchdog, SMC events, RTC), as DKMS. Replaces applesmc, which cannot
+# talk to the T2 SMC on a stock kernel (probe fails with -EIO).
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  modules/t2smc
+#
+# Both drivers bind ACPI APP0001, so applesmc is blacklisted here. The RTC
+# takeover KaiT2en offers (initcall_blacklist=cmos_init, module_blacklist=acpi_tad)
+# is left out for now: t2smc registers as the next free rtcN instead of rtc0.
+
+pkgname=t2smc-dkms
+_modname=t2smc
+_modver=0.1
+pkgver=0.1.r29.27fd5c9
+pkgrel=2
+pkgdesc="Apple T2 SMC driver (fans, charge limit, sensors) from KaiT2en, DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only')
+depends=('dkms')
+makedepends=('git')
+_repo="${KAIT2EN_REPO:-$HOME/Repos/gh/kaiT2en/KaiT2en-Fedora}"
+_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+source=("kait2en::git+file://${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_modver" \
+    "$(git rev-list --count HEAD -- modules/t2smc)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd kait2en/modules/t2smc
+  local dst="$pkgdir/usr/src/$_modname-$_modver"
+  install -Dm644 dkms.conf Makefile t2smc.c -t "$dst/"
+  printf '\n# t2-arch-packages: stock Omarchy kernels only (linux-t2 uses its patched applesmc)\nBUILD_EXCLUSIVE_KERNEL="%s"\n' \
+    "${T2_DKMS_KERNEL_REGEX:-.*-omarchy\$}" >> "$dst/dkms.conf"
+
+  # t2smc replaces applesmc; both bind ACPI APP0001. Skip applesmc only where
+  # t2smc exists for the running kernel, so a kernel without it (linux-t2)
+  # keeps applesmc. modprobe runs install commands through /bin/sh.
+  install -dm755 "$pkgdir/usr/lib/modprobe.d"
+  cat > "$pkgdir/usr/lib/modprobe.d/t2smc.conf" <<'EOF'
+# t2smc replaces applesmc on T2 Macs (both bind ACPI APP0001), on kernels that have t2smc.
+install applesmc modinfo -k "$(uname -r)" -F filename t2smc >/dev/null 2>&1 || /usr/bin/modprobe --ignore-install applesmc $CMDLINE_OPTS
+EOF
+}
