@@ -46,6 +46,8 @@ initramfs and kernel-argument setup.
 | `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
 | `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers (tested: pass, fail, no-op) |
 | `linux-apfs-rw-dkms` | `third-party/linux-apfs-rw` | compiles clean vs `linux-omarchy` 7.2.15. APFS driver (read-only by default) that `apple-bcm-firmware-fetcher` needs to read the Wi-Fi firmware off the macOS volume; `linux-t2` builds APFS in, `linux-omarchy` doesn't |
+| `t2-precision-trackpad-dkms` | `modules/t2_precision_trackpad` | compiles clean vs `linux-omarchy` 7.2.15. Multitouch/Force Touch for the internal trackpad: stock kernels drive it as a plain mouse (no two-finger scroll, no tap to click), `linux-t2` uses a patched `hid_magicmouse`. Must load before `t2bce_vhci` in the initramfs |
+| `t2-bluetooth-dkms` | kernel.org 7.2.15 `drivers/bluetooth` + `patches/runtime/wireless/{0002,0012,0013,0021,0024}` | compiles clean vs `linux-omarchy` 7.2.15. Replaces `btbcm`, `hci_uart`, `hci_bcm4377`: stock `btbcm` drops these Macs' LE advertisements (320 "unknown advertising packet type" in one boot), so LE keyboards/mice don't appear or can't connect. 7.2.x `-omarchy` kernels only |
 | `t2-arch-packages-keyring` | (this repo) | signing key in `/usr/share/pacman/keyrings`, populated on install |
 | `t2-fan-control` | `apps/t2-fan-control` | **works** with the shipped `/etc/t2-fancontrol/config.txt` (system chill 80 °C). Upstream's default 45 °C pins MacBookPro16,1 fans at 100%. Paths moved `/usr/local` → `/usr`; replaces `t2fanrd` |
 
