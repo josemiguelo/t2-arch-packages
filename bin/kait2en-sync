@@ -1,0 +1,215 @@
+#!/bin/bash
+# kait2en-sync: carry KaiT2en's upstream work into this repo's packages.
+#
+#   kait2en-sync check     what changed upstream since each package's pinned
+#                          commit (exit 0: nothing for the packages, 10: updates)
+#   kait2en-sync kernel    build every published DKMS package against the newest
+#                          linux-omarchy-headers in the pacman sync db (exit 0:
+#                          all build, 1: some don't — fix before Omarchy ships it)
+#   kait2en-sync apply [--yes]
+#                          for each package with upstream changes: pin the new
+#                          commit, build and sign it, build its DKMS modules
+#                          against the newest linux-omarchy headers; then, after
+#                          asking (--yes skips), publish to the GitHub release
+#                          and commit + push the PKGBUILDs
+#
+# Each PKGBUILD pins its own KaiT2en commit (_commit) and names the KaiT2en
+# paths it's built from in pkgver() (git rev-list ... -- <paths>); that's the
+# package-to-path map. Changes to KaiT2en's Fedora installer (scripts/fedora)
+# are listed apart: they are where new kernel arguments, modules or services
+# show up, and Omarchy's fix-t2.sh may need the same (review them by hand).
+#
+# Environment: KAIT2EN_CLONE (default ~/Repos/gh/kaiT2en/KaiT2en-Fedora, cloned
+# if missing), T2_SIGN_KEY (default the repo key), T2_WORK (default
+# ~/.cache/t2-arch-packages).
+
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+KAIT2EN=${KAIT2EN_CLONE:-$HOME/Repos/gh/kaiT2en/KaiT2en-Fedora}
+KAIT2EN_URL=https://github.com/kaiT2en/KaiT2en-Fedora.git
+KEY=${T2_SIGN_KEY:-077D8295CCF834D3F5EC25F70506B72C34EB162F}
+WORK=${T2_WORK:-${XDG_CACHE_HOME:-$HOME/.cache}/t2-arch-packages}
+GH_REPO=josemiguelo/t2-arch-packages
+RELEASE=repo
+DB=t2-arch-packages
+GUARD=$ROOT/t2-dkms-guard/t2-dkms-guard
+
+say() { echo -e "\e[1;32m==>\e[0m $*"; }
+warn() { echo -e "\e[1;33m==>\e[0m $*" >&2; }
+fail() { echo -e "\e[1;31mError:\e[0m $*" >&2; exit 1; }
+
+# Packages built from KaiT2en: their directory, pinned commit and paths.
+packages() {
+  local pkgbuild dir commit paths
+  for pkgbuild in "$ROOT"/*/PKGBUILD; do
+    dir=$(basename "$(dirname "$pkgbuild")")
+    commit=$(sed -n 's/^_commit=//p' "$pkgbuild")
+    paths=$(grep -oE 'rev-list --count HEAD -- [^)"]+' "$pkgbuild" | sed 's/^rev-list --count HEAD -- //' | head -1)
+    [[ -n $commit && -n $paths ]] || continue
+    printf '%s\t%s\t%s\n' "$dir" "$commit" "$paths"
+  done
+}
+
+kait2en_fetch() {
+  if [[ ! -d $KAIT2EN/.git ]]; then
+    say "cloning KaiT2en into $KAIT2EN"
+    mkdir -p "$(dirname "$KAIT2EN")"
+    git clone --quiet "$KAIT2EN_URL" "$KAIT2EN"
+  fi
+  git -C "$KAIT2EN" fetch --quiet origin
+  UPSTREAM=$(git -C "$KAIT2EN" rev-parse origin/HEAD 2>/dev/null || git -C "$KAIT2EN" rev-parse origin/main)
+}
+
+# Packages with upstream changes, as "dir<TAB>old<TAB>paths" lines.
+changed_packages() {
+  local dir commit paths
+  while IFS=$'\t' read -r dir commit paths; do
+    # shellcheck disable=SC2086 # paths is a list of globs for git
+    if [[ -n $(git -C "$KAIT2EN" log --format=%h "$commit..$UPSTREAM" -- $paths) ]]; then
+      printf '%s\t%s\t%s\n' "$dir" "$commit" "$paths"
+    fi
+  done < <(packages)
+}
+
+cmd_check() {
+  kait2en_fetch
+  local dir commit paths any=0 oldest=""
+  say "KaiT2en upstream: $(git -C "$KAIT2EN" log -1 --format='%h %cs %s' "$UPSTREAM")"
+  while IFS=$'\t' read -r dir commit paths; do
+    # shellcheck disable=SC2086
+    log=$(git -C "$KAIT2EN" log --format='    %h %cs %s' "$commit..$UPSTREAM" -- $paths)
+    [[ -z $oldest ]] && oldest=$commit
+    if [[ -n $log ]]; then
+      any=1
+      echo -e "\n\e[1m$dir\e[0m ($(wc -l <<<"$log") commits since ${commit:0:7}; $paths)"
+      echo "$log"
+    fi
+  done < <(packages)
+  log=$(git -C "$KAIT2EN" log --format='    %h %cs %s' "$oldest..$UPSTREAM" -- scripts/fedora)
+  if [[ -n $log ]]; then
+    echo -e "\n\e[1mscripts/fedora\e[0m (review by hand: new kernel arguments, modules or services may belong in fix-t2.sh)"
+    echo "$log"
+  fi
+  if (( any )); then
+    echo; say "updates available: kait2en-sync apply"
+    return 10
+  fi
+  say "no upstream changes for the packages"
+}
+
+# The newest linux-omarchy-headers in the [omarchy] repo this machine uses,
+# read from the repo's own database (fresher than the local sync db, and
+# unprivileged), downloaded and verified with pacman's keyring; prints its path.
+latest_headers() {
+  local server db url file name
+  server=$(pacman-conf -r omarchy Server 2>/dev/null | head -1)
+  [[ -n $server ]] || fail "no [omarchy] repo in pacman.conf"
+  server=${server//\$arch/x86_64}
+  mkdir -p "$WORK/headers"
+  db=$WORK/headers/omarchy.db
+  curl -fsSL -o "$db" "$server/omarchy.db" || fail "can't download $server/omarchy.db"
+  name=$(bsdtar -tf "$db" | grep -E '^linux-omarchy-headers-[^/]+/desc$' | head -1)
+  [[ -n $name ]] || fail "[omarchy] has no linux-omarchy-headers"
+  url=$server/$(bsdtar -xOf "$db" "$name" | sed -n '/^%FILENAME%$/{n;p}')
+  file=$WORK/headers/${url##*/}
+  [[ -s $file ]] || curl -fsSL -o "$file" "$url"
+  [[ -s $file.sig ]] || curl -fsSL -o "$file.sig" "$url.sig"
+  pacman-key --verify "$file.sig" "$file" >/dev/null 2>&1 || fail "${file##*/}: bad signature"
+  echo "$file"
+}
+
+# Build the DKMS sources in the given package files against the newest headers.
+test_dkms() {
+  local headers src pkg
+  headers=$(latest_headers)
+  src=$WORK/dkms-src
+  rm -rf "$src"
+  mkdir -p "$src"
+  for pkg in "$@"; do
+    bsdtar -xf "$pkg" -C "$src" --strip-components=2 'usr/src/*' 2>/dev/null || true
+  done
+  say "building the DKMS modules against ${headers##*/}"
+  T2_DKMS_GUARD_SKIP= T2_DKMS_GUARD_SRC=$src bash "$GUARD" "$headers"
+}
+
+release_fetch() {
+  local dir=$WORK/release
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  gh release download "$RELEASE" -R "$GH_REPO" -D "$dir" \
+    -p "$DB.db.tar.zst" -p "$DB.db.tar.zst.sig" -p "$DB.files.tar.zst" -p "$DB.files.tar.zst.sig" "$@"
+  gpg --verify "$dir/$DB.db.tar.zst.sig" "$dir/$DB.db.tar.zst" 2>/dev/null || fail "the published $DB.db has a bad signature"
+  echo "$dir"
+}
+
+cmd_kernel() {
+  local dir
+  dir=$(release_fetch -p '*-dkms-*.pkg.tar.zst')
+  test_dkms "$dir"/*-dkms-*.pkg.tar.zst
+}
+
+cmd_apply() {
+  local yes=${1:-} dir commit paths changed=() built=() p out
+  kait2en_fetch
+  mapfile -t lines < <(changed_packages)
+  (( ${#lines[@]} )) || { say "no upstream changes for the packages"; return 0; }
+  out=$WORK/pkgs
+  rm -rf "$out"
+  mkdir -p "$out"
+
+  for p in "${lines[@]}"; do
+    IFS=$'\t' read -r dir commit paths <<<"$p"
+    say "$dir: ${commit:0:7} -> ${UPSTREAM:0:7}"
+    sed -i "s/^_commit=.*/_commit=$UPSTREAM/; s/^pkgrel=.*/pkgrel=1/" "$ROOT/$dir/PKGBUILD"
+    (cd "$ROOT/$dir" && KAIT2EN_GIT=file://$KAIT2EN BUILDDIR=$WORK/build PKGDEST=$out SRCDEST=$WORK/src \
+      makepkg -d -f --noconfirm --sign --key "$KEY" >"$WORK/$dir.log" 2>&1) ||
+      fail "$dir didn't build: $WORK/$dir.log"
+    changed+=("$dir")
+  done
+  rm -f "$out"/*-debug-*
+  mapfile -t built < <(find "$out" -name '*.pkg.tar.zst' | sort)
+
+  dkms=()
+  for p in "${built[@]}"; do [[ ${p##*/} == *-dkms-* ]] && dkms+=("$p"); done
+  (( ${#dkms[@]} == 0 )) || test_dkms "${dkms[@]}" || fail "a DKMS module doesn't build against the newest headers; nothing published"
+
+  echo; say "built and tested:"; printf '    %s\n' "${built[@]##*/}"
+  if [[ $yes != --yes ]]; then
+    read -r -p "Publish to $GH_REPO's '$RELEASE' release and push the PKGBUILDs? [y/N] " answer
+    [[ $answer == [yY]* ]] || { warn "not published; the PKGBUILDs keep the new pins (git diff)"; return 0; }
+  fi
+
+  local rel old
+  rel=$(release_fetch)
+  cp "${built[@]}" "${built[@]/%/.sig}" "$rel/"
+  (cd "$rel" && repo-add --sign --key "$KEY" --verify "$DB.db.tar.zst" "${built[@]##*/}" >/dev/null)
+  for f in "$DB.db" "$DB.files"; do
+    cp --remove-destination "$rel/$f.tar.zst" "$rel/$f"
+    cp --remove-destination "$rel/$f.tar.zst.sig" "$rel/$f.sig"
+  done
+  gh release upload "$RELEASE" -R "$GH_REPO" --clobber \
+    "${built[@]}" "${built[@]/%/.sig}" "$rel/$DB".{db,files}{,.sig} "$rel/$DB".{db,files}.tar.zst{,.sig}
+  # The versions these replace.
+  for p in "${built[@]}"; do
+    name=$(bsdtar -xOf "$p" .PKGINFO | sed -n 's/^pkgname = //p')
+    while read -r old; do
+      [[ $old == "${p##*/}" || $old == "${p##*/}.sig" ]] && continue
+      gh release delete-asset "$RELEASE" "$old" -R "$GH_REPO" -y
+    done < <(gh release view "$RELEASE" -R "$GH_REPO" --json assets --jq '.assets[].name' |
+      grep -E "^${name}-[0-9][^-]*-[0-9]+-(any|x86_64)\.pkg\.tar\.zst(\.sig)?$")
+  done
+
+  git -C "$ROOT" add "${changed[@]/%//PKGBUILD}"
+  git -C "$ROOT" commit -q -m "Sync with KaiT2en $(git -C "$KAIT2EN" log -1 --format=%h "$UPSTREAM"): ${changed[*]}"
+  git -C "$ROOT" push -q
+  say "published: ${changed[*]} (KaiT2en ${UPSTREAM:0:7})"
+}
+
+case "${1:-check}" in
+  check) cmd_check ;;
+  kernel) cmd_kernel ;;
+  apply) shift; cmd_apply "${1:-}" ;;
+  -h|--help|help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) fail "unknown command: $1 (check, kernel, apply)" ;;
+esac

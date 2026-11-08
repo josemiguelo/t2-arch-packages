@@ -87,6 +87,26 @@ only where `t2smc`/`t2sbs` exist, `t2fanrd` limited to `*-t2` kernels by a
 drop-in, `t2smc?`/`t2sbs?` optional in mkinitcpio. Avoid
 `KERNEL_CMDLINE["linux-omarchy"]` in Limine: it replaces the default cmdline.
 
+## Keeping up with KaiT2en
+
+`bin/kait2en-sync` carries KaiT2en's upstream work into the packages:
+
+- `kait2en-sync check`: per package, the upstream commits since its pinned
+  `_commit`, plus changes to KaiT2en's Fedora installer (`scripts/fedora`), to
+  review by hand for `fix-t2.sh` (new kernel arguments, modules, services).
+  Exit 10 when a package has updates.
+- `kait2en-sync kernel`: builds every published DKMS package against the newest
+  `linux-omarchy-headers` of this machine's `[omarchy]` channel, ahead of
+  Omarchy shipping that kernel. Exit 1 when one doesn't build.
+- `kait2en-sync apply`: for each package with upstream changes, pins the new
+  commit, builds and signs it, builds its DKMS modules against the newest
+  headers, then, after asking, publishes to the release (replacing the old
+  versions) and commits and pushes the PKGBUILDs.
+
+`t2-bluetooth-dkms` also tracks a kernel version (`_kver`): when
+`linux-omarchy` moves to a new minor, `kernel` reports it skipped, and its
+sources move to that release by hand.
+
 ## Build and release
 
 Sources are pinned to a KaiT2en commit (`_commit` in each PKGBUILD) and fetched
