@@ -29,26 +29,40 @@ Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
 `077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F` (passphrase in the same 1Password item).
 
-## Where it stands (2026-11-08)
+## Where it stands (2026-11-10)
 
-Everything above is pushed. The ISO built from both `t2-kait2en` branches passed a full
-install on fake T2 hardware (`omarchy-iso-test --fake-pci 106b:1802:088000`), and every
-package works on the real Mac (it ran a dual-kernel `linux-t2`/`linux-omarchy` setup to test
-them: keyboard at the LUKS prompt, trackpad multitouch, Bluetooth LE, audio, fans, battery,
-deep S3 with a ~1 s wake). The owner was about to: restore macOS (erase disk, reinstall),
-shrink it to ~100 GB, install Omarchy from the ISO **into the free space** with the same
-hostname, then `omarchy update` and the dotfiles' bootstrap.
+Omarchy is installed on the real Mac from the ISO built from both `t2-kait2en` branches,
+**into free space beside macOS** (p2 macOS APFS kept, p3 `OMARCHY_EFI`, p4 LUKS + btrfs), on
+stock `linux-omarchy` with every KaiT2en DKMS module built; `linux-t2` is not installed.
+The dotfiles' bootstrap has run.
 
-**First things to check after that reinstall** (nothing here was testable before it):
-1. Wi-Fi: `systemctl status t2-wifi-firmware` should show the firmware fetched off the macOS
-   volume (`/var/lib/apple-bcm-firmware-fetcher/installed-files`). If not, `t2-bcm-firmware`
-   (loadout) has the 1Password `apple-bcm-firmware` package as a fallback.
-2. `loadout status` clean for the T2 items; `kait2en-dev check` passes.
-3. Internal keyboard and trackpad on the installed system (not only on the live ISO).
-4. The first `linux-omarchy` upgrade going through `t2-dkms-guard`.
-5. Fans under load (the old `t2fanrd` curve caused throttling when it ramped late; the
-   `t2-fan-control` config uses an 80 °C system target).
-6. Charge limit: write `charge_control_end_threshold` (e.g. 80) and see if it survives a reboot.
+**The real-Mac install found three bugs the fake-T2 VM test can't** (fixed in the
+`omarchy` fork's `t2-kait2en` worktree, not yet committed or in a rebuilt ISO):
+1. `fix-fkeys.sh` → `omarchy-keyboard-toprow` wrote `fnmode` to `/sys`, which is read-only
+   in the installer's chroot; under `set -e` that stopped "Configuring system". The install
+   was finished by hand from the live ISO (chroot), which skipped the final `@factory`
+   snapshot. Fix: skip the live write where `/sys` isn't writable (test in
+   `keyboard-toprow-test.sh`).
+2. The same `fix-fkeys.sh` wrote `omarchy-toprow.conf` with `fnmode=1` on the T2 keyboard,
+   overriding the dotfiles' default mode 3 (Fn+arrows). Fix: `fix-fkeys.sh` skips T2 Macs
+   (`106b:1801/1802`; test in `apple-silicon-quirks-test.sh`). Note `lspci | grep -q` under
+   `pipefail` reads as "no match" (SIGPIPE): use `grep … >/dev/null`, as `fix-t2.sh` does.
+3. `t2-wifi-firmware.service`'s `ExecStartPost=modprobe -r brcmfmac` failed: `brcmfmac_wcc`
+   holds it. The fetcher already reloads in the right order; the line is gone. The dotfiles'
+   `bcm-firmware.sh` had the same bug.
+
+**Post-install checks:**
+1. Wi-Fi: ✓ fetched off the macOS volume (BCM4364, `brcmfmac4364b3-pcie`); Bluetooth ✓.
+2. `loadout status`: T2 items done (`t2-kernel-args`, `t2-bcm-firmware`, `t2-boot-clock`,
+   `t2-gmux-backlight`, `t2-render-gpu`, `kait2en-dev`) except `t2-hid-apple-keyboard`,
+   pending on bug 2's leftover `omarchy-toprow.conf` until that file is removed.
+3. Internal keyboard and trackpad: drivers load on the installed system; owner to confirm.
+4. The first `linux-omarchy` upgrade through `t2-dkms-guard`: not yet.
+5. Fans: `t2-fan-control` active, 80 °C target; idle fine, not yet tried under load.
+6. Charge limit: not yet set (`charge_control_end_threshold` is 100).
+
+Next: rebuild the ISO with the fixes and rerun the fake-T2 test; the `/sys` bug is
+covered only by the shell test, since the VM has no `hid_apple`.
 
 ## How the owner works
 
