@@ -2,18 +2,19 @@
 # kait2en-sync: carry KaiT2en's upstream work into this repo's packages.
 #
 #   kait2en-sync check     what changed upstream since each package's pinned
-#                          commit (exit 0: nothing for the packages, 10: updates)
+#                          commit, split into eligible and waiting (exit 0:
+#                          nothing eligible, 10: eligible updates)
 #   kait2en-sync kernel    build every published DKMS package against the newest
 #                          linux-omarchy-headers of this machine's [omarchy] channel (exit 0:
 #                          all build, 1: some don't — fix before Omarchy ships it)
 #   kait2en-sync notify    for a timer: check, and kernel when [omarchy] has headers
 #                          it hasn't tested yet; desktop notifications to act on
 #   kait2en-sync apply [--yes]
-#                          for each package with upstream changes: pin the new
-#                          commit, build and sign it, build its DKMS modules
-#                          against the newest linux-omarchy headers; then, after
-#                          asking (--yes skips), publish to the GitHub release
-#                          and commit + push the PKGBUILDs
+#                          for each package with an eligible update: pin its
+#                          eligible commit, build and sign it, build its DKMS
+#                          modules against the newest linux-omarchy headers; then,
+#                          after asking (--yes skips), publish to the GitHub
+#                          release and commit + push the PKGBUILDs
 #
 # Each PKGBUILD pins its own KaiT2en commit (_commit) and names the KaiT2en
 # paths it's built from in pkgver() (git rev-list ... -- <paths>); that's the
@@ -21,8 +22,20 @@
 # are listed apart: they are where new kernel arguments, modules or services
 # show up, and Omarchy's fix-t2.sh may need the same (review them by hand).
 #
+# The one-month rule (CLAUDE.md): KaiT2en ships dangerous changes often, so a
+# package only moves to a commit that is at least KAIT2EN_MIN_AGE_DAYS old and
+# after which its paths stayed quiet that long. Walking its real commits since
+# the pin, newest first, the eligible one is the newest landed (committer date)
+# before the cutoff whose next change on the same paths came at least that
+# many days later, or never: a follow-up sooner is a fix or a revert, and the
+# clock restarts from it. Repo-wide sweeps (a commit touching more than
+# KAIT2EN_SWEEP_DIRS apps/ or modules/ folders, such as lockfile alignment)
+# don't count. A pin never moves backwards: pins older than the rule stay as
+# they are until an eligible commit comes after them.
+#
 # Environment: KAIT2EN_CLONE (default ~/Repos/gh/kaiT2en/KaiT2en-Fedora, cloned
-# if missing), T2_SIGN_KEY (default the repo key), T2_WORK (default
+# if missing), KAIT2EN_MIN_AGE_DAYS (default 30), KAIT2EN_SWEEP_DIRS (default
+# 8), T2_SIGN_KEY (default the repo key), T2_WORK (default
 # ~/.cache/t2-arch-packages).
 
 set -euo pipefail
@@ -36,6 +49,12 @@ GH_REPO=josemiguelo/t2-arch-packages
 RELEASE=repo
 DB=t2-arch-packages
 GUARD=$ROOT/t2-dkms-guard/t2-dkms-guard
+MIN_AGE_DAYS=${KAIT2EN_MIN_AGE_DAYS:-30}
+SWEEP_DIRS=${KAIT2EN_SWEEP_DIRS:-8}
+[[ $MIN_AGE_DAYS =~ ^[0-9]+$ ]] || { echo "KAIT2EN_MIN_AGE_DAYS must be a whole number of days" >&2; exit 1; }
+MIN_AGE=$((MIN_AGE_DAYS * 86400))
+NOW=$(date +%s)
+CUTOFF=$((NOW - MIN_AGE))
 
 say() { echo -e "\e[1;32m==>\e[0m $*"; }
 warn() { echo -e "\e[1;33m==>\e[0m $*" >&2; }
@@ -47,7 +66,10 @@ packages() {
   for pkgbuild in "$ROOT"/*/PKGBUILD; do
     dir=$(basename "$(dirname "$pkgbuild")")
     commit=$(sed -n 's/^_commit=//p' "$pkgbuild")
-    paths=$(grep -oE 'rev-list --count HEAD -- [^)"]+' "$pkgbuild" | sed 's/^rev-list --count HEAD -- //' | head -1)
+    # No match (a package not built from KaiT2en, such as the keyring) is no
+    # paths, not an error: under pipefail a failing grep ended the whole list,
+    # so every check came back empty.
+    paths=$(grep -oE 'rev-list --count HEAD -- [^)"]+' "$pkgbuild" | sed 's/^rev-list --count HEAD -- //' | head -1) || true
     [[ -n $commit && -n $paths ]] || continue
     printf '%s\t%s\t%s\n' "$dir" "$commit" "$paths"
   done
@@ -63,41 +85,114 @@ kait2en_fetch() {
   UPSTREAM=$(git -C "$KAIT2EN" rev-parse origin/HEAD 2>/dev/null || git -C "$KAIT2EN" rev-parse origin/main)
 }
 
-# Packages with upstream changes, as "dir<TAB>old<TAB>paths" lines.
-changed_packages() {
+day() { date -d "@$1" +%F; }
+
+# A repo-wide sweep (lockfile alignment, a shared build directory): a commit
+# touching more than SWEEP_DIRS apps/ or modules/ folders. Remembered per run.
+declare -A SWEEP=()
+is_sweep() {
+  local c=$1 n
+  if [[ -z ${SWEEP[$c]:-} ]]; then
+    n=$(git -C "$KAIT2EN" show --name-only --format= "$c" |
+      awk -F/ '($1 == "apps" || $1 == "modules") && NF > 2 { print $1 "/" $2 }' | sort -u | wc -l)
+    if (( n > SWEEP_DIRS )); then SWEEP[$c]=1; else SWEEP[$c]=0; fi
+  fi
+  [[ ${SWEEP[$c]} == 1 ]]
+}
+
+# One package's upstream state under the one-month rule (see the top). Sets
+# PLAN_TARGET (the eligible commit, empty when none), PLAN_LOG (its commits
+# since the pin, each marked eligible, waiting or sweep), PLAN_SWEEPS (how many
+# are sweeps) and PLAN_WAIT (the earliest day the waiting ones can become
+# eligible, if nothing else lands on their paths). Sweeps are listed, since
+# the heuristic can take a large feature for one, but they neither restart the
+# clock nor become a pin by themselves: they come along with the next eligible
+# real commit after them.
+plan() {
+  local pin=$1 c t s i n target=-1
+  shift
+  local -a all_h=() all_t=() all_s=() all_sweep=() ts=() hs=()
+  while IFS=$'\t' read -r c t s; do
+    all_h+=("$c") all_t+=("$t") all_s+=("$s")
+    if is_sweep "$c"; then all_sweep+=(1); else all_sweep+=(0) hs+=("$c") ts+=("$t"); fi
+  done < <(git -C "$KAIT2EN" log --reverse --format='%H%x09%ct%x09%s' "$pin..$UPSTREAM" -- "$@")
+  n=${#hs[@]}
+  PLAN_SWEEPS=$((${#all_h[@]} - n))
+  for ((i = n - 1; i >= 0; i--)); do
+    if ((ts[i] <= CUTOFF)) && { ((i == n - 1)) || ((ts[i + 1] - ts[i] >= MIN_AGE)); }; then
+      target=$i
+      break
+    fi
+  done
+  PLAN_TARGET="" PLAN_LOG="" PLAN_WAIT=""
+  ((target < 0)) || PLAN_TARGET=${hs[target]}
+  # Commits up to the target (in history order) come with it; the rest wait.
+  local reached=$((target < 0))
+  for ((i = 0; i < ${#all_h[@]}; i++)); do
+    if ((all_sweep[i])); then
+      c="sweep   "
+    elif ((!reached)); then
+      c="eligible"
+    else
+      c="waiting "
+    fi
+    [[ ${all_h[i]} == "$PLAN_TARGET" ]] && reached=1
+    PLAN_LOG+="    $c ${all_h[i]:0:7} $(day "${all_t[i]}") ${all_s[i]}"$'\n'
+  done
+  PLAN_LOG=${PLAN_LOG%$'\n'}
+  ((n > target + 1)) && PLAN_WAIT=$(day $((ts[n - 1] + MIN_AGE)))
+  return 0
+}
+
+# Packages with an eligible update, as "dir<TAB>pin<TAB>paths<TAB>target" lines.
+eligible_packages() {
   local dir commit paths
   while IFS=$'\t' read -r dir commit paths; do
     # shellcheck disable=SC2086 # paths is a list of globs for git
-    if [[ -n $(git -C "$KAIT2EN" log --format=%h "$commit..$UPSTREAM" -- $paths) ]]; then
-      printf '%s\t%s\t%s\n' "$dir" "$commit" "$paths"
-    fi
+    plan "$commit" $paths
+    [[ -z $PLAN_TARGET ]] || printf '%s\t%s\t%s\t%s\n' "$dir" "$commit" "$paths" "$PLAN_TARGET"
   done < <(packages)
 }
 
 cmd_check() {
   kait2en_fetch
-  local dir commit paths any=0 oldest=""
+  local dir commit paths oldest="" log
+  local -a eligible=() waiting=()
   say "KaiT2en upstream: $(git -C "$KAIT2EN" log -1 --format='%h %cs %s' "$UPSTREAM")"
+  say "eligible: landed by $(day "$CUTOFF") and $MIN_AGE_DAYS days quiet after it (KAIT2EN_MIN_AGE_DAYS)"
   while IFS=$'\t' read -r dir commit paths; do
-    # shellcheck disable=SC2086
-    log=$(git -C "$KAIT2EN" log --format='    %h %cs %s' "$commit..$UPSTREAM" -- $paths)
     [[ -z $oldest ]] && oldest=$commit
-    if [[ -n $log ]]; then
-      any=1
-      echo -e "\n\e[1m$dir\e[0m ($(wc -l <<<"$log") commits since ${commit:0:7}; $paths)"
-      echo "$log"
+    # shellcheck disable=SC2086
+    plan "$commit" $paths
+    [[ -n $PLAN_LOG ]] || continue
+    echo -e "\n\e[1m$dir\e[0m (pinned ${commit:0:7} from $(git -C "$KAIT2EN" log -1 --format=%cs "$commit"); $paths)"
+    echo "$PLAN_LOG"
+    ((PLAN_SWEEPS == 0)) || echo "    (sweep: touches more than $SWEEP_DIRS apps/modules folders; not counted, check it's really one)"
+    if [[ -n $PLAN_TARGET ]]; then
+      eligible+=("$dir")
+      echo "  -> eligible: re-pin to ${PLAN_TARGET:0:7} ($(git -C "$KAIT2EN" log -1 --format=%cs "$PLAN_TARGET"))"
+    fi
+    if [[ -n $PLAN_WAIT ]]; then
+      waiting+=("$dir")
+      echo "  -> waiting: eligible from $PLAN_WAIT at the earliest"
     fi
   done < <(packages)
-  log=$(git -C "$KAIT2EN" log --format='    %h %cs %s' "$oldest..$UPSTREAM" -- scripts/fedora)
+  log=$(git -C "$KAIT2EN" log --format='%ct%x09%h %cs %s' "$oldest..$UPSTREAM" -- scripts/fedora |
+    while IFS=$'\t' read -r t rest; do
+      if ((t <= CUTOFF)); then echo "    eligible $rest"; else echo "    waiting  $rest (from $(day $((t + MIN_AGE))))"; fi
+    done)
   if [[ -n $log ]]; then
-    echo -e "\n\e[1mscripts/fedora\e[0m (review by hand: new kernel arguments, modules or services may belong in fix-t2.sh)"
+    echo -e "\n\e[1mscripts/fedora\e[0m (review by hand: new kernel arguments, modules or services may belong in fix-t2.sh;"
+    echo "  marked by each commit's age only: check the same files' later history before porting)"
     echo "$log"
   fi
-  if (( any )); then
-    echo; say "updates available: kait2en-sync apply"
+  echo
+  ((${#waiting[@]} == 0)) || say "waiting under the one-month rule: ${waiting[*]}"
+  if ((${#eligible[@]})); then
+    say "eligible updates: ${eligible[*]} — kait2en-sync apply"
     return 10
   fi
-  say "no upstream changes for the packages"
+  say "no eligible updates for the packages"
 }
 
 # The newest linux-omarchy-headers in the [omarchy] repo this machine uses,
@@ -152,18 +247,19 @@ cmd_kernel() {
 }
 
 cmd_apply() {
-  local yes=${1:-} dir commit paths changed=() built=() p out
+  local yes=${1:-} dir commit paths target changed=() pins=() built=() p out
   kait2en_fetch
-  mapfile -t lines < <(changed_packages)
-  (( ${#lines[@]} )) || { say "no upstream changes for the packages"; return 0; }
+  mapfile -t lines < <(eligible_packages)
+  (( ${#lines[@]} )) || { say "no eligible updates for the packages (kait2en-sync check lists what's waiting)"; return 0; }
   out=$WORK/pkgs
   rm -rf "$out"
   mkdir -p "$out"
 
   for p in "${lines[@]}"; do
-    IFS=$'\t' read -r dir commit paths <<<"$p"
-    say "$dir: ${commit:0:7} -> ${UPSTREAM:0:7}"
-    sed -i "s/^_commit=.*/_commit=$UPSTREAM/; s/^pkgrel=.*/pkgrel=1/" "$ROOT/$dir/PKGBUILD"
+    IFS=$'\t' read -r dir commit paths target <<<"$p"
+    say "$dir: ${commit:0:7} -> ${target:0:7} ($(git -C "$KAIT2EN" log -1 --format=%cs "$target"))"
+    sed -i "s/^_commit=.*/_commit=$target/; s/^pkgrel=.*/pkgrel=1/" "$ROOT/$dir/PKGBUILD"
+    pins+=("$dir ${target:0:7}")
     (cd "$ROOT/$dir" && KAIT2EN_GIT=file://$KAIT2EN BUILDDIR=$WORK/build PKGDEST=$out SRCDEST=$WORK/src \
       makepkg -d -f --noconfirm --sign --key "$KEY" >"$WORK/$dir.log" 2>&1) ||
       fail "$dir didn't build: $WORK/$dir.log"
@@ -203,9 +299,9 @@ cmd_apply() {
   done
 
   git -C "$ROOT" add "${changed[@]/%//PKGBUILD}"
-  git -C "$ROOT" commit -q -m "Sync with KaiT2en $(git -C "$KAIT2EN" log -1 --format=%h "$UPSTREAM"): ${changed[*]}"
+  git -C "$ROOT" commit -q -m "Sync with KaiT2en, $MIN_AGE_DAYS days settled: $(IFS=,; echo "${pins[*]}" | sed 's/,/, /g')"
   git -C "$ROOT" push -q
-  say "published: ${changed[*]} (KaiT2en ${UPSTREAM:0:7})"
+  say "published: ${pins[*]}"
 }
 
 # For a timer: check, and kernel when [omarchy] has headers not tested yet;
@@ -214,8 +310,8 @@ cmd_notify() {
   local out rc stamp=$WORK/kernel-tested headers
   rc=0; out=$(cmd_check 2>&1) || rc=$?
   if (( rc == 10 )); then
-    notify-send -a kait2en-sync "KaiT2en has updates for the T2 packages" \
-      "$(grep -E '^[^ ].* commits since' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | cut -d' ' -f1-2 | tr '\n' ' ')— kait2en-sync apply"
+    notify-send -a kait2en-sync "KaiT2en updates are a month old and settled" \
+      "$(sed 's/\x1b\[[0-9;]*m//g' <<<"$out" | sed -n 's/^==> eligible updates: //p')"
   elif (( rc != 0 )); then
     notify-send -a kait2en-sync -u critical "kait2en-sync check failed" "$(tail -3 <<<"$out")"
   fi
