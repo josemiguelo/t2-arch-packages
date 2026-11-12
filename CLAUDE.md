@@ -25,7 +25,7 @@ from 1Password (item `kait2en`, Personal vault) and the daily `kait2en-sync.time
 
 Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
 `t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-bluetooth-dkms`,
-`t2-fan-control`, `t2bce-audio-ucm`, `t2-dkms-guard`, `t2-arch-packages-keyring`. Arch's own
+`t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dkms-guard`, `t2-arch-packages-keyring`. Arch's own
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
 `077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F` (passphrase in the same 1Password item).
 
@@ -59,7 +59,8 @@ The dotfiles' bootstrap has run.
 3. Internal keyboard and trackpad: drivers load on the installed system; owner to confirm.
 4. The first `linux-omarchy` upgrade through `t2-dkms-guard`: not yet.
 5. Fans: `t2-fan-control` active, 80 °C target; idle fine, not yet tried under load.
-6. Charge limit: not yet set (`charge_control_end_threshold` is 100).
+6. Charge limit: 85% since 2026-11-12 (the dotfiles' `t2-charge-limit`), with `t2-smc-control`'s
+   `t2-smc-gaugingd` lifting it for calibration charges.
 
 Next: rebuild the ISO with the fixes and rerun the fake-T2 test; the `/sys` bug is
 covered only by the shell test, since the VM has no `hid_apple`.
@@ -77,8 +78,10 @@ covered only by the shell test, since the VM has no `hid_apple`.
 - KaiT2en: its trademark forbids its name or logo on published forks (the repo name and the
   removed wordmark follow that; attribution stays, the license requires it); its README rejects
   AI-written PRs and issues, so anything going upstream there is the owner's to write.
-- Claude Code's auto mode blocks building third-party code and `docker stop`: hand those
-  commands to the owner.
+- Building third-party code is allowed: the owner's Claude Code user settings allow `makepkg`,
+  `cargo build` and `make` (auto mode blocked them before, a CLAUDE.md line can't lift that).
+  Publishing (`gh release upload`/`delete-asset`, the release's `repo-add`) and `docker stop`
+  still go through the owner.
 
 ## Procedures
 

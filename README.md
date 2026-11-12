@@ -10,7 +10,7 @@ it. All driver and app code is KaiT2en's: kernel modules under GPL-2.0, userspac
 under GPL-3.0-or-later with a section 7(b) author attribution term (André
 Eikmeyer; 4f1sh3r for the fan and SMC tools). Each package ships KaiT2en's
 `LICENSING.md` and `AUTHORS`. KaiT2en's name and logo are its trademarks; the
-logo is removed from `t2-fan-control` (`no-wordmark.patch`).
+logo is removed from `t2-fan-control` and `t2-smc-control` (`no-wordmark.patch`).
 
 ## Use the repo
 
@@ -29,7 +29,7 @@ sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
 Server = https://github.com/josemiguelo/t2-arch-packages/releases/download/repo
 ```
 
-Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-bluetooth-dkms t2-fan-control t2bce-audio-ucm t2-dkms-guard t2-arch-packages-keyring linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
+Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-bluetooth-dkms t2-fan-control t2-smc-control t2bce-audio-ucm t2-dkms-guard t2-arch-packages-keyring linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
 `linux-t2` must not be installed on the same kernel: it has its own t2bce. See
 [Omarchy's `fix-t2.sh` on the `t2-kait2en` branch](#port-status) for the module,
 initramfs and kernel-argument setup.
@@ -49,6 +49,7 @@ initramfs and kernel-argument setup.
 | `t2-bluetooth-dkms` | kernel.org 7.2.15 `drivers/bluetooth` + `patches/runtime/wireless/{0002,0012,0013,0021,0024}` | compiles clean vs `linux-omarchy` 7.2.15. Replaces `btbcm`, `hci_uart`, `hci_bcm4377`: stock `btbcm` drops these Macs' LE advertisements (320 "unknown advertising packet type" in one boot), so LE keyboards/mice don't appear or can't connect. 7.2.x `-omarchy` kernels only |
 | `t2-arch-packages-keyring` | (this repo) | signing key in `/usr/share/pacman/keyrings`, populated on install |
 | `t2-fan-control` | `apps/t2-fan-control` | **works** with the shipped `/etc/t2-fancontrol/config.txt` (system chill 80 °C). Upstream's default 45 °C pins MacBookPro16,1 fans at 100%. Paths moved `/usr/local` → `/usr`; replaces `t2fanrd` |
+| `t2-smc-control` | `apps/t2-smc-control` | **builds**, upstream's 13 tests pass (2026-11-12). The GTK app and `t2-smc-gaugingd.service`, which lifts a charge limit (t2smc's `battery_charge_limit_suspended`) for a full charge when the gauge needs one to recalibrate, as macOS's powerd does. Paths moved `/usr/local` → `/usr`; the unit runs only where t2smc is loaded |
 
 ### Notes from testing (MacBookPro16,1)
 
