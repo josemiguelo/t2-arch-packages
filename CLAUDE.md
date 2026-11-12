@@ -25,7 +25,7 @@ a fresh install, plus `omacom/omarchy-pkgs`, `nutanix/libvfio-user` (built), the
 from 1Password (item `kait2en`, Personal vault) and the daily `kait2en-sync.timer`.
 
 Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
-`t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-wireless-dkms`,
+`t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-trackpad-actuator-dkms`, `t2-force-click`, `t2-wireless-dkms`,
 `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp` (with `bankstown-lv2`, not KaiT2en's),
 `t2-dkms-guard`, `t2-arch-packages-keyring`. Arch's own
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
@@ -152,6 +152,17 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   the in-tree one ("already installed (unversioned module)"): the patches leave `brcmutil` and
   `brcmfmac-wcc/-cyw/-bca` the same code (checked by disassembly), so the stock ones stay, and
   `dkms status` reports "Differences between built and installed modules". Harmless.
+- **`hid-apple` binds every interface of the T2 trackpad/keyboard device** (it matches by ID),
+  the Taptic Engine's included, and the HID core rehands only interfaces bound to hid-generic:
+  `t2_trackpad_actuator` loaded later gets nothing (KaiT2en's own `t2hid` keeps hid-apple off
+  them). `t2_precision_trackpad` gets its interface by loading first in the initramfs; the
+  actuator's package ships a udev rule instead: on `ACTION=="add|bind"` with `DRIVER=="apple"`
+  for the T2 trackpad IDs, a helper moves the interface whose report descriptor starts
+  `06 00 ff 09 0d` (usage page 0xff00, usage 0x0d) and gives it back to hid-apple if binding
+  fails. `add` is the one that catches it at boot: hid-apple binds these in the initramfs, whose
+  udev only carries mkinitcpio's four rule files, and the real root's coldplug replays them as
+  `add` events (driver already bound); after a resume the T2 bus enumerates them again and the
+  `bind` does. A rule on `bind` alone passes a manual rebind test and fails at every boot.
 - `fix-t2.sh` must not contain the word `brcmfmac` (not even in a comment):
   `test/shell.d/brcmfmac-supplicant-test.sh` keeps that driver's modprobe file to one owner.
 - The fetcher needs APFS (linux-t2 builds it in, linux-omarchy doesn't), and during an ISO
@@ -204,14 +215,55 @@ it back, so re-check with `git log -- <path>` before starting.
    and rebooting undoes it.
 4. **Packaging the firmware fetcher here**, to drop `[arch-mact2]` (`SigLevel = Never`): ours,
    no wait.
-5. **dGPU power** (`modules/t2gmux`, `patches/runtime/gpu-runtime-pm`, `apps/t2-dgpu-control`,
-   `apps/t2-hybrid-gpu-control`): eligible 2026-12-10. Two amdgpu patches are specific to the
-   MacBookPro16,1; review the loadout's `t2-gmux-backlight` and `t2-render-gpu` with it, and the
-   `amdgpu ... sdma0` fence warnings.
+5. **dGPU power, hybrid graphics** (`modules/t2gmux`, `patches/runtime/gpu-runtime-pm`,
+   `apps/t2-hybrid-gpu-control`): **deferred by the owner to linux-omarchy 7.3** (2026-11-12), to go
+   with moving `t2-wireless-dkms` to 7.3 sources, when KaiT2en's patches (rebased onto 7.3 on
+   2026-11-10) should apply as they are and have settled under the one-month rule.
+   - **Why it matters:** the panel (eDP) is wired to the AMD dGPU at boot, so it never sleeps
+     (`power/control` = `on`, D0): **32 W on battery** measured 2026-11-12 (~1.8 h). In hybrid mode
+     the Intel iGPU drives the panel and Hyprland, and the dGPU sits in D3cold until an app asks
+     for it (`DRI_PRIME=1`), through PRIME offload.
+   - **What it takes:** (1) `t2gmux` (DKMS, has a `dkms.conf`) in place of `apple_gmux`: blacklist
+     `apple_gmux` and load `t2gmux` early in the initramfs (`MODULES` in `fix-t2.sh`): "GMUX must
+     provide the power callbacks before AMDGPU probes". It keeps the `gmux_backlight` name and has
+     `boot_gpu` (-1 auto, 0 iGPU, 1 dGPU). (2) `amdgpu` rebuilt from kernel sources with the series,
+     like `t2-wireless-dkms` (`drivers/gpu/drm/amd`: 536 MB, ~1000 .c files: measure the DKMS and
+     `t2-dkms-guard` build time; `amdxcp` and other side modules may be code-identical, as with
+     brcmfmac's helpers). 0001 (VI reset) is in the kernel since 7.2.10: skip it. 0008, 0009 and
+     0012 are MacBookPro16,1-specific. (3) The boot GPU set to the iGPU: the Apple EFI variable
+     `gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9`, `07 00 00 00 01 00 00 00` for the
+     iGPU (`... 00 ...` for the dGPU; efivarfs files may need `chattr -i`). **macOS resets it to
+     the dGPU at every macOS boot**: KaiT2en's answer is `t2-gpu-preboot`, a UEFI program made the
+     first boot entry; the plan here was a loadout script plus a boot unit that set it back
+     instead (the first Omarchy boot after macOS then runs on the dGPU, the next is hybrid), no
+     UEFI binary in the boot chain. The dGPU's `power/control` must read `auto`.
+   - **Found on 7.2.15 at the pin `27fd5c9`:** 0002 (the GMUX runtime-PM patch) and 0012 don't
+     apply cleanly (written against other sources: offsets up to 290 lines). The rejects were
+     trivial (a `bool gmux, px;` declaration in `amdgpu_device_fini_sw`, an
+     `#include <linux/dmi.h>` in `amdgpu_dm.c`), but several hunks went in with fuzz and would
+     each need checking by hand. On 7.3 with KaiT2en's rebased series that should be moot: check
+     with `patch --dry-run` first.
+   - **The HDA patch** the app's README mentions ("allow direct-complete with a powered-off GPU")
+     isn't in KaiT2en's runtime set (only `currently-testing/` and `upstream/submitted/`), and its
+     installer removes the patched `snd-hda-intel` it used to ship.
+   - **The dotfiles:** `t2-render-gpu` picks the card whose eDP is connected at each login, so it
+     follows the panel to the iGPU by itself (and so keeps Hyprland off the dGPU).
+     `t2-gmux-backlight`'s udev rule matches `gmux_backlight`, which `t2gmux` keeps: verify.
+     **External monitors** on the Thunderbolt ports hang off the dGPU: in hybrid mode, with
+     Hyprland on the iGPU only, they need a dGPU boot.
+   - **Plan, in two stages:** stage 1, `t2gmux` and the patched `amdgpu` installed while still
+     booting on the dGPU (nothing visible changes: proves the drivers, backlight, suspend, build
+     time); stage 2, the boot GPU flipped to the iGPU: check the panel on Intel, the dGPU in
+     D3cold, battery draw, suspend, brightness, a `DRI_PRIME=1` app. Ways back: the variable back
+     to the dGPU, or one macOS boot; removing the packages; the Limine fallback.
+   - KaiT2en's i915 patches (`patches/runtime/i915`: PSR on Apple panels, restoring the gmux
+     brightness) matter once the iGPU drives the panel: look at them with this.
 6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): eligible
    2026-11-30. Replaces hid_apple: the loadout's `t2-hid-apple-keyboard` swaps move with it.
-7. **Trackpad haptics** (`modules/t2_trackpad_actuator`, `apps/t2-force-click`): eligible
-   2026-12-08.
+7. **Trackpad haptics** (`modules/t2_trackpad_actuator`, `apps/t2-force-click`): **done
+   2026-11-12, as an exception to the one-month rule**: `t2-trackpad-actuator-dkms` (with a udev
+   rule, see the facts above) and `t2-force-click`. The force click replays Apple's captured
+   plain click, so it feels like a second click, not macOS's force-click haptic.
 8. **The rest, each with its own clock**: Thunderbolt runtime patches (`patches/runtime/
    thunderbolt`, 2026-12-11), `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
    bridge link, which the udev rule keeps NetworkManager off but leaves up), `t2-kbd-backlight`

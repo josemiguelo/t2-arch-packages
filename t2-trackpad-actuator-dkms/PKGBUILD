@@ -1,0 +1,63 @@
+# t2_trackpad_actuator: KaiT2en's driver for the Taptic Engine of the T2
+# MacBook trackpads, DKMS. The trackpad exposes its haptic actuator as a
+# separate HID interface (vendor usage page 0xff00, usage 0x0d); this driver
+# binds it and plays waveforms through report 0x53, as macOS's
+# AppleActuatorHIDEventDriver does.
+#
+# t2_precision_trackpad weak-links to it (symbol_get): when it's loaded, a
+# force click (the second, harder press) plays Apple's click waveform; without
+# it the press is still reported (BTN_TASK) but gives no haptic response.
+# Plain clicks are the trackpad firmware's own; the force click replays
+# Apple's captured plain click (waveform 1), so it feels like a second click,
+# not macOS's deeper force-click haptic. The probe_* parameters are diagnostics.
+#
+# hid-apple matches every interface of the trackpad/keyboard device by ID and
+# binds the haptic one before this driver can (on KaiT2en its own t2hid keeps
+# hid-apple off them), and the HID core rehands only hid-generic's interfaces.
+# A udev rule (t2-trackpad-actuator.rules) runs a helper whenever hid-apple
+# binds an interface of these trackpads, at boot and after each resume: it
+# moves the one whose report descriptor is the actuator's here, and gives it
+# back to hid-apple if binding fails. Keyboard interfaces are never touched,
+# and nothing goes into the initramfs.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  modules/t2_trackpad_actuator
+# Ported 2026-11-12 as an exception to the one-month rule (last code change
+# 2026-10-15, a comments-only commit on 2026-11-08).
+
+pkgname=t2-trackpad-actuator-dkms
+_modname=t2_trackpad_actuator
+_modver=0.01
+pkgver=0.01.r2.27fd5c9
+pkgrel=2
+pkgdesc="Apple T2 MacBook trackpad Taptic Engine (haptics) driver from KaiT2en, DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only')
+depends=('dkms' 't2-precision-trackpad-dkms')
+makedepends=('git')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+source=("kait2en::git+${_repo}#commit=${_commit}"
+        't2-trackpad-actuator.rules'
+        'rebind')
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_modver" \
+    "$(git rev-list --count HEAD -- modules/t2_trackpad_actuator)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd kait2en/modules/t2_trackpad_actuator
+  local dst="$pkgdir/usr/src/$_modname-$_modver"
+  install -Dm644 dkms.conf Makefile t2_trackpad_actuator.c t2_trackpad_actuator.h hid-ids.h -t "$dst/"
+  printf '\n# t2-arch-packages: stock Omarchy kernels only\nBUILD_EXCLUSIVE_KERNEL="%s"\n' \
+    "${T2_DKMS_KERNEL_REGEX:-.*-omarchy\$}" >> "$dst/dkms.conf"
+  install -Dm644 "$srcdir/t2-trackpad-actuator.rules" "$pkgdir/usr/lib/udev/rules.d/90-t2-trackpad-actuator.rules"
+  install -Dm755 "$srcdir/rebind" "$pkgdir/usr/lib/t2-trackpad-actuator/rebind"
+}

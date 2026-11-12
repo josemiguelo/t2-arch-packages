@@ -9,8 +9,8 @@
 # device: list it ahead of t2bce_vhci in the initramfs MODULES.
 #
 # Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  modules/t2_precision_trackpad
-# Its optional haptics partner, t2_trackpad_actuator, is weak-linked and not
-# packaged here yet.
+# Its optional haptics partner, t2_trackpad_actuator, is weak-linked:
+# t2-trackpad-actuator-dkms.
 
 pkgname=t2-precision-trackpad-dkms
 _modname=t2_precision_trackpad

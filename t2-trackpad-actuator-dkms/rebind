@@ -1,0 +1,13 @@
+#!/bin/sh
+# Move one T2 trackpad HID interface from hid-apple to t2_trackpad_actuator,
+# if it's the Taptic Engine's (its report descriptor starts with usage page
+# 0xff00, usage 0x0d). Run by udev for each interface hid-apple binds.
+dev=$1
+desc=$(od -An -tx1 -v "/sys/bus/hid/devices/$dev/report_descriptor" 2>/dev/null | tr -d ' \n')
+case $desc in 0600ff090d*) ;; *) exit 0 ;; esac
+modprobe -q t2_trackpad_actuator || exit 0
+[ -d /sys/bus/hid/drivers/t2_trackpad_actuator ] || exit 0
+echo "$dev" > /sys/bus/hid/drivers/apple/unbind 2>/dev/null || exit 0
+echo "$dev" > /sys/bus/hid/drivers/t2_trackpad_actuator/bind 2>/dev/null ||
+  echo "$dev" > /sys/bus/hid/drivers/apple/bind 2>/dev/null
+exit 0

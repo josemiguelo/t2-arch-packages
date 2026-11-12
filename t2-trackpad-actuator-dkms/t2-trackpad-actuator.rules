@@ -1,0 +1,13 @@
+# t2-arch-packages: hand the T2 trackpad's haptic interface to
+# t2_trackpad_actuator. hid-apple matches every interface of these devices by
+# ID and binds them first, the Taptic Engine's included, and the HID core only
+# rehands interfaces bound to hid-generic. The helper acts only on the
+# interface whose report descriptor is the actuator's (vendor usage page
+# 0xff00, usage 0x0d) and gives it back to hid-apple if binding fails.
+# add|bind: hid-apple binds these in the initramfs (for the disk unlock
+# prompt), where this rule isn't, so at boot it's the real root's coldplug
+# `add`, with the driver already bound, that catches them; after a resume
+# the T2 bus enumerates them again and the `bind` that follows the `add` does.
+ACTION=="add|bind", SUBSYSTEM=="hid", DRIVER=="apple", ENV{HID_ID}=="0003:000005AC:0000027[8a-f]", RUN+="/usr/lib/t2-trackpad-actuator/rebind %k"
+ACTION=="add|bind", SUBSYSTEM=="hid", DRIVER=="apple", ENV{HID_ID}=="0003:000005AC:00000280", RUN+="/usr/lib/t2-trackpad-actuator/rebind %k"
+ACTION=="add|bind", SUBSYSTEM=="hid", DRIVER=="apple", ENV{HID_ID}=="0003:000005AC:00000340", RUN+="/usr/lib/t2-trackpad-actuator/rebind %k"

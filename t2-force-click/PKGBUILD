@@ -1,0 +1,75 @@
+# T2 Force Click: KaiT2en's GTK app and root daemon for the T2 trackpads'
+# Force Touch: click pressure (t2_precision_trackpad's click_strength),
+# the force click threshold and switch, and one action bound to a force click
+# (alternating copy/paste, a recorded key combo through a virtual keyboard, or
+# a shell command run as the desktop user). The daemon
+# (t2-force-click.service) applies the saved settings at boot; the GUI talks to
+# it over /run/t2-force-click/daemon.sock.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  apps/t2-force-click
+# Authors: André Eikmeyer and 4f1sh3r. GPL-3.0-or-later with a section 7(b)
+# attribution term (see LICENSING.md, shipped in /usr/share/licenses).
+#
+# Upstream installs to /usr/local; the binary moves to /usr. The app shows the
+# KaiT2en wordmark only when /usr/local/share/kait2en/kait2en-wordmark.png
+# exists, which nothing here ships (KaiT2en's trademark terms keep its name and
+# logo out of redistributions), so no patch is needed for it.
+
+pkgname=t2-force-click
+_ver=0.1.0
+pkgver=0.1.0.r8.27fd5c9
+pkgrel=1
+pkgdesc="Force Touch settings app and daemon for Apple T2 Mac trackpads (KaiT2en)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('gtk4' 'libadwaita' 't2-precision-trackpad-dkms' 't2-trackpad-actuator-dkms')
+makedepends=('git' 'cargo')
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- apps/t2-force-click)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en/apps/t2-force-click
+  sed -i 's|/usr/local/bin/|/usr/bin/|g' org.t2forceclick.gtk.desktop systemd/t2-force-click.service
+  grep -rq '/usr/local/bin' org.t2forceclick.gtk.desktop systemd src &&
+    { echo "unpatched /usr/local/bin path left" >&2; return 1; }
+  # Run only where the trackpad driver it configures is loaded.
+  sed -i '/^\[Unit\]/a ConditionPathIsDirectory=/sys/module/t2_precision_trackpad' systemd/t2-force-click.service
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/apps/t2-force-click
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+check() {
+  cd kait2en/apps/t2-force-click
+  export CARGO_TARGET_DIR=target
+  cargo test --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=apps/t2-force-click
+  install -Dm755 "$app/target/release/t2-force-click" "$pkgdir/usr/bin/t2-force-click"
+  install -Dm644 "$app/org.t2forceclick.gtk.desktop" "$pkgdir/usr/share/applications/org.t2forceclick.gtk.desktop"
+  install -Dm644 "$app/assets/icons/hicolor/scalable/apps/org.t2forceclick.gtk.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.t2forceclick.gtk.svg"
+  install -Dm644 "$app/systemd/t2-force-click.service" "$pkgdir/usr/lib/systemd/system/t2-force-click.service"
+
+  install -Dm644 "$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}
