@@ -3,7 +3,8 @@
 Context for Claude sessions (and people) picking this work up. The owner runs it on a
 MacBookPro16,1 (16" 2019, T2) named `t2-macbook-omarchy`, on Omarchy's **stable** channel
 (the ISO is built with `--stable`), beside macOS. Read this before acting; the dotfiles' `docs/t2-macbook.md`
-is the machine-side companion.
+is the machine-side companion, and `docs/omarchy-integration.md` explains how the fork's install,
+the running system and updates fit together, and how to maintain them.
 
 ## The system
 
