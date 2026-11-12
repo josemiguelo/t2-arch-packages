@@ -30,7 +30,7 @@ sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
 Server = https://github.com/josemiguelo/t2-arch-packages/releases/download/repo
 ```
 
-Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-bluetooth-dkms t2-fan-control t2-smc-control t2bce-audio-ucm t2-dsp bankstown-lv2 t2-dkms-guard t2-arch-packages-keyring linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
+Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-wireless-dkms t2-fan-control t2-smc-control t2bce-audio-ucm t2-dsp bankstown-lv2 t2-dkms-guard t2-arch-packages-keyring linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
 `linux-t2` must not be installed on the same kernel: it has its own t2bce. See
 [Omarchy's `fix-t2.sh` on the `t2-kait2en` branch](#port-status) for the module,
 initramfs and kernel-argument setup.
@@ -47,7 +47,7 @@ initramfs and kernel-argument setup.
 | `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
 | `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers (tested: pass, fail, no-op) |
 | `t2-precision-trackpad-dkms` | `modules/t2_precision_trackpad` | compiles clean vs `linux-omarchy` 7.2.15. Multitouch/Force Touch for the internal trackpad: stock kernels drive it as a plain mouse (no two-finger scroll, no tap to click), `linux-t2` uses a patched `hid_magicmouse`. Must load before `t2bce_vhci` in the initramfs |
-| `t2-bluetooth-dkms` | kernel.org 7.2.15 `drivers/bluetooth` + `patches/runtime/wireless/{0002,0012,0013,0021,0024}` | compiles clean vs `linux-omarchy` 7.2.15. Replaces `btbcm`, `hci_uart`, `hci_bcm4377`: stock `btbcm` drops these Macs' LE advertisements (320 "unknown advertising packet type" in one boot), so LE keyboards/mice don't appear or can't connect. 7.2.x `-omarchy` kernels only |
+| `t2-wireless-dkms` (replaces `t2-bluetooth-dkms`) | kernel.org 7.2.15 `drivers/bluetooth` + `drivers/net/wireless/broadcom/brcm80211` + `patches/runtime/wireless/0001-0024` | **works** (2026-11-12, MacBookPro16,1): Wi-Fi on the patched `brcmfmac`, 3 resumes (one of 21 min) with no `brcmf` errors (6 on the stock driver) and Wi-Fi back in ~4.7 s (each wake re-probes the card with a firmware reload); Bluetooth LE devices connect after resume. Replaces `btbcm`, `hci_uart`, `hci_bcm4377` (stock `btbcm` drops these Macs' LE advertisements, so LE keyboards/mice don't appear) and `brcmfmac`; DKMS keeps the stock `brcmutil`/`brcmfmac-wcc/-cyw/-bca`, the same code when built from the patched tree. 7.2.x `-omarchy` kernels only. Wi-Fi ported as an exception to the one-month rule |
 | `t2-arch-packages-keyring` | (this repo) | signing key in `/usr/share/pacman/keyrings`, populated on install |
 | `t2-fan-control` | `apps/t2-fan-control` | **works** with the shipped `/etc/t2-fancontrol/config.txt` (system chill 80 °C). Upstream's default 45 °C pins MacBookPro16,1 fans at 100%. Paths moved `/usr/local` → `/usr`; replaces `t2fanrd` |
 | `t2-smc-control` | `apps/t2-smc-control` | **builds**, upstream's 13 tests pass (2026-11-12). The GTK app and `t2-smc-gaugingd.service`, which lifts a charge limit (t2smc's `battery_charge_limit_suspended`) for a full charge when the gauge needs one to recalibrate, as macOS's powerd does. Paths moved `/usr/local` → `/usr`; the unit runs only where t2smc is loaded |
@@ -119,7 +119,7 @@ backwards.
   headers, then, after asking, publishes to the release (replacing the old
   versions) and commits and pushes the PKGBUILDs.
 
-`t2-bluetooth-dkms` also tracks a kernel version (`_kver`): when
+`t2-wireless-dkms` also tracks a kernel version (`_kver`): when
 `linux-omarchy` moves to a new minor, `kernel` reports it skipped, and its
 sources move to that release by hand.
 

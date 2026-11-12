@@ -13,7 +13,7 @@ migrations that assume a T2 Mac runs `linux-t2`.
 
 | Piece | What it does | When it acts |
 |---|---|---|
-| **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages: 7 DKMS kernel-module packages (`t2bce-stack`, `t2smc`, `t2sbs`, `t2smp`, `t2thunderbolt`, `t2-precision-trackpad`, `t2-bluetooth`), `t2-fan-control`, `t2-smc-control`, `t2-dsp` (with `bankstown-lv2`), `t2bce-audio-ucm`, `t2-dkms-guard`, the keyring | Every time pacman installs or updates them, from the GitHub release `repo` |
+| **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages: 7 DKMS kernel-module packages (`t2bce-stack`, `t2smc`, `t2sbs`, `t2smp`, `t2thunderbolt`, `t2-precision-trackpad`, `t2-wireless`), `t2-fan-control`, `t2-smc-control`, `t2-dsp` (with `bankstown-lv2`), `t2bce-audio-ucm`, `t2-dkms-guard`, the keyring | Every time pacman installs or updates them, from the GitHub release `repo` |
 | **omarchy fork**, branch `t2-kait2en-stable` (`josemiguelo/omarchy`) | Replaces upstream's T2 support (`linux-t2` plus `t2fanrd`) with stock `linux-omarchy` plus your packages: `install/hardware/apple/fix-t2.sh`, `install/hardware/pacman.sh`, the package list | **Only during installation** |
 | **omarchy-iso fork**, branch `t2-kait2en` (`josemiguelo/omarchy-iso`) | Builds the ISO that runs that installer: picks `linux-omarchy` on T2 Macs, trusts your repo key, adds the repo to the ISO's pacman configs, populates hardware keyrings once the target's keyring is ready | Only when building the ISO and installing |
 | **dotfiles** (`~/.local/share/chezmoi`, `loadouts/.etc/t2/`) | The `t2-*` scripts: re-check and repair the T2 setup on the running system | Whenever you run `loadout` (status, sync, run) |
@@ -103,11 +103,11 @@ not before 2026-12-11).
 
 ### C. The first kernel 7.3: the gap
 
-- `t2-bluetooth-dkms` only builds for 7.2 kernels (`BUILD_EXCLUSIVE_KERNEL="^7\.2\.[0-9]+-[0-9]+-omarchy$"`).
+- `t2-wireless-dkms` only builds for 7.2 kernels (`BUILD_EXCLUSIVE_KERNEL="^7\.2\.[0-9]+-[0-9]+-omarchy$"`).
   For a 7.3 kernel the guard prints *"not for 7.3…, skipped"* and **lets the upgrade through**.
 - You'd boot 7.3 with the stock `btbcm`/`hci_uart`/`hci_bcm4377`, which drop this Mac's
-  Bluetooth LE advertisements. **The Keychron K15 Max and the MX Master 3 would stop
-  connecting.**
+  Bluetooth LE advertisements (**the Keychron K15 Max and the MX Master 3 would stop
+  connecting**), and the stock `brcmfmac` (Wi-Fi without the resume fixes).
 - "Make `t2-dkms-guard` warn when a kernel skips a package" is on the roadmap in
   t2-arch-packages' CLAUDE.md. It hasn't been done yet.
 
@@ -153,7 +153,7 @@ If a new one shows up, read it before the stable release that includes it reache
 - Watch for the daily `kait2en-sync.timer` notification (`bin/kait2en-sync notify`). It compiles
   the published DKMS packages against new `[omarchy]` headers as soon as they appear, ahead of you
   updating. `bin/kait2en-sync kernel` does the same by hand.
-- When 7.3 headers appear, move `t2-bluetooth-dkms` to 7.3 sources (kernel.org 7.3 plus KaiT2en's
+- When 7.3 headers appear, move `t2-wireless-dkms` to 7.3 sources (kernel.org 7.3 plus KaiT2en's
   patches) first. Until it's ready, hold the kernel back with
   `IgnorePkg = linux-omarchy linux-omarchy-headers` in `/etc/pacman.conf`.
 

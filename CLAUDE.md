@@ -25,7 +25,7 @@ a fresh install, plus `omacom/omarchy-pkgs`, `nutanix/libvfio-user` (built), the
 from 1Password (item `kait2en`, Personal vault) and the daily `kait2en-sync.timer`.
 
 Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
-`t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-bluetooth-dkms`,
+`t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-wireless-dkms`,
 `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp` (with `bankstown-lv2`, not KaiT2en's),
 `t2-dkms-guard`, `t2-arch-packages-keyring`. Arch's own
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
@@ -144,10 +144,16 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   hid-apple takes the trackpad's mouse interface. It only claims that interface, so hid-apple
   keeps the keyboard (and the owner's `hid_apple` swaps).
 - Stock `btbcm` drops these Macs' LE advertisements ("unknown advertising packet type"):
-  `t2-bluetooth-dkms` rebuilds btbcm/hci_uart/hci_bcm4377 from kernel.org 7.2.15 with KaiT2en's
-  patches 0002/0012/0013/0021/0024; `BUILD_EXCLUSIVE_KERNEL="^7\.2\.…"`, so on 7.3 its sources
-  move by hand. linux-omarchy is plain kernel.org (no stable-review patch); its own Bluetooth
-  patches touch only btusb/btintel*, which aren't replaced.
+  `t2-wireless-dkms` (was `t2-bluetooth-dkms`) rebuilds btbcm/hci_uart/hci_bcm4377 and brcmfmac
+  from kernel.org 7.2.15 with KaiT2en's patches 0001-0024; `BUILD_EXCLUSIVE_KERNEL="^7\.2\.…"`,
+  so on 7.3 its sources move by hand (until then 7.3 runs the stock Wi-Fi and Bluetooth drivers).
+  linux-omarchy is plain kernel.org (no stable-review patch); its own Bluetooth patches touch
+  only btusb/btintel*, which aren't replaced. DKMS 3.4 skips a module whose srcversion matches
+  the in-tree one ("already installed (unversioned module)"): the patches leave `brcmutil` and
+  `brcmfmac-wcc/-cyw/-bca` the same code (checked by disassembly), so the stock ones stay, and
+  `dkms status` reports "Differences between built and installed modules". Harmless.
+- `fix-t2.sh` must not contain the word `brcmfmac` (not even in a comment):
+  `test/shell.d/brcmfmac-supplicant-test.sh` keeps that driver's modprobe file to one owner.
 - The fetcher needs APFS (linux-t2 builds it in, linux-omarchy doesn't), and during an ISO
   install its post-install runs in a chroot whose modprobe targets the live ISO's kernel: hence
   `t2-wifi-firmware.service` on the installed system's boots.
@@ -185,10 +191,10 @@ it back, so re-check with `git log -- <path>` before starting.
    (`acpi_override`); here it would go through mkinitcpio's ACPI override in the UKI. A DSDT
    override is high-risk (a bad table can stop the boot): test from a snapshot with the Limine
    fallback entry at hand.
-2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`, `install-wireless.sh`,
-   `install-kernel-args.sh`): eligible 2026-12-11. Same pattern as `t2-bluetooth-dkms`; one
-   firmware timeout after a resume was seen. KaiT2en's kernel arguments now assume them
-   (asynchronous suspend for the BCM4364).
+2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`): **done 2026-11-12, as an exception to
+   the one-month rule**, at the existing pin `27fd5c9` (patches 0001-0024): `t2-bluetooth-dkms`
+   became `t2-wireless-dkms`. Not taken: 0025 (iMac antenna), 0026 (BCM4377 ASPM) and 0027
+   (brcmfmac deep sleep, new on 2026-11-10), which come with the next re-pin under the rule.
 3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): **done 2026-11-12, as an
    exception to the one-month rule** granted by the owner (would have been eligible 2026-12-08);
    sounds like macOS, ~17% of one core while playing, 0 xruns. Packaged as `t2-dsp` at `402a353` (2026-11-08), the last DSP before

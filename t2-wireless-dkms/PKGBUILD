@@ -1,0 +1,116 @@
+# The kernel's Broadcom Wi-Fi and Bluetooth drivers from Linux 7.2.15, with
+# KaiT2en's Apple fixes, DKMS. They replace the in-tree modules from updates/.
+# Replaces t2-bluetooth-dkms (the same Bluetooth part, which this grew from).
+#
+# Wi-Fi, brcmfmac (+ brcmfmac-wcc/-cyw/-bca, brcmutil), for the BCM4364 of
+# the MacBookPro15/16 and the BCM4355/BCM4377 of the others:
+#   0001  TX beamforming off on the BCM4364
+#   0003  200 ms power-save timeout by default
+#   0004  firmware capabilities matched as whole words
+#   0005  the AP 4-way handshake left to the host (the firmware's never finishes)
+#   0006-0011  AWDL (what AirDrop runs on): interface, data path, vendor
+#         commands; inert until something uses it
+#   0014  ARP/ND offload off on the BCM4364 while awake
+#   0015-0020, 0022, 0023  PCIe power states and resume: D3 handling, mailbox
+#         and core startup of newer firmware, probing again after a resume
+#         through firmware, flowring delete without waiting, no host-ready
+#         doorbell at init where it's a capability (the BCM4364 firmware halt)
+# Bluetooth, btbcm, hci_uart, hci_bcm4377:
+#   0002  raise ACL priority on Apple Broadcom controllers (A2DP and HID links
+#         no longer starve while Wi-Fi runs on 2.4 GHz)
+#   0012  clear vendor bits in LE advertising report types: stock btbcm drops
+#         most of these Macs' LE advertisements ("unknown advertising packet
+#         type: 0x11"), so Bluetooth LE keyboards and mice never show up or
+#         can't connect (MacBookPro16,1 on linux-omarchy: 320 drops in a boot)
+#   0013  strict duplicate filter quirk (scans report addresses promptly)
+#   0021, 0024  hci_bcm4377 resume and registration fixes (PCIe models)
+#
+# Pinned with the other packages at 27fd5c9, whose series is 0001-0024 (later
+# KaiT2en commits add 0025-0027: an iMac antenna check, a BCM4377 ASPM change
+# and brcmfmac deep sleep). Wi-Fi ported 2026-11-12 as an exception to the
+# one-month rule (CLAUDE.md).
+#
+# The sources must match the kernel the modules load into: linux-omarchy 7.2.x
+# builds plain kernel.org 7.2.15 (no stable-review patch), and its own patches
+# touch neither brcm80211 nor the Bluetooth drivers replaced here.
+# BUILD_EXCLUSIVE_KERNEL keeps it to 7.2.x -omarchy kernels: a 7.3 kernel keeps
+# its stock drivers (without these fixes, Bluetooth LE devices included) until
+# this package moves to 7.3 sources.
+#
+# Patches: https://github.com/kaiT2en/KaiT2en-Fedora  patches/runtime/wireless
+
+pkgname=t2-wireless-dkms
+_kver=7.2.15
+_modname=t2-wireless
+pkgver=7.2.15.r20.27fd5c9
+pkgrel=1
+pkgdesc="Broadcom Wi-Fi and Bluetooth drivers with KaiT2en's Apple fixes (resume, LE devices, AWDL), DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only' 'ISC')
+depends=('dkms')
+makedepends=('git')
+provides=('t2-bluetooth-dkms')
+conflicts=('t2-bluetooth-dkms')
+replaces=('t2-bluetooth-dkms')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+_patches=(0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012
+          0013 0014 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024)
+source=("https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${_kver}.tar.xz"
+        "kait2en::git+${_repo}#commit=${_commit}")
+noextract=("linux-${_kver}.tar.xz")
+sha256sums=('d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_kver" \
+    "$(git rev-list --count HEAD -- patches/runtime/wireless)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  rm -rf src
+  mkdir src
+  bsdtar -xf "linux-${_kver}.tar.xz" -C src --strip-components=1 \
+    "linux-${_kver}/drivers/bluetooth" \
+    "linux-${_kver}/drivers/net/wireless/broadcom/brcm80211"
+  cd src
+  local p f
+  for p in "${_patches[@]}"; do
+    f=$(ls "$srcdir"/kait2en/patches/runtime/wireless/"$p"-*.patch)
+    patch -p1 --forward --no-backup-if-mismatch < "$f"
+  done
+}
+
+package() {
+  local dst="$pkgdir/usr/src/$_modname-$_kver"
+  install -dm755 "$dst"
+  cp -a --no-preserve=ownership src/drivers/bluetooth "$dst/bluetooth"
+  cp -a --no-preserve=ownership src/drivers/net/wireless/broadcom/brcm80211 "$dst/brcm80211"
+  # brcmsmac (older Broadcom chips, no T2 Mac) stays the kernel's own.
+  rm -rf "$dst/brcm80211/brcmsmac"
+  sed -i '/CONFIG_BRCMSMAC/d' "$dst/brcm80211/Makefile"
+  printf 'obj-m += bluetooth/\nobj-m += brcm80211/\n' > "$dst/Makefile"
+  find "$dst" -name '*.orig' -delete
+
+  local i=0 m
+  {
+    printf 'PACKAGE_NAME="%s"\nPACKAGE_VERSION="%s"\n' "$_modname" "$_kver"
+    echo '# The kernel'"'"'s own Makefiles build what its config enables; only these are'
+    echo '# installed, over the in-tree ones.'
+    for m in bluetooth/btbcm bluetooth/hci_uart bluetooth/hci_bcm4377 \
+             brcm80211/brcmutil/brcmutil brcm80211/brcmfmac/brcmfmac \
+             brcm80211/brcmfmac/wcc/brcmfmac-wcc brcm80211/brcmfmac/cyw/brcmfmac-cyw \
+             brcm80211/brcmfmac/bca/brcmfmac-bca; do
+      printf 'BUILT_MODULE_NAME[%d]="%s"\nBUILT_MODULE_LOCATION[%d]="%s"\nDEST_MODULE_LOCATION[%d]="/updates/dkms"\n' \
+        "$i" "${m##*/}" "$i" "${m%/*}/" "$i"
+      i=$((i + 1))
+    done
+    echo 'AUTOINSTALL="yes"'
+    echo '# t2-arch-packages: Linux 7.2 sources, for stock Omarchy 7.2.x kernels only'
+    echo 'BUILD_EXCLUSIVE_KERNEL="^7\.2\.[0-9]+-[0-9]+-omarchy$"'
+  } > "$dst/dkms.conf"
+}
