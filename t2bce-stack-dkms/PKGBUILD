@@ -35,6 +35,18 @@ pkgver() {
     "$(git rev-parse --short=7 HEAD)"
 }
 
+# KaiT2en's 6ddacd9 (2026-11-11) replaced the whole t2bce stack, keyboard
+# included, with modules/apple-t2-bridge (snd_apple_t2 for audio). A pin at or
+# past it has no t2bce sources: that's a port by hand (new package, initramfs
+# modules, UCM, the DSP's udev match), never a re-pin.
+prepare() {
+  cd kait2en
+  local c
+  for c in t2bce_stack t2bce_dma t2bce_core t2bce_vhci t2bce_audio; do
+    [[ -d modules/$c ]] || { echo "modules/$c is gone at this KaiT2en commit (apple-t2-bridge replaced the t2bce stack in 6ddacd9): port it by hand" >&2; return 1; }
+  done
+}
+
 package() {
   cd kait2en
   local dst="$pkgdir/usr/src/$_modname-$_modver"

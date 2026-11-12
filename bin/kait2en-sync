@@ -100,12 +100,23 @@ is_sweep() {
   [[ ${SWEEP[$c]} == 1 ]]
 }
 
+# A sweep for a package's paths: a sweep that deletes or renames nothing
+# there. 6ddacd9 touched 12 folders like one, and removed t2bce_audio (the
+# audio driver t2bce-stack-dkms ships) on the way.
+sweep_for() {
+  local c=$1
+  shift
+  is_sweep "$c" || return 1
+  [[ -z $(git -C "$KAIT2EN" show --diff-filter=DR --name-only --format= "$c" -- "$@") ]]
+}
+
 # One package's upstream state under the one-month rule (see the top). Sets
 # PLAN_TARGET (the eligible commit, empty when none), PLAN_LOG (its commits
 # since the pin, each marked eligible, waiting or sweep), PLAN_SWEEPS (how many
 # are sweeps) and PLAN_WAIT (the earliest day the waiting ones can become
-# eligible, if nothing else lands on their paths). Sweeps are listed, since
-# the heuristic can take a large feature for one, but they neither restart the
+# eligible, if nothing else lands on their paths). Sweeps (sweep_for: none
+# that deletes or renames files in the package) are listed, since the
+# heuristic can take a large feature for one, but they neither restart the
 # clock nor become a pin by themselves: they come along with the next eligible
 # real commit after them.
 plan() {
@@ -114,7 +125,7 @@ plan() {
   local -a all_h=() all_t=() all_s=() all_sweep=() ts=() hs=()
   while IFS=$'\t' read -r c t s; do
     all_h+=("$c") all_t+=("$t") all_s+=("$s")
-    if is_sweep "$c"; then all_sweep+=(1); else all_sweep+=(0) hs+=("$c") ts+=("$t"); fi
+    if sweep_for "$c" "$@"; then all_sweep+=(1); else all_sweep+=(0) hs+=("$c") ts+=("$t"); fi
   done < <(git -C "$KAIT2EN" log --reverse --format='%H%x09%ct%x09%s' "$pin..$UPSTREAM" -- "$@")
   n=${#hs[@]}
   PLAN_SWEEPS=$((${#all_h[@]} - n))

@@ -33,6 +33,15 @@ pkgver() {
     "$(git rev-parse --short=7 HEAD)"
 }
 
+# KaiT2en's 6ddacd9 (2026-11-11) moved these profiles to
+# modules/apple-t2-alsa-ucm-conf, for its new snd_apple_t2 driver: a port by
+# hand together with t2bce-stack-dkms, never a re-pin.
+prepare() {
+  cd kait2en
+  [[ -d modules/t2bce_audio-alsa-ucm-conf/ucm2 ]] ||
+    { echo "modules/t2bce_audio-alsa-ucm-conf is gone at this KaiT2en commit (6ddacd9 moved it with the new audio driver): port it by hand" >&2; return 1; }
+}
+
 package() {
   cd kait2en
   install -dm755 "$pkgdir/usr/share/alsa/ucm2"
