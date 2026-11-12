@@ -1,8 +1,8 @@
 # Working on the KaiT2en → Omarchy port
 
 Context for Claude sessions (and people) picking this work up. The owner runs it on a
-MacBookPro16,1 (16" 2019, T2) named `t2-macbook-omarchy`, on Omarchy's **edge** channel
-(permanently), beside macOS. Read this before acting; the dotfiles' `docs/t2-macbook.md`
+MacBookPro16,1 (16" 2019, T2) named `t2-macbook-omarchy`, on Omarchy's **stable** channel
+(the ISO is built with `--stable`), beside macOS. Read this before acting; the dotfiles' `docs/t2-macbook.md`
 is the machine-side companion.
 
 ## The system
@@ -29,41 +29,42 @@ Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
 `077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F` (passphrase in the same 1Password item).
 
-## Where it stands (2026-11-10)
+## Where it stands (2026-11-12)
 
-Omarchy is installed on the real Mac from the ISO built from both `t2-kait2en` branches,
-**into free space beside macOS** (p2 macOS APFS kept, p3 `OMARCHY_EFI`, p4 LUKS + btrfs), on
-stock `linux-omarchy` with every KaiT2en DKMS module built; `linux-t2` is not installed.
-The dotfiles' bootstrap has run.
+Reinstalled on 2026-11-11 from a `--stable` ISO built from both `t2-kait2en` branches (the
+omarchy fork's `t2-kait2en-stable`), **into free space beside macOS** (p2 macOS APFS kept,
+p3 `OMARCHY_EFI`, p4 LUKS + btrfs), on stock `linux-omarchy` 7.2.15 with every KaiT2en DKMS
+module built; `linux-t2` is not installed. Every installer phase finished, the `@factory`
+snapshot included, and the dotfiles' bootstrap has run. The three bugs the 2026-11-10 install
+found (`fix-fkeys.sh`'s `/sys` write and `omarchy-toprow.conf`, the Wi-Fi unit's
+`modprobe -r`) are fixed in the fork and didn't come back.
 
-**The real-Mac install found three bugs the fake-T2 VM test can't** (fixed in the
-`omarchy` fork's `t2-kait2en` worktree, not yet committed or in a rebuilt ISO):
-1. `fix-fkeys.sh` → `omarchy-keyboard-toprow` wrote `fnmode` to `/sys`, which is read-only
-   in the installer's chroot; under `set -e` that stopped "Configuring system". The install
-   was finished by hand from the live ISO (chroot), which skipped the final `@factory`
-   snapshot. Fix: skip the live write where `/sys` isn't writable (test in
-   `keyboard-toprow-test.sh`).
-2. The same `fix-fkeys.sh` wrote `omarchy-toprow.conf` with `fnmode=1` on the T2 keyboard,
-   overriding the dotfiles' default mode 3 (Fn+arrows). Fix: `fix-fkeys.sh` skips T2 Macs
-   (`106b:1801/1802`; test in `apple-silicon-quirks-test.sh`). Note `lspci | grep -q` under
-   `pipefail` reads as "no match" (SIGPIPE): use `grep … >/dev/null`, as `fix-t2.sh` does.
-3. `t2-wifi-firmware.service`'s `ExecStartPost=modprobe -r brcmfmac` failed: `brcmfmac_wcc`
-   holds it. The fetcher already reloads in the right order; the line is gone. The dotfiles'
-   `bcm-firmware.sh` had the same bug.
+**Checked on the first boots:**
+1. Wi-Fi: ✓ on the very first boot. `t2-wifi-firmware.service` fetched the firmware and
+   `t2-wifi-reload` brought the card up (the 2026-11-11 first-boot bug is fixed). Bluetooth ✓:
+   the Keychron K15 Max and MX Master 3 connect, no "unknown advertising packet type".
+2. Internal keyboard, trackpad (with its Force Click device), Touch Bar and T2 audio sinks
+   are up on their drivers; multitouch and Force Click not re-tested after this install.
+3. Deep sleep: ✓, wakes in ~1 s (owner-tested).
+4. Fans: `t2-fan-control` active, 80 °C target; idle fine, not yet tried under load.
+5. Charge limit: 85% (the dotfiles' `t2-charge-limit`), with this repo's `t2-smc-control`
+   (published 2026-11-12) and its `t2-smc-gaugingd` lifting it for calibration charges.
+6. `loadout status`: every T2 item done; pending only what's by hand (`surfingkeys`,
+   `android-sdk`).
+7. The first `linux-omarchy` upgrade through `t2-dkms-guard`: not yet.
 
-**Post-install checks:**
-1. Wi-Fi: ✓ fetched off the macOS volume (BCM4364, `brcmfmac4364b3-pcie`); Bluetooth ✓.
-2. `loadout status`: T2 items done (`t2-kernel-args`, `t2-bcm-firmware`, `t2-boot-clock`,
-   `t2-gmux-backlight`, `t2-render-gpu`, `kait2en-dev`) except `t2-hid-apple-keyboard`,
-   pending on bug 2's leftover `omarchy-toprow.conf` until that file is removed.
-3. Internal keyboard and trackpad: drivers load on the installed system; owner to confirm.
-4. The first `linux-omarchy` upgrade through `t2-dkms-guard`: not yet.
-5. Fans: `t2-fan-control` active, 80 °C target; idle fine, not yet tried under load.
-6. Charge limit: 85% since 2026-11-12 (the dotfiles' `t2-charge-limit`), with `t2-smc-control`'s
-   `t2-smc-gaugingd` lifting it for calibration charges.
+**Fixed after the install** (dotfiles, and the fork's `t2-kait2en`, not yet on
+`t2-kait2en-stable` nor in an ISO): NetworkManager retried DHCP every 45 s on the T2's internal
+USB network link (`05ac:8233`), now unmanaged by a udev rule; `t2-smc-control` installed and its
+daemon enabled by `fix-t2.sh`. In the dotfiles only: 1Password's own "Start at login" entry
+dropped the scale flag at every start (login startup is loadout's now), and `rtkit` was
+missing, so PipeWire had no realtime threads (Omarchy lists it for aarch64 only).
 
-Next: rebuild the ISO with the fixes and rerun the fake-T2 test; the `/sys` bug is
-covered only by the shell test, since the VM has no `hid_apple`.
+Watch: `amdgpu … Fence fallback timer expired on ring sdma0` (twice on 2026-11-12), with the
+dGPU power work below.
+
+Next: move the fork's new `t2-kait2en` commits onto `t2-kait2en-stable`, rebuild the ISO and
+rerun the fake-T2 test.
 
 ## How the owner works
 
@@ -93,7 +94,9 @@ covered only by the shell test, since the VM has no `hid_apple`.
   release assets can't be symlinks (copy `.db`/`.files` and their `.sig` as real files); GitHub's
   CDN serves the old database for about a minute after `--clobber`. The local work dir is
   `~/.cache/t2-arch-packages`; `/tmp` (Claude's scratchpad) is wiped by every reboot.
-- **ISO**: in the omarchy-iso worktree, `bin/omarchy-iso-make --keep-pkg-cache --no-boot-offer
+- **ISO**: the Mac's own is a stable build (`--stable`, from `t2-kait2en-stable`; the dotfiles'
+  `docs/t2-macbook.md` has the command). For testing, in the omarchy-iso worktree,
+  `bin/omarchy-iso-make --keep-pkg-cache --no-boot-offer
   --local-source <omarchy worktree> ~/Repos/gh/omacom/omarchy-pkgs` (~45 min, edge, output
   `release/*-local.iso`; the omarchy package's version label is upstream's pinned commit but
   its files are the worktree's). Test: `VFIO_USER_SERVER=<libvfio-user>/build/samples/gpio-pci-idio-16
