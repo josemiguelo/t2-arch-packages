@@ -1,0 +1,27 @@
+# Copy this model's speaker/mic graph to PipeWire's config, from the DMI
+# product name and /usr/share/t2-dsp/models.json. A model with no profile gets
+# none and runs without DSP. Takes effect at the next boot: the card's new
+# name (udev) and the graphs (PipeWire) both start then.
+
+_t2_dsp_conf=/etc/pipewire/pipewire.conf.d/51-t2-dsp.conf
+
+_t2_dsp_select() {
+  local model profile src
+  model=$(cat /sys/class/dmi/id/product_name 2>/dev/null) || return 0
+  profile=$(grep -F "\"$model\"" /usr/share/t2-dsp/models.json | sed -n 's/.*: *"\([^"]*\)".*/\1/p' | head -1)
+  src=/usr/share/t2-dsp/pipewire/$profile.conf
+  if [[ -z $profile || ! -f $src ]]; then
+    echo "t2-dsp: no DSP profile for '$model'; speakers stay on the raw path"
+    rm -f "$_t2_dsp_conf"
+    return 0
+  fi
+  install -Dm644 "$src" "$_t2_dsp_conf"
+  echo "t2-dsp: $model uses DSP profile $profile; reboot to activate"
+}
+
+post_install() { _t2_dsp_select; }
+post_upgrade() { _t2_dsp_select; }
+pre_remove() {
+  rm -f "$_t2_dsp_conf"
+  echo "t2-dsp: reboot to return the speakers to the raw path"
+}

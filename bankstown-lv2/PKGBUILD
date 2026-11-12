@@ -1,0 +1,47 @@
+# Bankstown: a bass enhancer LV2 plugin (virtual bass), by James Calligeros
+# for Asahi Linux. t2-dsp's speaker graphs run it; Arch has it only in the AUR
+# (as `bankstown`), so it's here for ISO installs and signed updates.
+#
+# Upstream: https://github.com/chadmed/bankstown (MIT)
+# Pinned one commit past release 1.1.0 (2023-12-29): 8e6f96f (2026-09-30) only
+# keeps a zero sample rate from panicking the plugin, which would take down
+# PipeWire's filter chain.
+
+pkgname=bankstown-lv2
+_ver=1.1.0
+pkgver=1.1.0.r1.8e6f96f
+pkgrel=1
+pkgdesc="Bankstown bass enhancer LV2 plugin (virtual bass for small speakers)"
+arch=('x86_64')
+url="https://github.com/chadmed/bankstown"
+license=('MIT')
+depends=('lv2' 'gcc-libs' 'glibc')
+makedepends=('git' 'cargo')
+provides=('bankstown')
+conflicts=('bankstown')
+options=('!debug')
+_commit=8e6f96f
+source=("bankstown::git+https://github.com/chadmed/bankstown.git#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd bankstown
+  printf '%s.r%s.%s' "$_ver" "$(git rev-list --count "$_ver"..HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd bankstown
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd bankstown
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+package() {
+  cd bankstown
+  make DESTDIR="$pkgdir" LIBDIR=/usr/lib install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

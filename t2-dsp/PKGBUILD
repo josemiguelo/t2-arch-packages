@@ -1,0 +1,72 @@
+# T2 DSP: KaiT2en's speaker and microphone processing for Apple T2 Macs, as
+# PipeWire filter-chain graphs: the EQ, crossovers, multiband compressor,
+# limiters, crosstalk cancellation and virtual bass macOS applies to each
+# model's internal speakers, and a microphone graph. Headphones and headset
+# microphones keep the raw path.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  dsp/
+# Authors: André Eikmeyer and 4f1sh3r. GPL-3.0-or-later with a section 7(b)
+# attribution term (see LICENSING.md, shipped in /usr/share/licenses).
+#
+# How it works: a udev rule renames the T2 sound card to t2-<profile> (from the
+# DMI product name, e.g. t2-16_1), WirePlumber matches that card's Speaker and
+# Mic nodes, and /etc/pipewire/pipewire.conf.d/51-t2-dsp.conf (the model's
+# graph, copied by t2-dsp.install) builds the filter chains. Reboot after
+# installing: the card is renamed when udev first sees it.
+#
+# Pinned at 402a353 (2026-11-08), the last DSP before KaiT2en's 6ddacd9, which
+# moved it to the new snd_apple_t2 driver: this version's udev rule matches
+# t2bce_audio, the driver t2bce-stack-dkms ships. build() refuses a version
+# that doesn't. Ported as an exception to the one-month rule (CLAUDE.md).
+# KaiT2en's lifecycle helper (Fedora migration of older DSP configs) is left
+# out: nothing here predates this package.
+
+pkgname=t2-dsp
+_ver=0
+pkgver=0.r14.402a353
+pkgrel=1
+pkgdesc="Speaker and microphone DSP for Apple T2 Macs: PipeWire filter-chain graphs (KaiT2en)"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('pipewire' 'pipewire-audio' 'wireplumber>=0.5.8' 'lsp-plugins-lv2' 'bankstown-lv2'
+         't2bce-stack-dkms' 't2bce-audio-ucm')
+makedepends=('git' 'python')
+install=t2-dsp.install
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=402a353210d91357fbf8f7815f834f87dd6da63a
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- dsp)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cd kait2en/dsp
+  python3 tools/build.py --datadir /usr/share
+  grep -q 'KERNELS=="t2bce_audio"' build/89-t2-dsp.rules ||
+    { echo "this DSP's udev rule doesn't match t2bce_audio (KaiT2en's 6ddacd9 moved it to snd_apple_t2): port by hand" >&2; return 1; }
+}
+
+package() {
+  cd kait2en/dsp
+  local share="$pkgdir/usr/share"
+  install -d "$share/t2-dsp/profiles" "$share/t2-dsp/pipewire"
+  cp -r --no-preserve=ownership build/profiles/. "$share/t2-dsp/profiles/"
+  cp -r --no-preserve=ownership build/pipewire/. "$share/t2-dsp/pipewire/"
+  install -m644 build/models.json "$share/t2-dsp/models.json"
+  find "$share/t2-dsp" -type d -exec chmod 755 {} +
+  find "$share/t2-dsp" -type f -exec chmod 644 {} +
+  install -Dm644 build/51-t2-dsp.conf "$share/wireplumber/wireplumber.conf.d/51-t2-dsp.conf"
+  install -Dm644 integration/wireplumber/t2-default-output.lua "$share/wireplumber/scripts/t2-default-output.lua"
+  install -Dm644 build/89-t2-dsp.rules "$pkgdir/usr/lib/udev/rules.d/89-t2-dsp.rules"
+
+  cd ..
+  install -Dm644 LICENSE "$share/licenses/$pkgname/LICENSE"
+  install -m644 LICENSING.md AUTHORS LICENSES/GPL-3.0-or-later.txt "$share/licenses/$pkgname/"
+}

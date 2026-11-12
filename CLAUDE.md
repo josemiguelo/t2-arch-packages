@@ -26,7 +26,8 @@ from 1Password (item `kait2en`, Personal vault) and the daily `kait2en-sync.time
 
 Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
 `t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-bluetooth-dkms`,
-`t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dkms-guard`, `t2-arch-packages-keyring`. Arch's own
+`t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp` (with `bankstown-lv2`, not KaiT2en's),
+`t2-dkms-guard`, `t2-arch-packages-keyring`. Arch's own
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
 `077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F` (passphrase in the same 1Password item).
 
@@ -125,6 +126,16 @@ rerun the fake-T2 test.
 
 ## Facts that cost time to learn
 
+- **KaiT2en's `6ddacd9` (2026-11-11, "apple_t2_bridge: initial implementation") replaces the
+  whole t2bce stack**: every `modules/t2bce_*` (keyboard `t2bce_vhci`, audio `t2bce_audio`, …) and
+  `modules/t2bce_audio-alsa-ucm-conf` are gone, replaced by `modules/apple-t2-bridge`
+  (`snd_apple_t2`) and `modules/apple-t2-alsa-ucm-conf`. Re-pinning `t2bce-stack-dkms` or
+  `t2bce-audio-ucm` at or past it would ship no keyboard driver: their `prepare()` stops the
+  build there. Moving to it is a port by hand (new package, initramfs `MODULES` in `fix-t2.sh`,
+  UCM, the DSP's udev match, the dotfiles' hid/audio assumptions), after the one-month rule.
+  `kait2en-sync` took it for a repo-wide sweep (12 folders) until a commit that deletes or
+  renames files in a package's paths stopped counting as one.
+
 - `t2_precision_trackpad` must load before `t2bce_vhci` (first in initramfs MODULES), or
   hid-apple takes the trackpad's mouse interface. It only claims that interface, so hid-apple
   keeps the keyboard (and the owner's `hid_apple` swaps).
@@ -174,8 +185,13 @@ it back, so re-check with `git log -- <path>` before starting.
    `install-kernel-args.sh`): eligible 2026-12-11. Same pattern as `t2-bluetooth-dkms`; one
    firmware timeout after a resume was seen. KaiT2en's kernel arguments now assume them
    (asynchronous suspend for the BCM4364).
-3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): eligible 2026-12-08.
-   PipeWire filter chain; needs lsp-plugins and lv2-bankstown.
+3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): **done 2026-11-12, as an
+   exception to the one-month rule** granted by the owner (would have been eligible 2026-12-08);
+   sounds like macOS, ~17% of one core while playing, 0 xruns. Packaged as `t2-dsp` at `402a353` (2026-11-08), the last DSP before
+   `6ddacd9`: its udev rule matches `KERNELS=="t2bce_audio"`, the driver in use; from `6ddacd9`
+   on it matches `snd_apple_t2`. PipeWire filter chain; needs `lsp-plugins-lv2` (`[extra]`) and
+   bankstown (`bankstown-lv2`, packaged here: AUR only). Userspace only: removing the package
+   and rebooting undoes it.
 4. **Packaging the firmware fetcher here**, to drop `[arch-mact2]` (`SigLevel = Never`): ours,
    no wait.
 5. **dGPU power** (`modules/t2gmux`, `patches/runtime/gpu-runtime-pm`, `apps/t2-dgpu-control`,

@@ -10,7 +10,8 @@ it. All driver and app code is KaiT2en's: kernel modules under GPL-2.0, userspac
 under GPL-3.0-or-later with a section 7(b) author attribution term (André
 Eikmeyer; 4f1sh3r for the fan and SMC tools). Each package ships KaiT2en's
 `LICENSING.md` and `AUTHORS`. KaiT2en's name and logo are its trademarks; the
-logo is removed from `t2-fan-control` and `t2-smc-control` (`no-wordmark.patch`).
+logo is removed from `t2-fan-control` and `t2-smc-control` (`no-wordmark.patch`). `bankstown-lv2` is
+chadmed's (Asahi Linux), MIT, not KaiT2en's.
 
 ## Use the repo
 
@@ -29,7 +30,7 @@ sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
 Server = https://github.com/josemiguelo/t2-arch-packages/releases/download/repo
 ```
 
-Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-bluetooth-dkms t2-fan-control t2-smc-control t2bce-audio-ucm t2-dkms-guard t2-arch-packages-keyring linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
+Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-bluetooth-dkms t2-fan-control t2-smc-control t2bce-audio-ucm t2-dsp bankstown-lv2 t2-dkms-guard t2-arch-packages-keyring linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is in `[arch-mact2]`).
 `linux-t2` must not be installed on the same kernel: it has its own t2bce. See
 [Omarchy's `fix-t2.sh` on the `t2-kait2en` branch](#port-status) for the module,
 initramfs and kernel-argument setup.
@@ -50,6 +51,8 @@ initramfs and kernel-argument setup.
 | `t2-arch-packages-keyring` | (this repo) | signing key in `/usr/share/pacman/keyrings`, populated on install |
 | `t2-fan-control` | `apps/t2-fan-control` | **works** with the shipped `/etc/t2-fancontrol/config.txt` (system chill 80 °C). Upstream's default 45 °C pins MacBookPro16,1 fans at 100%. Paths moved `/usr/local` → `/usr`; replaces `t2fanrd` |
 | `t2-smc-control` | `apps/t2-smc-control` | **builds**, upstream's 13 tests pass (2026-11-12). The GTK app and `t2-smc-gaugingd.service`, which lifts a charge limit (t2smc's `battery_charge_limit_suspended`) for a full charge when the gauge needs one to recalibrate, as macOS's powerd does. Paths moved `/usr/local` → `/usr`; the unit runs only where t2smc is loaded |
+| `t2-dsp` | `dsp` (at `402a353`) | **works** (2026-11-12, MacBookPro16,1): the card is renamed `t2-16_1`, "Mac 16,1 native DSP Speakers" is the default output and sounds like macOS. About 17% of one core while playing (3.6 ms of a 21.3 ms cycle), 0 xruns. Pinned before `6ddacd9` (moved to `snd_apple_t2`); `build()` refuses a version whose udev rule doesn't match `t2bce_audio`. Ported as an exception to the one-month rule |
+| `bankstown-lv2` | chadmed/bankstown `8e6f96f` | the virtual bass LV2 plugin `t2-dsp` runs: release 1.1.0 plus a fix that keeps a zero sample rate from panicking it |
 
 ### Notes from testing (MacBookPro16,1)
 

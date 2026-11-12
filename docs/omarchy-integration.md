@@ -13,7 +13,7 @@ migrations that assume a T2 Mac runs `linux-t2`.
 
 | Piece | What it does | When it acts |
 |---|---|---|
-| **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages: 7 DKMS kernel-module packages (`t2bce-stack`, `t2smc`, `t2sbs`, `t2smp`, `t2thunderbolt`, `t2-precision-trackpad`, `t2-bluetooth`), `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dkms-guard`, the keyring | Every time pacman installs or updates them, from the GitHub release `repo` |
+| **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages: 7 DKMS kernel-module packages (`t2bce-stack`, `t2smc`, `t2sbs`, `t2smp`, `t2thunderbolt`, `t2-precision-trackpad`, `t2-bluetooth`), `t2-fan-control`, `t2-smc-control`, `t2-dsp` (with `bankstown-lv2`), `t2bce-audio-ucm`, `t2-dkms-guard`, the keyring | Every time pacman installs or updates them, from the GitHub release `repo` |
 | **omarchy fork**, branch `t2-kait2en` (`josemiguelo/omarchy`) | Replaces upstream's T2 support (`linux-t2` plus `t2fanrd`) with stock `linux-omarchy` plus your packages: `install/hardware/apple/fix-t2.sh`, `install/hardware/pacman.sh`, the package list | **Only during installation** |
 | **omarchy-iso fork**, branch `t2-kait2en` (`josemiguelo/omarchy-iso`) | Builds the ISO that runs that installer: picks `linux-omarchy` on T2 Macs, trusts your repo key, adds the repo to the ISO's pacman configs, populates hardware keyrings once the target's keyring is ready | Only when building the ISO and installing |
 | **dotfiles** (`~/.local/share/chezmoi`, `loadouts/.etc/t2/`) | The `t2-*` scripts: re-check and repair the T2 setup on the running system | Whenever you run `loadout` (status, sync, run) |
@@ -34,7 +34,7 @@ Branches in the omarchy fork:
 3. **The fork's `fix-t2.sh`**, when it detects PCI ID `106b:1801/1802`, sets up:
    - **Packages:** the keyring first (with `--noscriptlet` during an ISO install, because the
      installer is still building the target's keyring), then `linux-omarchy-headers`, the 7 DKMS
-     packages, `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dkms-guard`,
+     packages, `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp`, `t2-dkms-guard`,
      `linux-apfs-rw-dkms` and `apple-bcm-firmware-fetcher` (from `[arch-mact2]`). DKMS compiles
      the modules for the installed kernel.
    - **Boot setup:**
