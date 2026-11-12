@@ -14,16 +14,16 @@ migrations that assume a T2 Mac runs `linux-t2`.
 | Piece | What it does | When it acts |
 |---|---|---|
 | **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages: 7 DKMS kernel-module packages (`t2bce-stack`, `t2smc`, `t2sbs`, `t2smp`, `t2thunderbolt`, `t2-precision-trackpad`, `t2-bluetooth`), `t2-fan-control`, `t2-smc-control`, `t2-dsp` (with `bankstown-lv2`), `t2bce-audio-ucm`, `t2-dkms-guard`, the keyring | Every time pacman installs or updates them, from the GitHub release `repo` |
-| **omarchy fork**, branch `t2-kait2en` (`josemiguelo/omarchy`) | Replaces upstream's T2 support (`linux-t2` plus `t2fanrd`) with stock `linux-omarchy` plus your packages: `install/hardware/apple/fix-t2.sh`, `install/hardware/pacman.sh`, the package list | **Only during installation** |
+| **omarchy fork**, branch `t2-kait2en-stable` (`josemiguelo/omarchy`) | Replaces upstream's T2 support (`linux-t2` plus `t2fanrd`) with stock `linux-omarchy` plus your packages: `install/hardware/apple/fix-t2.sh`, `install/hardware/pacman.sh`, the package list | **Only during installation** |
 | **omarchy-iso fork**, branch `t2-kait2en` (`josemiguelo/omarchy-iso`) | Builds the ISO that runs that installer: picks `linux-omarchy` on T2 Macs, trusts your repo key, adds the repo to the ISO's pacman configs, populates hardware keyrings once the target's keyring is ready | Only when building the ISO and installing |
 | **dotfiles** (`~/.local/share/chezmoi`, `loadouts/.etc/t2/`) | The `t2-*` scripts: re-check and repair the T2 setup on the running system | Whenever you run `loadout` (status, sync, run) |
 
-Branches in the omarchy fork:
-
-- `t2-kait2en`: the T2 commits on upstream's `quattro`, kept there so they can go upstream.
-- `t2-kait2en-stable`: the same commits on the commit Omarchy's stable package is built from
-  (the `_commit` in omarchy-pkgs' `pkgbuilds/omarchy/PKGBUILD`). **The Mac's ISO is built from
-  this one, with `--stable`.**
+The omarchy fork has one branch, `t2-kait2en-stable` (its default on GitHub): the T2 commits on
+the commit Omarchy's stable package is built from (the `_commit` in omarchy-pkgs'
+`pkgbuilds/omarchy/PKGBUILD`). **The Mac's ISO is built from it, with `--stable`.** This is a
+personal project and nothing goes upstream, so there's no branch on upstream's `quattro` (one
+existed until 2026-11-12). The omarchy-iso fork also has one branch, `t2-kait2en`: the ISO builder,
+whose `--stable` produces stable ISOs.
 
 ## 2. What happens during an install
 
@@ -198,10 +198,9 @@ database:
 
 ### Before the next ISO build
 
-- `t2-kait2en-stable` is behind `t2-kait2en`: it's missing `e6f16bbe1` (T2 internal network link)
-  and `8ba898ab1` (`t2-smc-control` and its daemon). Cherry-pick them.
 - At each Omarchy release, rebase `t2-kait2en-stable` onto the commit the new stable package is
-  built from.
+  built from. All of upstream's changes since the last release arrive then, at once: watching
+  `upstream/quattro`'s migrations (above) gives the warning in advance.
 - Build with `--stable` (the command is in the dotfiles' `docs/t2-macbook.md`). Before booting
   the stick, check it lists `omarchy-settings`, not `omarchy-settings-dev`.
 
@@ -215,15 +214,13 @@ database:
 
 ### Long term
 
-`t2-kait2en` sits on `quattro` so it can go upstream to omacom. If upstream adopts the
-`linux-omarchy` plus KaiT2en approach, most of this upkeep goes away. Anything sent to KaiT2en
-itself is the owner's to write: its README rejects AI-written contributions.
+This is a personal project: nothing goes upstream to omacom or KaiT2en (KaiT2en's README rejects
+AI-written contributions anyway).
 
 ## 6. Possible follow-ups (not set up)
 
 - A `post-update` hook (`~/.config/omarchy/hooks/post-update.d/`) that runs `loadout status` for
   the T2 items and sends a notification when something drifted, so you don't have to remember.
 - `t2-dkms-guard` warning (or failing) when it skips a module, to close the 7.3 gap.
-- Cherry-picking `e6f16bbe1` and `8ba898ab1` onto `t2-kait2en-stable`.
 - Packaging the firmware fetcher in t2-arch-packages, to drop the unsigned `[arch-mact2]` repo
   (`SigLevel = Never`) from installed systems.

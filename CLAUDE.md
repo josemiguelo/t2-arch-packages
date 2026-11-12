@@ -15,7 +15,7 @@ T2 Macs run Omarchy's stock kernel, `linux-omarchy`, with
 | Repo | Role | After a reinstall, at |
 |---|---|---|
 | `josemiguelo/t2-arch-packages` (this) | PKGBUILDs; the signed pacman repo (release tag `repo`); `bin/kait2en-sync` | `~/Repos/gh/josemiguelo/t2-arch-packages/all_worktrees/main` |
-| `josemiguelo/omarchy` (fork), branch `t2-kait2en` | `install/hardware/apple/fix-t2.sh` (installs the packages, initramfs, kernel args, Wi-Fi firmware service), `install/hardware/pacman.sh` (adds the repo), manual | `~/Repos/gh/josemiguelo/omarchy/all_worktrees/t2-kait2en` (`upstream` = omacom, push disabled) |
+| `josemiguelo/omarchy` (fork), branch `t2-kait2en-stable` (its only one, the default) | `install/hardware/apple/fix-t2.sh` (installs the packages, initramfs, kernel args, Wi-Fi firmware service), `install/hardware/pacman.sh` (adds the repo), manual; on Omarchy's stable release commit | `~/Repos/gh/josemiguelo/omarchy/all_worktrees/t2-kait2en-stable` (`upstream` = omacom, push disabled) |
 | `josemiguelo/omarchy-iso` (fork), branch `t2-kait2en` | installer picks `linux-omarchy` on T2, build trusts the repo key, installer populates hardware keyrings in a transient unit | `~/Repos/gh/josemiguelo/omarchy-iso/all_worktrees/t2-kait2en` |
 | `josemiguelo/.dotfiles` (chezmoi + loadout) | `loadouts/.etc/t2/` (the machine's T2 setup), `loadouts/.repos/.loadout/kait2en-dev.sh` (this dev setup), `docs/t2-macbook.md` | `~/.local/share/chezmoi` |
 | `kaiT2en/KaiT2en-Fedora` (upstream, read-only) | the drivers and tools | `~/Repos/gh/kaiT2en/KaiT2en-Fedora` |
@@ -55,18 +55,23 @@ found (`fix-fkeys.sh`'s `/sys` write and `omarchy-toprow.conf`, the Wi-Fi unit's
    `android-sdk`).
 7. The first `linux-omarchy` upgrade through `t2-dkms-guard`: not yet.
 
-**Fixed after the install** (dotfiles, and the fork's `t2-kait2en`, not yet on
-`t2-kait2en-stable` nor in an ISO): NetworkManager retried DHCP every 45 s on the T2's internal
+**Fixed after the install** (dotfiles, and the fork's `t2-kait2en-stable`, not yet in an ISO):
+NetworkManager retried DHCP every 45 s on the T2's internal
 USB network link (`05ac:8233`), now unmanaged by a udev rule; `t2-smc-control` installed and its
-daemon enabled by `fix-t2.sh`. In the dotfiles only: 1Password's own "Start at login" entry
+daemon enabled by `fix-t2.sh`; `t2-dsp` (speaker DSP). In the dotfiles only: 1Password's own "Start at login" entry
 dropped the scale flag at every start (login startup is loadout's now), and `rtkit` was
 missing, so PipeWire had no realtime threads (Omarchy lists it for aarch64 only).
 
 Watch: `amdgpu … Fence fallback timer expired on ring sdma0` (twice on 2026-11-12), with the
 dGPU power work below.
 
-Next: move the fork's new `t2-kait2en` commits onto `t2-kait2en-stable`, rebuild the ISO and
-rerun the fake-T2 test.
+Next: rebuild the ISO from `t2-kait2en-stable` and rerun the fake-T2 test.
+
+**One branch since 2026-11-12**: this is a personal project and nothing goes upstream, so the
+omarchy fork keeps only `t2-kait2en-stable` (its default); `t2-kait2en` (the same commits on
+`quattro`, for upstreaming) and the fork's copies of omacom's branches were deleted. Each new
+Omarchy stable release means a rebase onto the commit its package is built from, before an ISO.
+Upcoming upstream changes are watched through `upstream/quattro` (its migrations), not a branch.
 
 ## How the owner works
 
@@ -112,12 +117,11 @@ rerun the fake-T2 test.
   release assets can't be symlinks (copy `.db`/`.files` and their `.sig` as real files); GitHub's
   CDN serves the old database for about a minute after `--clobber`. The local work dir is
   `~/.cache/t2-arch-packages`; `/tmp` (Claude's scratchpad) is wiped by every reboot.
-- **ISO**: the Mac's own is a stable build (`--stable`, from `t2-kait2en-stable`; the dotfiles'
-  `docs/t2-macbook.md` has the command). For testing, in the omarchy-iso worktree,
-  `bin/omarchy-iso-make --keep-pkg-cache --no-boot-offer
-  --local-source <omarchy worktree> ~/Repos/gh/omacom/omarchy-pkgs` (~45 min, edge, output
-  `release/*-local.iso`; the omarchy package's version label is upstream's pinned commit but
-  its files are the worktree's). Test: `VFIO_USER_SERVER=<libvfio-user>/build/samples/gpio-pci-idio-16
+- **ISO**: a stable build (`--stable`) from `t2-kait2en-stable`, in the omarchy-iso worktree:
+  `bin/omarchy-iso-make --keep-pkg-cache --no-boot-offer --local-source <omarchy worktree>
+  ~/Repos/gh/omacom/omarchy-pkgs --stable` (~45 min, output `release/*-local-stable.iso`; the
+  dotfiles' `docs/t2-macbook.md` has the full command; the omarchy package's version label is the
+  recipe's but its files are the worktree's). Test: `VFIO_USER_SERVER=<libvfio-user>/build/samples/gpio-pci-idio-16
   OMARCHY_PATH=<omarchy worktree> bin/omarchy-iso-test <iso> --fake-pci 106b:1802:088000
   --no-preview` (~40 min; `--reuse-base --keep-running` then ssh `omarchy@127.0.0.1 -p 2222`
   with the run's `id_ed25519`). Expected VM-only failures: `t2-wifi-firmware` (no macOS volume)
