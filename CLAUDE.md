@@ -258,19 +258,67 @@ it back, so re-check with `git log -- <path>` before starting.
      to the dGPU, or one macOS boot; removing the packages; the Limine fallback.
    - KaiT2en's i915 patches (`patches/runtime/i915`: PSR on Apple panels, restoring the gmux
      brightness) matter once the iGPU drives the panel: look at them with this.
-6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): eligible
-   2026-11-30. Replaces hid_apple: the loadout's `t2-hid-apple-keyboard` swaps move with it.
+6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): **left for later by
+   the owner** (2026-11-12): the gain is a nicety, the risk sits at the disk unlock prompt.
+   Eligible 2026-11-30 at the earliest (app's last code change 2026-10-31).
+   - **What it replaces:** `t2touchbar` builds `t2hid` (a fork of `hid-apple` with the same
+     options, `fnmode`, `swap_opt_cmd`, `swap_fn_leftctrl`, `swap_ctrl_cmd`, `iso_layout`, plus
+     `debounce_ms`, and the same `:white:kbd_backlight` LED), `t2touchbar_kbd` and
+     `t2touchbar_bl` (for `hid_appletb_kbd`/`_bl`); `t2bdrm` replaces `appletbdrm` (the bar's
+     screen as a DRM device). The app, `kait2en-touchbar` (DRM/input from tiny-dfr), is a user
+     service drawing its own bar: dark until touched or Fn, media/F-key/extra-key layers,
+     swipes, four custom keys, haptics through `t2_trackpad_actuator`; a root
+     `kait2en-touchbar-attach.service` switches the 05ac:8302 device to configuration 2 (the DRM
+     display); a `kait2en-touchbar` group, a udev rule (private seat `seat-touchbar` for the bar's
+     DRM card and digitizer, group on the internal keyboard's event node and `/dev/uinput`).
+   - **The risk:** `hid_apple` is in the initramfs for the unlock prompt; `t2hid` takes its place
+     there (KaiT2en loads `t2hid` early), with `hid_apple` blacklisted. If `t2hid` failed, no
+     internal keyboard at the prompt. Ways back: a pre-change Limine snapshot (its UKI has
+     `hid_apple`), or a non-Apple USB keyboard (hid-generic).
+   - **Adapting:** the app's fonts are Fedora paths (`/usr/share/fonts/adwaita-sans-fonts/...`;
+     Arch's `adwaita-fonts` has `/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf`); D-Bus use is
+     freedesktop only (`ScreenSaver`, UPower's `KbdBacklight`). `t2hid` declines the haptic
+     interface on purpose, so `t2_trackpad_actuator` gets it without the udev rule (which then
+     never matches: harmless). `/dev/uinput`'s user access is a logind ACL, kept when the rule
+     changes its group. The dotfiles' `t2-hid-apple-keyboard` would set `t2hid`'s options instead.
+   - **Plan, in stages:** packages (`t2-touchbar-dkms`, `t2bdrm-dkms`, `kait2en-touchbar` with a
+     sysusers group); a runtime test without reboot (internal keyboard rebound from `hid-apple`
+     to `t2hid` with the Keychron connected as a spare, then the bar and the app); only then the
+     blacklist, the initramfs list, the dotfiles script, a snapshot, and a reboot.
 7. **Trackpad haptics** (`modules/t2_trackpad_actuator`, `apps/t2-force-click`): **done
    2026-11-12, as an exception to the one-month rule**: `t2-trackpad-actuator-dkms` (with a udev
    rule, see the facts above) and `t2-force-click`. The force click replays Apple's captured
    plain click, so it feels like a second click, not macOS's force-click haptic.
-8. **The rest, each with its own clock**: Thunderbolt runtime patches (`patches/runtime/
-   thunderbolt`, 2026-12-11), `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
+8. **Thunderbolt hotplug and controller power-down** (`patches/runtime/thunderbolt`): **left for
+   later by the owner** (2026-11-12); eligible 2026-12-11 at the earliest, and it fits the 7.3
+   batch with the dGPU work and `t2-wireless-dkms`'s move.
+   - The 16,1 has two Titan Ridge 4C controllers (`8086:15ea` bridges, `15eb` NHI, `15ec` xHCI).
+     `pcie_ports=compat` (half of the ~16 s to ~1 s wake) turns the PCIe port services off,
+     `pciehp` included: PCIe devices behind Thunderbolt (docks' NICs/NVMe, eGPUs) only appear if
+     connected at boot; plain USB-C and displays are fine. No RTD3 either (KaiT2en measured PC10
+     going from 33 to 64 % on a MacBookAir9,1; not measured on the 16,1).
+   - **None of it is in the pin `27fd5c9`:** KaiT2en added the patched `thunderbolt` driver (RTD3
+     for Titan Ridge and Ice Lake on T2 Macs) on 2026-11-10, dropped `pcie_ports=compat` for every
+     Mac with it ("the Thunderbolt runtime PM needs the PCIe port services"), fixed it twice on
+     2026-11-11 (one: keeping `pciehp`'s MSI), and retired `t2thunderbolt` (gone from its module
+     list; the patched driver replaces it). At the pin it still added `pcie_ports=compat` on all
+     Macs, as `fix-t2.sh` does.
+   - **A port means:** `t2-thunderbolt-dkms` (kernel.org `drivers/thunderbolt` + the patch, like
+     `t2-wireless-dkms`) replacing `t2thunderbolt-dkms`; `pcie_ports=compat` dropped from
+     `fix-t2.sh`, the dotfiles' `t2-kernel-args` (which enforces it today) and Limine; the resume
+     time re-measured; hotplug tested with a Thunderbolt dock or eGPU.
+9. **Touch ID**: **left for later by the owner** (2026-11-12). Not through `t2sep` (KaiT2en doesn't
+   ship it, its README says): the `t2-services/t2-touchid` daemon reaches the sensor over
+   BridgeXPC on the T2 link (`enp4s0f1u1`: unmanaged by NetworkManager but up, with its link-local
+   address, which it needs), then `fprintd` and PAM, through Omarchy's own fingerprint setup;
+   KaiT2en's SELinux policy doesn't apply on Arch. High value, but authentication: a mistake can
+   lock sudo or the lock screen. Eligible 2026-12-08 at the earliest; wait longer than the
+   minimum.
+10. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
    bridge link, which the udev rule keeps NetworkManager off but leaves up), `t2-kbd-backlight`
    (2026-11-29), `t2-sidecar` (2026-11-23), AirShare/AirDrop (`t2-airshare`, `t2-drop`;
    2026-12-04), `t2-truetone` (2026-12-08), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
-   16,1's panel is on the dGPU, so low value), Touch ID (`modules/t2sep`, 2026-12-08; the Secure
-   Enclave: wait longer than the minimum). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
+   16,1's panel is on the dGPU, so low value; look at it with the dGPU work). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
    work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,
    `modules/apple-t2-alsa-ucm-conf`.
 
