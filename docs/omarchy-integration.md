@@ -72,9 +72,10 @@ specialized kernel"* and decides that by checking for `linux-t2`.
 
 ## 4. What happens at an update
 
-On 2026-11-12 nothing was waiting: `checkupdates` was empty, the repos offered the installed
-kernel (`linux-omarchy 7.2.15-1`), and `kait2en-sync check` found no upstream changes for the
-packages.
+On 2026-11-12 nothing was waiting on the system: `checkupdates` was empty and the repos offered
+the installed kernel (`linux-omarchy 7.2.15-1`). Upstream, KaiT2en had commits for six packages
+since their pin, all younger than a month: none eligible before 2026-12-08 (`t2-bluetooth-dkms`
+not before 2026-12-11).
 
 ### A. An ordinary `omarchy update`, no kernel change: safe
 
@@ -158,8 +159,21 @@ If a new one shows up, read it before the stable release that includes it reache
 
 ### KaiT2en upstream
 
-- `bin/kait2en-sync check`: what changed since each package's pinned commit. `apply` re-pins,
-  builds, signs, tests DKMS against the newest headers, and publishes after asking.
+**Wait a month.** KaiT2en ships dangerous changes often. Nothing is ported, re-pinned or added
+until the KaiT2en commit that brings it is at least 30 days old and the paths it touches have had
+no further real change for 30 days (repo-wide sweeps such as lockfile alignment don't count;
+"fix"/"revert" follow-ups do, and restart the clock). Pin to that commit, never to KaiT2en's HEAD,
+and read the month of history after it before porting. Only a security fix, or a fix for a bug
+this Mac actually hits, goes sooner, and only by an explicit decision. The candidates and their
+earliest dates are in CLAUDE.md's Roadmap.
+
+- `bin/kait2en-sync check`: what changed since each package's pinned commit, each commit marked
+  `eligible`, `waiting` (with the earliest day it can qualify) or `sweep`. `apply` re-pins each
+  package to its own eligible commit (never backwards), builds, signs, tests DKMS against the
+  newest headers, and publishes after asking. The daily `notify` only speaks for eligible
+  updates. `KAIT2EN_MIN_AGE_DAYS` (default 30) is the rule's length. Read the `sweep` lines: the
+  heuristic (a commit touching more than 8 `apps/`/`modules/` folders) can take a new feature for a
+  sweep.
 - Changes to KaiT2en's Fedora installer (`scripts/fedora`) don't reach you automatically: new
   kernel arguments, modules or services may belong in the fork's `fix-t2.sh`, by hand. On
   2026-11-12 there were 4 new ones (iMac Pro kernel arguments, GPU runtime power management).

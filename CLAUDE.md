@@ -87,10 +87,26 @@ rerun the fake-T2 test.
 
 ## Procedures
 
-- **KaiT2en updates**: `bin/kait2en-sync check` (per-package upstream commits, plus
+- **KaiT2en updates wait a month** (the owner's rule, 2026-11-12): KaiT2en ships dangerous
+  changes often, so nothing is ported, re-pinned or added until the KaiT2en commit that brings it
+  is **at least 30 days old**, and the paths it touches have had **no further real change for 30
+  days** (repo-wide sweeps such as lockfile alignment don't count; follow-up "fix"/"revert"
+  commits do, and restart the clock). Pin to that commit, not to KaiT2en's HEAD. Before porting,
+  read the 30 days of history after it for reverts and fixes, and check its issues. A security fix
+  or a fix for a bug this Mac actually hits can go sooner, by the owner's explicit decision only.
+  The pins in place on 2026-11-12 (`27fd5c9`, 2026-11-07) predate the rule; they're the tested
+  baseline, and the next re-pin follows it.
+- **KaiT2en tooling**: `bin/kait2en-sync check` (per-package upstream commits, plus
   `scripts/fedora` changes to port to `fix-t2.sh` by hand), `apply` (re-pin, build, sign, test
   DKMS against the newest headers, publish after asking), `kernel` (all DKMS packages vs the
-  newest `linux-omarchy-headers`), `notify` (the timer's). `apply` hasn't had a real run yet.
+  newest `linux-omarchy-headers`), `notify` (the timer's). They follow the one-month rule
+  (`KAIT2EN_MIN_AGE_DAYS`, default 30; since 2026-11-12): `check` marks each upstream commit
+  `eligible`, `waiting` or `sweep` and says when the waiting ones qualify, `apply` pins each package
+  to its own eligible commit, never backwards, and `notify` only speaks for eligible updates.
+  Sweeps are a heuristic (more than 8 `apps/`/`modules/` folders): `6ddacd9`, a new feature, counts
+  as one, so read sweep lines. `apply` hasn't had a real run yet. Until 2026-11-12 `check` saw no
+  package at all (a failing `grep` on the keyring's PKGBUILD ended the list under `pipefail`), so
+  every "no upstream changes" before then meant nothing.
 - **Release by hand** (README, "Build and release"): sign with the key; `repo-add --sign`;
   release assets can't be symlinks (copy `.db`/`.files` and their `.sig` as real files); GitHub's
   CDN serves the old database for about a minute after `--clobber`. The local work dir is
@@ -143,14 +159,42 @@ rerun the fake-T2 test.
 
 ## Roadmap
 
-After the checks above, in order of value: KaiT2en's `brcmfmac` Wi-Fi patches (same pattern as
-`t2-bluetooth-dkms`; one firmware timeout after a resume was seen), the `16_1` speaker DSP
-profile (PipeWire filter chain; needs lsp-plugins and lv2-bankstown), packaging the firmware
-fetcher here to drop `[arch-mact2]` from installed systems, then the dGPU power work (`t2gmux`
-+ KaiT2en's amdgpu runtime-PM patches, two specific to MacBookPro16,1; review the loadout's
-`t2-gmux-backlight` and `t2-render-gpu` with it), then `t2touchbar` (replaces hid_apple: the
-loadout's `t2-hid-apple-keyboard` swaps move with it), `t2_trackpad_actuator`, and the rest
-(Touch ID, Sidecar, AirDrop). Also: make `t2-dkms-guard` warn when a kernel skips a package,
-and boot the live ISO on linux-omarchy instead of linux-t2. KaiT2en's recent `scripts/fedora`
-changes to review: `d46fc8e` (patched i915 with Apple PSR and gmux brightness restore) and
-`8de9546` (t2-truetone).
+In order of value for the MacBookPro16,1. "Eligible" is the earliest date under the one-month
+rule (30 days after the path's last real change as seen on 2026-11-12); any later change pushes
+it back, so re-check with `git log -- <path>` before starting.
+
+1. **ACPI fixes** (`scripts/fedora/acpi-autofix.py`, `install-acpi-fixes.sh`): eligible now
+   (last real change 2026-10-07). An override for the CpuSSDT sub-table loading error and the
+   DSDT `_OSC` buffer overflow; this Mac logs the first on every boot (`AE_ALREADY_EXISTS ...
+   Aborting method \_PR.CPU0._OSC/_PDC`). KaiT2en ships it for dracut
+   (`acpi_override`); here it would go through mkinitcpio's ACPI override in the UKI. A DSDT
+   override is high-risk (a bad table can stop the boot): test from a snapshot with the Limine
+   fallback entry at hand.
+2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`, `install-wireless.sh`,
+   `install-kernel-args.sh`): eligible 2026-12-11. Same pattern as `t2-bluetooth-dkms`; one
+   firmware timeout after a resume was seen. KaiT2en's kernel arguments now assume them
+   (asynchronous suspend for the BCM4364).
+3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): eligible 2026-12-08.
+   PipeWire filter chain; needs lsp-plugins and lv2-bankstown.
+4. **Packaging the firmware fetcher here**, to drop `[arch-mact2]` (`SigLevel = Never`): ours,
+   no wait.
+5. **dGPU power** (`modules/t2gmux`, `patches/runtime/gpu-runtime-pm`, `apps/t2-dgpu-control`,
+   `apps/t2-hybrid-gpu-control`): eligible 2026-12-10. Two amdgpu patches are specific to the
+   MacBookPro16,1; review the loadout's `t2-gmux-backlight` and `t2-render-gpu` with it, and the
+   `amdgpu ... sdma0` fence warnings.
+6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): eligible
+   2026-11-30. Replaces hid_apple: the loadout's `t2-hid-apple-keyboard` swaps move with it.
+7. **Trackpad haptics** (`modules/t2_trackpad_actuator`, `apps/t2-force-click`): eligible
+   2026-12-08.
+8. **The rest, each with its own clock**: Thunderbolt runtime patches (`patches/runtime/
+   thunderbolt`, 2026-12-11), `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
+   bridge link, which the udev rule keeps NetworkManager off but leaves up), `t2-kbd-backlight`
+   (2026-11-29), `t2-sidecar` (2026-11-23), AirShare/AirDrop (`t2-airshare`, `t2-drop`;
+   2026-12-04), `t2-truetone` (2026-12-08), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
+   16,1's panel is on the dGPU, so low value), Touch ID (`modules/t2sep`, 2026-12-08; the Secure
+   Enclave: wait longer than the minimum). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
+   work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,
+   `modules/apple-t2-alsa-ucm-conf`.
+
+Ours, no wait: make `t2-dkms-guard` warn when a kernel skips a package (the 7.3 Bluetooth gap),
+and boot the live ISO on linux-omarchy instead of linux-t2.
