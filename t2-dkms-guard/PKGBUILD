@@ -4,7 +4,7 @@
 # unlock prompt. See the t2-dkms-guard script for details.
 
 pkgname=t2-dkms-guard
-pkgver=0.1
+pkgver=0.2
 pkgrel=1
 pkgdesc="Abort linux-omarchy upgrades that would break the KaiT2en T2 DKMS modules"
 arch=('any')

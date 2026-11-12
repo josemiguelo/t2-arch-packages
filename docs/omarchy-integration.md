@@ -101,15 +101,17 @@ not before 2026-12-11).
 - To override: `sudo env T2_DKMS_GUARD_SKIP=1 pacman -Syu`. Not yet tested through a real kernel
   upgrade.
 
-### C. The first kernel 7.3: the gap
+### C. The first kernel 7.3: held back until the package moves
 
 - `t2-wireless-dkms` only builds for 7.2 kernels (`BUILD_EXCLUSIVE_KERNEL="^7\.2\.[0-9]+-[0-9]+-omarchy$"`).
-  For a 7.3 kernel the guard prints *"not for 7.3…, skipped"* and **lets the upgrade through**.
-- You'd boot 7.3 with the stock `btbcm`/`hci_uart`/`hci_bcm4377`, which drop this Mac's
-  Bluetooth LE advertisements (**the Keychron K15 Max and the MX Master 3 would stop
+  Booting 7.3 without it would mean the stock `btbcm`/`hci_uart`/`hci_bcm4377`, which drop this
+  Mac's Bluetooth LE advertisements (**the Keychron K15 Max and the MX Master 3 would stop
   connecting**), and the stock `brcmfmac` (Wi-Fi without the resume fixes).
-- "Make `t2-dkms-guard` warn when a kernel skips a package" is on the roadmap in
-  t2-arch-packages' CLAUDE.md. It hasn't been done yet.
+- Since `t2-dkms-guard` 0.2 (2026-11-12) the guard **aborts that upgrade** ("would be left out"),
+  as it does for a module that fails to build, and the daily timer's kernel test warns ahead of
+  it. Move the package to 7.3 sources, or hold the kernel (`IgnorePkg = linux-omarchy
+  linux-omarchy-headers`), or let it through without the module:
+  `sudo env T2_DKMS_GUARD_ALLOW_SKIP=1 pacman ...`. (0.1 let the upgrade through silently.)
 
 ### D. A future upstream migration that assumes "T2 means `linux-t2`": the other risk
 
@@ -133,9 +135,12 @@ itself. They can be spotted early: stable releases trail upstream's `quattro`, a
 
 ### After every `omarchy update`
 
-Run `loadout status`. It re-checks the repo, its key and its hook, the kernel arguments, the
-stable channel, the keyboard settings, the Wi-Fi firmware, the charge limit, the gauging daemon
-and the network rule. `loadout run <name>` repairs whatever drifted.
+It's automatic since 2026-11-12: the dotfiles' `t2-post-update-check` keeps a post-update hook
+(`~/.config/omarchy/hooks/post-update.d/t2-loadout-check`) that runs `loadout status` for the T2
+items (the repo, its key and hook, the packages, the kernel arguments, the stable channel, the
+keyboard settings, the Wi-Fi firmware, the charge limit, the daemons, the network rule) and sends
+a critical notification naming any the update undid. `loadout run <name>` repairs a script,
+`loadout install <name>` a package.
 
 ### Before updating, now and then
 
@@ -219,8 +224,5 @@ AI-written contributions anyway).
 
 ## 6. Possible follow-ups (not set up)
 
-- A `post-update` hook (`~/.config/omarchy/hooks/post-update.d/`) that runs `loadout status` for
-  the T2 items and sends a notification when something drifted, so you don't have to remember.
-- `t2-dkms-guard` warning (or failing) when it skips a module, to close the 7.3 gap.
 - Packaging the firmware fetcher in t2-arch-packages, to drop the unsigned `[arch-mact2]` repo
   (`SigLevel = Never`) from installed systems.

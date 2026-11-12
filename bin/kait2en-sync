@@ -331,8 +331,8 @@ cmd_notify() {
   if out=$(cmd_kernel 2>&1); then
     echo "${headers##*/}" > "$stamp"
   else
-    notify-send -a kait2en-sync -u critical "T2 modules don't build against ${headers##*/}" \
-      "$(grep -E 'FAILED|ABORTING' <<<"$out" | head -3) — t2-dkms-guard will hold that kernel back"
+    notify-send -a kait2en-sync -u critical "T2 modules aren't ready for ${headers##*/}" \
+      "$(grep -E 'FAILED|ABORTING|left out' <<<"$out" | head -3) — t2-dkms-guard will hold that kernel back"
   fi
 }
 

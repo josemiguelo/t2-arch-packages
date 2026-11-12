@@ -45,7 +45,7 @@ initramfs and kernel-argument setup.
 | `t2sbs-dkms` | `modules/t2sbs` | **works**: capacity 98% (correct, `charge_now/charge_full`) vs stock `sbs` 78% (design-relative). Skips `sbs` on kernels that have `t2sbs` |
 | `t2thunderbolt-dkms` | `modules/t2thunderbolt` | loads (4 PM ordering links on 2× Titan Ridge 4C); autoloads by NHI alias; no wake-time change on its own |
 | `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
-| `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers (tested: pass, fail, no-op) |
+| `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers, or would be left out of it (`BUILD_EXCLUSIVE_KERNEL`, since 0.2) (tested: pass, fail, no-op) |
 | `t2-precision-trackpad-dkms` | `modules/t2_precision_trackpad` | compiles clean vs `linux-omarchy` 7.2.15. Multitouch/Force Touch for the internal trackpad: stock kernels drive it as a plain mouse (no two-finger scroll, no tap to click), `linux-t2` uses a patched `hid_magicmouse`. Must load before `t2bce_vhci` in the initramfs |
 | `t2-trackpad-actuator-dkms` | `modules/t2_trackpad_actuator` | **works** (2026-11-12, MacBookPro16,1): a force click plays Apple's captured plain click on the Taptic Engine (a felt and audible second click; not macOS's deeper force-click haptic). `hid-apple` binds the haptic interface first, so its udev rule hands it over by report descriptor, at boot (coldplug `add`) and after resume (`bind`): checked after a reboot and a resume. Exception to the one-month rule |
 | `t2-force-click` | `apps/t2-force-click` | **works**: GTK app and root daemon (`t2-force-click.service`) for click pressure, the force click threshold and an action bound to force click; upstream's 5 tests pass. The wordmark shows only if its image exists, which nothing ships. Exception to the one-month rule |
@@ -122,8 +122,9 @@ backwards.
   versions) and commits and pushes the PKGBUILDs.
 
 `t2-wireless-dkms` also tracks a kernel version (`_kver`): when
-`linux-omarchy` moves to a new minor, `kernel` reports it skipped, and its
-sources move to that release by hand.
+`linux-omarchy` moves to a new minor, `kernel` reports it left out and
+`t2-dkms-guard` (0.2) holds that kernel back until its sources move to that
+release by hand (`T2_DKMS_GUARD_ALLOW_SKIP=1` lets it through without it).
 
 ## Build and release
 

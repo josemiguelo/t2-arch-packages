@@ -10,7 +10,15 @@
 # new kernel without t2bce_vhci, so the internal keyboard is gone at the disk
 # unlock prompt.
 #
-#   T2_DKMS_GUARD_SKIP=1 pacman ...     upgrade anyway
+# A module whose dkms.conf limits it to other kernels (BUILD_EXCLUSIVE_KERNEL,
+# e.g. t2-wireless-dkms's 7.2-only sources) would be left out of the new
+# kernel just as silently, its stock driver taking over (for t2-wireless:
+# Bluetooth LE devices stop connecting, Wi-Fi loses its resume fixes), so that
+# aborts too, until the package moves to the new kernel's sources.
+#
+#   T2_DKMS_GUARD_SKIP=1 pacman ...     upgrade anyway, no checks
+#   T2_DKMS_GUARD_ALLOW_SKIP=1 pacman ...
+#                                       upgrade with the limited modules left out
 #   t2-dkms-guard <headers.pkg.tar.zst> test against a specific package file
 #   T2_DKMS_GUARD_SRC=<dir>             module sources (default /usr/src)
 
@@ -72,13 +80,14 @@ build=$tmp/h/usr/lib/modules/$kver/build
 [[ -f $build/Makefile ]] || { say "no kernel build tree in $pkgfile"; exit 1; }
 
 say "building ${#confs[@]} KaiT2en modules against $kver"
-failed=()
+failed=() skipped=()
 for conf in "${confs[@]}"; do
   dir=$(dirname "$conf")
   name=$(basename "$dir")
   regex=$(sed -n 's/^BUILD_EXCLUSIVE_KERNEL="\(.*\)"$/\1/p' "$conf" | tail -1)
   if [[ -n $regex ]] && ! [[ $kver =~ $regex ]]; then
-    say "  $name: not for $kver (BUILD_EXCLUSIVE_KERNEL), skipped"
+    say "  $name: not for $kver (BUILD_EXCLUSIVE_KERNEL), would be left out"
+    skipped+=("$name")
     continue
   fi
   cp -a "$dir" "$tmp/src/$name"
@@ -99,4 +108,18 @@ if (( ${#failed[@]} )); then
   say "Wait for a KaiT2en fix, or upgrade anyway with: sudo env T2_DKMS_GUARD_SKIP=1 pacman ..."
   exit 1
 fi
-say "all KaiT2en modules build for $kver"
+if (( ${#skipped[@]} )) && [[ ${T2_DKMS_GUARD_ALLOW_SKIP:-} != 1 ]]; then
+  echo
+  say "ABORTING the upgrade: ${skipped[*]} only build for other kernels and would"
+  say "be left out of $kver, the stock drivers taking their place (t2-wireless:"
+  say "Bluetooth LE devices stop connecting, Wi-Fi loses its resume fixes). Nothing"
+  say "has been changed. Move the package to $kver's sources first, or hold the"
+  say "kernel (IgnorePkg = linux-omarchy linux-omarchy-headers), or upgrade anyway"
+  say "without them: sudo env T2_DKMS_GUARD_ALLOW_SKIP=1 pacman ..."
+  exit 1
+fi
+if (( ${#skipped[@]} )); then
+  say "all KaiT2en modules for $kver build; left out (T2_DKMS_GUARD_ALLOW_SKIP=1): ${skipped[*]}"
+else
+  say "all KaiT2en modules build for $kver"
+fi

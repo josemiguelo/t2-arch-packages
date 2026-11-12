@@ -65,7 +65,19 @@ missing, so PipeWire had no realtime threads (Omarchy lists it for aarch64 only)
 Watch: `amdgpu … Fence fallback timer expired on ring sdma0` (twice on 2026-11-12), with the
 dGPU power work below.
 
-Next: rebuild the ISO from `t2-kait2en-stable` and rerun the fake-T2 test.
+**ISO rebuilt 2026-11-12** from `t2-kait2en-stable` (`omarchy-2026.11.12-x86_64-local-stable.iso`):
+stable (`omarchy-settings`), every T2 package in the offline mirror (but `t2-dkms-guard` 0.1: 0.2
+was published after the build fetched; the first `omarchy update` brings it), `fix-t2.sh` the
+branch's. The build first failed: a freshly pulled `archlinux:latest` was ahead of the stable
+snapshot (OpenSSL 4 against 3.6) and `pacman -Syu` couldn't settle; the omarchy-iso fork's
+`builder/build-iso.sh` now runs `-Syuu` so the container also downgrades to the channel. **Fake-T2
+test:** install, first boot and the system checks pass; the failed units are the two expected
+(`systemd-modules-load`, `t2-wifi-firmware`); three on-screen checks fail, the same on a rerun
+(`--reuse-base`): "style submenu is visible" (the menu lands on Trigger), "menu opens on
+temporary monitor", "notification content is visible". The fork's diff to the stable commit
+touches none of that, and the T2 services wait for hardware the VM lacks, but **no baseline yet**:
+build a stock stable ISO from `a948d8a68` and run the same test to see whether upstream fails
+them too (the harness is omarchy-iso's newer `quattro`, the tests are the 4.5.0 tree's).
 
 **One branch since 2026-11-12**: this is a personal project and nothing goes upstream, so the
 omarchy fork keeps only `t2-kait2en-stable` (its default); `t2-kait2en` (the same commits on
@@ -146,7 +158,8 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 - Stock `btbcm` drops these Macs' LE advertisements ("unknown advertising packet type"):
   `t2-wireless-dkms` (was `t2-bluetooth-dkms`) rebuilds btbcm/hci_uart/hci_bcm4377 and brcmfmac
   from kernel.org 7.2.15 with KaiT2en's patches 0001-0024; `BUILD_EXCLUSIVE_KERNEL="^7\.2\.…"`,
-  so on 7.3 its sources move by hand (until then 7.3 runs the stock Wi-Fi and Bluetooth drivers).
+  so on 7.3 its sources move by hand: until then `t2-dkms-guard` (0.2) holds a 7.3 kernel back
+  ("would be left out"; `T2_DKMS_GUARD_ALLOW_SKIP=1` lets it through without the module).
   linux-omarchy is plain kernel.org (no stable-review patch); its own Bluetooth patches touch
   only btusb/btintel*, which aren't replaced. DKMS 3.4 skips a module whose srcversion matches
   the in-tree one ("already installed (unversioned module)"): the patches leave `brcmutil` and
@@ -180,7 +193,10 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 - `t2-fan-control` saves its config at every start; upstream's 45 °C system target pins a dGPU
   model's fans at 100%. The T2 SMC keeps manual fan mode across reboots (hand back: `0` to each
   `fanN_target`).
-- On linux-omarchy, t2smc is rtc1 (the ACPI TAD moved to rtc2); `t2-boot-clock` picks by name.
+- On linux-omarchy, t2smc is rtc1 (the ACPI TAD moved to rtc2). t2smc writes the system time to
+  the EC clock itself in its suspend and shutdown callbacks (as macOS does before every power
+  transition; the kernel's NTP writeback stops at rtc0), so the dotfiles' `t2-boot-clock`
+  shutdown unit was retired on 2026-11-12.
 - Omarchy: boots UKIs (the initramfs is the `.initrd` section of `/boot/EFI/Linux/*.efi`);
   `xhci_pci`, `usbhid`, `hid_generic` are built in; its pacman guard needs
   `OMARCHY_ALLOW_DIRECT_PACMAN=1` for a direct `-Syu`; the user password is the LUKS password;
@@ -322,5 +338,6 @@ it back, so re-check with `git log -- <path>` before starting.
    work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,
    `modules/apple-t2-alsa-ucm-conf`.
 
-Ours, no wait: make `t2-dkms-guard` warn when a kernel skips a package (the 7.3 Bluetooth gap),
-and boot the live ISO on linux-omarchy instead of linux-t2.
+Ours, no wait: boot the live ISO on linux-omarchy instead of linux-t2. (Done 2026-11-12:
+`t2-dkms-guard` 0.2 aborts an upgrade that would leave a module out, and the dotfiles'
+`t2-post-update-check` hook checks the T2 items after every `omarchy update`.)
