@@ -15,8 +15,8 @@
 
 pkgname=t2-fan-control
 _ver=0.1.0
-pkgver=0.1.0.r24.27fd5c9
-pkgrel=4
+pkgver=0.1.0.r27.8c7f725
+pkgrel=1
 pkgdesc="Fan control daemon and GTK app for Apple T2 Macs (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -29,7 +29,7 @@ backup=('etc/t2-fancontrol/config.txt')
 options=('!debug')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
-_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+_commit=8c7f72585d1aa3df8c115721cbfe3d35673481ff
 source=("kait2en::git+${_repo}#commit=${_commit}"
         'no-wordmark.patch')
 sha256sums=('SKIP'
@@ -44,7 +44,7 @@ pkgver() {
 
 prepare() {
   cd kait2en
-  patch -Np1 -i "$srcdir/no-wordmark.patch"
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/no-wordmark.patch"
   cd apps/t2-fan-control
   sed -i 's|/usr/local/bin/|/usr/bin/|g' org.t2fancontrol.gtk.desktop systemd/t2-fancontrol.service
   grep -rq '/usr/local' src org.t2fancontrol.gtk.desktop systemd &&

@@ -1,6 +1,6 @@
---- a/apps/t2-fan-control/src/main.rs	2026-11-08 09:03:34.555615011 -0500
-+++ b/apps/t2-fan-control/src/main.rs	2026-11-08 09:03:34.674616145 -0500
-@@ -36,28 +36,10 @@
+--- a/apps/t2-fan-control/src/main.rs
++++ b/apps/t2-fan-control/src/main.rs
+@@ -32,28 +32,10 @@
  use sysfs::{discover_fans, discover_temperature_sources, FanEndpoint, TemperatureSnapshot, TemperatureSource};
  
  fn kait2en_brand() -> DrawingArea {

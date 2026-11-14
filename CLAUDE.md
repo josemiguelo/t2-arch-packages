@@ -113,7 +113,9 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   read the 30 days of history after it for reverts and fixes, and check its issues. A security fix
   or a fix for a bug this Mac actually hits can go sooner, by the owner's explicit decision only.
   The pins in place on 2026-11-12 (`27fd5c9`, 2026-11-07) predate the rule; they're the tested
-  baseline, and the next re-pin follows it.
+  baseline, and the next re-pin follows it. Exception (2026-11-14, by the owner): `t2-fan-control`
+  re-pinned to `8c7f725` (2026-11-12: in SMC mode, automatic control off, the daemon sleeps until
+  the GUI asks instead of polling; no change with our config's automatic control on).
 - **KaiT2en tooling**: `bin/kait2en-sync check` (per-package upstream commits, plus
   `scripts/fedora` changes to port to `fix-t2.sh` by hand), `apply` (re-pin, build, sign, test
   DKMS against the newest headers, publish after asking), `kernel` (all DKMS packages vs the
@@ -272,6 +274,10 @@ it back, so re-check with `git log -- <path>` before starting.
      time); stage 2, the boot GPU flipped to the iGPU: check the panel on Intel, the dGPU in
      D3cold, battery draw, suspend, brightness, a `DRI_PRIME=1` app. Ways back: the variable back
      to the dGPU, or one macOS boot; removing the packages; the Limine fallback.
+   - **Fans, after stage 2** (owner, 2026-11-14): with idle draw down, compare `t2-fan-control`'s
+     SMC mode (automatic control off; since `8c7f725` the daemon sleeps then) against automatic
+     with the 80 °C target: idle draw with each, then 10 min of load (temperatures, rpm,
+     throttling). Switch only if the SMC's curve keeps it cool enough; on Linux it ramps late.
    - KaiT2en's i915 patches (`patches/runtime/i915`: PSR on Apple panels, restoring the gmux
      brightness) matter once the iGPU drives the panel: look at them with this.
 6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): **left for later by
