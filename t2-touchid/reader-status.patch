@@ -1,0 +1,58 @@
+--- a/t2-services/t2-touchid/daemon/main.rs
++++ b/t2-services/t2-touchid/daemon/main.rs
+@@ -81,6 +81,7 @@
+         log(&format!("Escape key monitor unavailable: {error:#}"));
+     }
+     let resumed = resume::watch();
++    reader_status("starting");
+     let mut unreachable_since: Option<Instant> = None;
+     log(&format!(
+         "watching {} for uid {} with flags {:#x}",
+@@ -104,10 +105,12 @@
+                 Ok(mut opened) => {
+                     log("BiometricKit session open");
+                     (user_id, identities) = find_fingers(&mut opened, user_id);
++                    reader_status(if identities.is_empty() { "no-fingers" } else { "ready" });
+                     session = Some(opened);
+                 }
+                 Err(error) => {
+                     log(&format!("cannot reach the sensor: {error:#}"));
++                    reader_status("unreachable");
+                     // Only fall the prompt back to the password once the sensor
+                     // has stayed unreachable past the grace window; a link
+                     // returning after resume settles well within it.
+@@ -170,6 +173,9 @@
+         // for the life of the session.
+         if identities.is_empty() {
+             (user_id, identities) = find_fingers(session.as_mut().unwrap(), user_id);
++            if !identities.is_empty() {
++                reader_status("ready");
++            }
+         }
+ 
+         // One touch is enough: the finger is already enrolled in the SEP.
+@@ -311,6 +317,24 @@
+     all_bound
+ }
+ 
++/// The reader's state for Omarchy's fingerprint detection
++/// (/usr/share/omarchy-platform/fingerprint-readers names this file with
++/// `ready`): read as the session user, so world-readable in a traversable
++/// directory. `ready` once the sensor answers and macOS has fingers enrolled;
++/// otherwise the reason (`starting`, `unreachable`, `no-fingers`).
++const READER_STATUS: &str = "/run/t2-touchid/reader";
++
++fn reader_status(state: &str) {
++    use std::os::unix::fs::PermissionsExt;
++    let temporary = format!("{READER_STATUS}.new");
++    let written = std::fs::write(&temporary, format!("{state}\n"))
++        .and_then(|()| std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o644)))
++        .and_then(|()| std::fs::rename(&temporary, READER_STATUS));
++    if let Err(error) = written {
++        log(&format!("cannot write {READER_STATUS}: {error}"));
++    }
++}
++
+ fn log(message: &str) {
+     eprintln!("t2-touchid: {message}");
+ }

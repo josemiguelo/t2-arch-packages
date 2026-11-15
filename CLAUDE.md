@@ -351,11 +351,21 @@ it back, so re-check with `git log -- <path>` before starting.
      Now an attempt cut by a resume reopens the session and serves the standing prompt. KaiT2en's
      `t2-services-suspend.service` does nothing for Touch ID (its README: the daemon's logind
      watcher handles it); Omarchy's `fprintd-resume` hook (restarts fprintd) is fine with it.
-   - **PAM is Omarchy's**: its fingerprint setup's `setup_pam_config` (sudo, polkit-1, behind its
-     lid-closed gate) and `omarchy-apply-lock` (the lock's `omarchy-lock-fingerprint`, the resume
-     hook). Its whole setup can't run on a T2: it finds no USB reader, then would enroll. The
-     dotfiles' loadout does the binding and PAM. The libfprint-git `aurora-apple-sep.patch` in
-     omarchy-pkgs is Apple Silicon's Touch ID (`/dev/sep-bio`), not this.
+   - **Omarchy's fingerprint setup and removal drive it** (pkgrel 2, 2026-11-14): the package ships
+     `/usr/share/omarchy-platform/fingerprint-readers` (`/run/t2-touchid/reader ready`), Omarchy's
+     hook for readers that aren't USB, and `reader-status.patch` has the daemon write that file
+     (`ready` once the sensor answers and macOS has fingers, else `starting`/`unreachable`/
+     `no-fingers`; world-readable, the runtime folder `0711`). So `omarchy-hw-fingerprint` finds it,
+     and the menu's setup installs `libfprint-git` + fprintd, enrolls (fprintd's duplicate check
+     then the enroll: about two touches; the daemon answers both with the macOS finger, which binds
+     it), verifies and adds its PAM (sudo, polkit-1 behind its lid gate, `omarchy-apply-lock`). Its
+     removal deletes the prints and PAM and drops fprintd and `libfprint-git`: hence those are
+     `optdepends`, not `depends` (a dependency made its `pacman -Rns` fail). The daemon must be
+     running for detection (no lifecycle hook: `omarchy-lifecycle-dispatch` registers none for
+     x86), so the fork's `fix-t2.sh` enables it. Automatic binding (`T2_TOUCHID_BIND_USER`) stays
+     `none`: it re-binds at every daemon start and would undo a removal. Tested end to end:
+     remove, then setup from the menu. The libfprint-git `aurora-apple-sep.patch` in omarchy-pkgs is
+     Apple Silicon's Touch ID (`/dev/sep-bio`), not this.
    - **Names**: unit, config and drop-in are neutral (`t2-touchid.*`, KaiT2en's trademark); the
      D-Bus name `org.kait2en.TouchId` is in the code, for the Touch Bar's animation: rename it with
      the Touch Bar port. sudo's prompt says "Swipe": the virtual driver's scan type, cosmetic.
@@ -365,8 +375,8 @@ it back, so re-check with `git log -- <path>` before starting.
      it), but an install right after a publish got theirs (the CDN served the old database):
      replace it with `pacman -S t2-arch-packages/t2-touchid`. `epoch=1` would make ours outrank it
      everywhere, if it bites again.
-   - **Not done**: the omarchy fork (`fix-t2.sh` installing `libfprint-git t2-touchid`; its
-     fingerprint menu entry on a T2) and a reboot test.
+   - **Not done**: an ISO with it (the fork installs and enables `t2-touchid`; `libfprint-git`
+     and fprintd are in its offline list for the setup).
 10. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
    bridge link, which the udev rule keeps NetworkManager off but leaves up), `t2-kbd-backlight`
    (2026-11-29), `t2-sidecar` (2026-11-23), AirShare/AirDrop (`t2-airshare`, `t2-drop`;

@@ -24,22 +24,37 @@
 #   later stays NO-CARRIER. It also keeps NetworkManager off it.
 # - No SELinux policy, no authselect: PAM is Omarchy's (its fingerprint setup's
 #   sudo/polkit lines, omarchy-apply-lock for the lock screen).
+# - reader-status.patch and /usr/share/omarchy-platform/fingerprint-readers:
+#   Omarchy's fingerprint detection (omarchy-hw-fingerprint: the setup menu
+#   entry and its first-run invitation) finds a reader that isn't USB through
+#   that file, a path and the value it reads once the reader is usable. The
+#   daemon writes /run/t2-touchid/reader: `ready` once the sensor answers and
+#   macOS has fingers enrolled, else the reason. It's read as the session user,
+#   so the runtime directory is 0711 (the socket in it stays root's).
 #
-# Binding: T2_TOUCHID_BIND_USER in /etc/t2-touchid.conf names the Linux account
-# the macOS fingers are bound to (default none). The fprintd drop-in Requires=
-# the daemon, so a stopped daemon means no reader and PAM falls to the password.
+# Turning it on is Omarchy's fingerprint setup, with the daemon running
+# (enabled at install, as KaiT2en's installer does): its enroll step binds the
+# macOS finger to the account with one touch, then verify, then PAM; its
+# removal deletes the binding and drops fprintd and libfprint-git. T2_TOUCHID_BIND_USER in /etc/t2-touchid.conf
+# binds without a touch instead, at every daemon start (so a removal comes
+# back); default none. The fprintd drop-in Requires= the daemon, so a stopped
+# daemon means no reader and PAM falls to the password.
 
 pkgname=t2-touchid
 _ver=0.1.0
 pkgver=0.1.0.r14.c9e24f7
-pkgrel=1
+pkgrel=2
 pkgdesc="Touch ID on Apple T2 Macs through fprintd (KaiT2en's t2-touchid)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')
-# libfprint-git (Omarchy's, every driver built) by name: a bare fprintd would
-# let pacman pick Arch's libfprint, which conflicts with Omarchy's.
-depends=('fprintd' 'libfprint-git' 'libinput' 'iproute2' 'systemd' 't2bce-stack-dkms')
+# fprintd and libfprint-git are Omarchy's fingerprint setup's to install (in
+# one transaction, so Arch's libfprint, which conflicts, stays out) and its
+# removal's to drop: as dependencies they'd stop that removal. The daemon runs
+# without them, keeping its session and the reader status.
+depends=('libinput' 'iproute2' 'systemd' 't2bce-stack-dkms')
+optdepends=('fprintd: the fingerprint service PAM asks (Omarchy fingerprint setup installs it)'
+            'libfprint-git: libfprint with its virtual storage driver (Omarchy fingerprint setup installs it)')
 makedepends=('git' 'cargo')
 backup=('etc/t2-touchid.conf')
 options=('!debug')
@@ -47,8 +62,10 @@ options=('!debug')
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
 _commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
 source=("kait2en::git+${_repo}#commit=${_commit}"
-        'resume-reopen.patch')
+        'resume-reopen.patch'
+        'reader-status.patch')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP')
 
 pkgver() {
@@ -61,6 +78,7 @@ pkgver() {
 prepare() {
   cd kait2en
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/resume-reopen.patch"
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/reader-status.patch"
   cd t2-services/t2-touchid
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
@@ -90,12 +108,14 @@ ExecStart=/usr/bin/t2-touchid --socket ${T2_TOUCHID_SOCKET} --uid ${T2_TOUCHID_U
 Restart=on-failure
 RestartSec=5
 RuntimeDirectory=t2-touchid
-RuntimeDirectoryMode=0700
+RuntimeDirectoryMode=0711
 RuntimeDirectoryPreserve=yes
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+# A stopped daemon is no reader: the directory outlives it (Preserve).
+ExecStopPost=/usr/bin/rm -f /run/t2-touchid/reader
 
 [Install]
 WantedBy=multi-user.target
@@ -113,7 +133,7 @@ After=t2-touchid.service
 Environment=FP_VIRTUAL_DEVICE_STORAGE=/run/t2-touchid/fprint.sock
 ReadWritePaths=/run/t2-touchid
 RuntimeDirectory=t2-touchid
-RuntimeDirectoryMode=0700
+RuntimeDirectoryMode=0711
 RuntimeDirectoryPreserve=yes
 EOF
 
@@ -124,6 +144,12 @@ EOF
 # as it appears. The T2 signals carrier once, when the link is set up, so a
 # link opened later stays NO-CARRIER.
 ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="05ac", ATTRS{idProduct}=="8233", ENV{NM_UNMANAGED}="1", RUN+="/usr/bin/ip link set dev $name addrgenmode eui64", RUN+="/usr/bin/ip link set dev $name up"
+EOF
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/omarchy-platform/fingerprint-readers" <<'EOF'
+# T2 Touch ID (t2-touchid): the daemon writes this once the sensor answers and
+# macOS has fingers enrolled. Read by omarchy-hw-fingerprint as the session user.
+/run/t2-touchid/reader ready
 EOF
 
   install -Dm644 "$app/integration/dbus/org.kait2en.TouchId.conf" \
