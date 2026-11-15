@@ -12,9 +12,9 @@
 # Changes from upstream:
 # - Neutral file names (KaiT2en's trademark terms do not allow its name in
 #   redistributions): t2-touchid.service, /etc/t2-touchid.conf, the fprintd
-#   drop-in t2-touchid.conf. The D-Bus name the daemon owns for the Touch Bar's
-#   animation, org.kait2en.TouchId, is in its code and stays for now: it goes
-#   with the Touch Bar port.
+#   drop-in t2-touchid.conf, and the D-Bus name it signals the Touch Bar's
+#   unlock prompt on, io.github.josemiguelo.T2TouchId (t2-touchbar listens to
+#   it; upstream's org.kait2en.TouchId).
 # - resume-reopen.patch: an attempt waiting when the machine went to sleep
 #   (the lock screen's, locked just before suspend) no longer reports an error
 #   to fprintd after resume; the daemon reopens its session and serves the
@@ -43,7 +43,7 @@
 pkgname=t2-touchid
 _ver=0.1.0
 pkgver=0.1.0.r14.c9e24f7
-pkgrel=2
+pkgrel=3
 pkgdesc="Touch ID on Apple T2 Macs through fprintd (KaiT2en's t2-touchid)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -79,6 +79,11 @@ prepare() {
   cd kait2en
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/resume-reopen.patch"
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/reader-status.patch"
+  sed -i -e 's|org\.kait2en\.TouchId|io.github.josemiguelo.T2TouchId|g' \
+    -e 's|/org/kait2en/TouchId|/io/github/josemiguelo/T2TouchId|g' \
+    t2-services/t2-touchid/daemon/signal.rs
+  grep -q 'io.github.josemiguelo.T2TouchId' t2-services/t2-touchid/daemon/signal.rs ||
+    { echo "D-Bus name not renamed" >&2; return 1; }
   cd t2-services/t2-touchid
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
@@ -152,8 +157,8 @@ EOF
 /run/t2-touchid/reader ready
 EOF
 
-  install -Dm644 "$app/integration/dbus/org.kait2en.TouchId.conf" \
-    "$pkgdir/usr/share/dbus-1/system.d/org.kait2en.TouchId.conf"
+  sed 's|org\.kait2en\.TouchId|io.github.josemiguelo.T2TouchId|g' "$app/integration/dbus/org.kait2en.TouchId.conf" |
+    install -Dm644 /dev/stdin "$pkgdir/usr/share/dbus-1/system.d/io.github.josemiguelo.T2TouchId.conf"
 
   install -Dm644 /dev/stdin "$pkgdir/etc/t2-touchid.conf" <<'EOF'
 # t2-touchid (t2-touchid.service). Restart it after a change.

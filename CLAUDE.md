@@ -280,33 +280,43 @@ it back, so re-check with `git log -- <path>` before starting.
      throttling). Switch only if the SMC's curve keeps it cool enough; on Linux it ramps late.
    - KaiT2en's i915 patches (`patches/runtime/i915`: PSR on Apple panels, restoring the gmux
      brightness) matter once the iGPU drives the panel: look at them with this.
-6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): **left for later by
-   the owner** (2026-11-12): the gain is a nicety, the risk sits at the disk unlock prompt.
-   Eligible 2026-11-30 at the earliest (app's last code change 2026-10-31).
-   - **What it replaces:** `t2touchbar` builds `t2hid` (a fork of `hid-apple` with the same
-     options, `fnmode`, `swap_opt_cmd`, `swap_fn_leftctrl`, `swap_ctrl_cmd`, `iso_layout`, plus
-     `debounce_ms`, and the same `:white:kbd_backlight` LED), `t2touchbar_kbd` and
-     `t2touchbar_bl` (for `hid_appletb_kbd`/`_bl`); `t2bdrm` replaces `appletbdrm` (the bar's
-     screen as a DRM device). The app, `kait2en-touchbar` (DRM/input from tiny-dfr), is a user
-     service drawing its own bar: dark until touched or Fn, media/F-key/extra-key layers,
-     swipes, four custom keys, haptics through `t2_trackpad_actuator`; a root
-     `kait2en-touchbar-attach.service` switches the 05ac:8302 device to configuration 2 (the DRM
-     display); a `kait2en-touchbar` group, a udev rule (private seat `seat-touchbar` for the bar's
-     DRM card and digitizer, group on the internal keyboard's event node and `/dev/uinput`).
-   - **The risk:** `hid_apple` is in the initramfs for the unlock prompt; `t2hid` takes its place
-     there (KaiT2en loads `t2hid` early), with `hid_apple` blacklisted. If `t2hid` failed, no
-     internal keyboard at the prompt. Ways back: a pre-change Limine snapshot (its UKI has
-     `hid_apple`), or a non-Apple USB keyboard (hid-generic).
-   - **Adapting:** the app's fonts are Fedora paths (`/usr/share/fonts/adwaita-sans-fonts/...`;
-     Arch's `adwaita-fonts` has `/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf`); D-Bus use is
-     freedesktop only (`ScreenSaver`, UPower's `KbdBacklight`). `t2hid` declines the haptic
-     interface on purpose, so `t2_trackpad_actuator` gets it without the udev rule (which then
-     never matches: harmless). `/dev/uinput`'s user access is a logind ACL, kept when the rule
-     changes its group. The dotfiles' `t2-hid-apple-keyboard` would set `t2hid`'s options instead.
-   - **Plan, in stages:** packages (`t2-touchbar-dkms`, `t2bdrm-dkms`, `kait2en-touchbar` with a
-     sysusers group); a runtime test without reboot (internal keyboard rebound from `hid-apple`
-     to `t2hid` with the Keychron connected as a spare, then the bar and the app); only then the
-     blacklist, the initramfs list, the dotfiles script, a snapshot, and a reboot.
+6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): **done 2026-11-14, as an
+   exception to the one-month rule** (pin `c9e24f7`; module code unchanged since 2026-10-28, the
+   app since 2026-10-31). `t2-touchbar-dkms` (`t2hid`, `t2touchbar_kbd`/`_bl`, `t2bdrm`) and
+   `t2-touchbar` (the daemon). Tested on this Mac: live swap, then the bar, touch, swipes, layers,
+   haptics, the Touch ID prompt, suspend, and a reboot with `t2hid` at the unlock prompt.
+   - **They don't need `apple-t2-bridge`**: plain HID/USB/DRM drivers matched by device ID, no BCE
+     symbols or headers (6ddacd9 changed only a README line there). Built on 7.2.15 cleanly.
+   - **Installed inert**: `t2hid`/`t2touchbar_*` claim the same IDs as `hid-apple` and
+     `hid-appletb-*`, and udev would load both at every boot and resume. The package's
+     `/usr/lib/modprobe.d/t2-touchbar.conf` blacklists ours; the switch-over is
+     `/etc/modprobe.d/t2-touchbar.conf` (same name, so it takes that file's place) blacklisting
+     `hid_apple`, `hid_appletb_kbd`, `hid_appletb_bl`, `appletbdrm`, plus `t2hid` in
+     `apple-t2.conf`'s `MODULES` in `hid_apple`'s place (a blacklist doesn't stop a module named
+     there; modconf carries the blacklist into the image for the `keyboard` hook's autoload). The
+     fork's `fix-t2.sh` writes both; the dotfiles' `t2-touchbar-switch` writes them with the
+     keyboard options (`options t2hid …`, the same as hid-apple's) and replaced
+     `t2-hid-apple-keyboard`.
+   - **The daemon** (`t2-touchbar`, renamed from `kait2en-touchbar`, as are its units, udev rule,
+     group, `/etc/t2-touchbar`, `~/.config/t2-touchbar`, `T2_TOUCHBAR_*`): a root
+     `t2-touchbar-attach.service` (udev-wanted on 05ac:8302 in configuration 1, only while the user
+     unit is enabled globally) switches the bar to configuration 2, where `t2bdrm` makes a DRM card
+     on a private seat (`seat-touchbar`; Hyprland ignores it); the user service draws on it. Group
+     `t2-touchbar` (sysusers) opens that card, the digitizer, the keyboard's event node (Fn),
+     `/dev/uinput`, the bar's light and the actuator's `play`. A new group reaches the user
+     session only after a reboot: the user's systemd manager keeps its groups across logins while
+     anything else runs. Fonts patched to Arch's (`adwaita-fonts`). The Touch ID D-Bus name is
+     `io.github.josemiguelo.T2TouchId` on both sides (`t2-touchid` 3).
+   - **Live testing** (how it was proven): `modprobe -r hid_apple && modprobe t2hid <options>` with a
+     `systemd-run --on-active=` revert armed; then `t2touchbar_kbd`, `t2bdrm`, the global enable,
+     `systemctl start t2-touchbar-attach`, the user service. A revert has to stop the user service
+     first (`systemctl --user -M <user>@ stop t2-touchbar`), or `t2bdrm` stays in use. A package
+     installed on a running system sets the actuator's `play` group only at the next udev event,
+     so restart the app once (at boot the rule runs first).
+   - **Ways back**: delete `/etc/modprobe.d/t2-touchbar.conf`, `hid_apple` back in `apple-t2.conf`,
+     `limine-mkinitcpio`; at the unlock prompt, a USB keyboard (hid-generic) or a pre-change
+     snapshot. `t2-touchbar --detach` (or disabling the unit globally) brings Apple's firmware row
+     back.
 7. **Trackpad haptics** (`modules/t2_trackpad_actuator`, `apps/t2-force-click`): **done
    2026-11-12, as an exception to the one-month rule**: `t2-trackpad-actuator-dkms` (with a udev
    rule, see the facts above) and `t2-force-click`. The force click replays Apple's captured

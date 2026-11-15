@@ -1,0 +1,74 @@
+# KaiT2en's Touch Bar and internal keyboard drivers for T2 MacBooks, DKMS:
+#   t2hid           a fork of hid-apple (same options: fnmode, iso_layout,
+#                   swap_opt_cmd, swap_ctrl_cmd, swap_fn_leftctrl; plus
+#                   debounce_ms; the same :white:kbd_backlight LED) that
+#                   declines the trackpad's mouse and actuator interfaces
+#   t2touchbar_kbd  the Touch Bar's keys and modes (hid-appletb-kbd's place)
+#   t2touchbar_bl   its backlight, t2tb_backlight (hid-appletb-bl's place)
+#   t2bdrm          the Touch Bar's screen as a DRM device (appletbdrm's place),
+#                   on the 05ac:8302 device's configuration 2
+# Plain HID/USB/DRM drivers matched by device ID: they use nothing from the BCE
+# bus driver, so they work on t2bce_vhci as on KaiT2en's apple-t2-bridge.
+#
+# Installed inert: t2hid and t2touchbar_* claim the same IDs as hid-apple and
+# the in-kernel Touch Bar drivers, and udev would load both sets at every boot
+# and resume, the first to bind winning. /usr/lib/modprobe.d/t2-touchbar.conf
+# keeps these from autoloading (a blacklist stops only alias loading, so
+# `modprobe t2hid` still works). Switching over is
+# /etc/modprobe.d/t2-touchbar.conf, which takes that file's place: blacklist
+# hid_apple, hid_appletb_kbd, hid_appletb_bl and appletbdrm instead, carry the
+# keyboard options to t2hid, and put t2hid in the initramfs (the disk unlock
+# prompt needs the keyboard). Deleting it switches back.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  modules/t2touchbar,
+# modules/t2bdrm (GPL; MODULE_AUTHOR kept). Code unchanged since 2026-10-28.
+
+pkgname=t2-touchbar-dkms
+_modver=0.1
+pkgver=0.1.r24.c9e24f7
+pkgrel=1
+pkgdesc="Apple T2 MacBook Touch Bar and keyboard drivers from KaiT2en (t2hid, t2touchbar, t2bdrm), DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only')
+depends=('dkms')
+makedepends=('git')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_modver" \
+    "$(git rev-list --count HEAD -- modules/t2touchbar modules/t2bdrm)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd kait2en/modules
+  local mod dst
+  for mod in t2touchbar t2bdrm; do
+    dst="$pkgdir/usr/src/$mod-$_modver"
+    install -d "$dst"
+    find "$mod" -maxdepth 1 -type f \( -name '*.c' -o -name '*.h' -o -name Makefile -o -name dkms.conf \) \
+      -exec install -m644 -t "$dst/" {} +
+    printf '\n# t2-arch-packages: stock Omarchy kernels only\nBUILD_EXCLUSIVE_KERNEL="%s"\n' \
+      "${T2_DKMS_KERNEL_REGEX:-.*-omarchy\$}" >> "$dst/dkms.conf"
+  done
+  install -Dm644 t2touchbar/README.md "$pkgdir/usr/share/doc/$pkgname/t2touchbar.md"
+  install -Dm644 t2bdrm/README.md "$pkgdir/usr/share/doc/$pkgname/t2bdrm.md"
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/modprobe.d/t2-touchbar.conf" <<'EOF'
+# t2-touchbar-dkms, installed inert: these claim the same devices as hid-apple
+# and the in-kernel Touch Bar drivers, so they don't autoload. `modprobe` by
+# name still loads them. /etc/modprobe.d/t2-touchbar.conf takes this file's
+# place to switch over (blacklisting hid_apple, hid_appletb_kbd, hid_appletb_bl
+# and appletbdrm instead).
+blacklist t2hid
+blacklist t2touchbar_kbd
+blacklist t2touchbar_bl
+blacklist t2bdrm
+EOF
+}
