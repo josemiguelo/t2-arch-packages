@@ -27,7 +27,7 @@ from 1Password (item `kait2en`, Personal vault) and the daily `kait2en-sync.time
 Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
 `t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-trackpad-actuator-dkms`, `t2-force-click`, `t2-wireless-dkms`,
 `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp` (with `bankstown-lv2`, not KaiT2en's),
-`t2-dkms-guard`, `t2-arch-packages-keyring`. Arch's own
+`t2-dkms-guard`, `t2-touchid`, `t2-arch-packages-keyring`. Arch's own
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
 `077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F` (passphrase in the same 1Password item).
 
@@ -329,13 +329,44 @@ it back, so re-check with `git log -- <path>` before starting.
      `t2-wireless-dkms`) replacing `t2thunderbolt-dkms`; `pcie_ports=compat` dropped from
      `fix-t2.sh`, the dotfiles' `t2-kernel-args` (which enforces it today) and Limine; the resume
      time re-measured; hotplug tested with a Thunderbolt dock or eGPU.
-9. **Touch ID**: **left for later by the owner** (2026-11-12). Not through `t2sep` (KaiT2en doesn't
-   ship it, its README says): the `t2-services/t2-touchid` daemon reaches the sensor over
-   BridgeXPC on the T2 link (`enp4s0f1u1`: unmanaged by NetworkManager but up, with its link-local
-   address, which it needs), then `fprintd` and PAM, through Omarchy's own fingerprint setup;
-   KaiT2en's SELinux policy doesn't apply on Arch. High value, but authentication: a mistake can
-   lock sudo or the lock screen. Eligible 2026-12-08 at the earliest; wait longer than the
-   minimum.
+9. **Touch ID** (`t2-services/t2-touchid`): **packaged 2026-11-14 as `t2-touchid`, an exception to
+   the one-month rule** (pin `c9e24f7`). Tested on this Mac by hand first: sudo, polkit and the lock
+   screen, before and after suspend. How it works: the T2's Secure Enclave matches the finger
+   (fingers enrolled in macOS only; it reports none until macOS has been logged into once since
+   the T2 last lost power); the daemon reaches its BiometricKit over BridgeXPC on the T2 link
+   (`enp4s0f1u1`, the T2 at `fe80::aede:48ff:fe33:4455`, discovery port 59602) and hands verdicts to
+   stock fprintd through libfprint's virtual storage driver (`FP_VIRTUAL_DEVICE_STORAGE`), which
+   Omarchy's `libfprint-git` builds (`-D drivers=all`). With `--bind-user` it binds the macOS
+   fingers to a Linux account without a touch: any finger enrolled in macOS unlocks it. A wrong
+   finger gets a retry, not a no-match (upstream's choice: a bad read doesn't spend a PAM try), so
+   sudo waits out `pam_fprintd`'s 30 s or Esc, then the password.
+   - **The T2 link** must come up as the device appears (the package's udev rule, like KaiT2en's
+     on `ACTION=="add"`): the T2 signals carrier once, when its NCM function is set up (bind,
+     reset-resume), so a link opened later stays NO-CARRIER (found 2026-11-14: our
+     `90-t2-ibridge-unmanaged` rule had only kept NetworkManager off it since 2026-11-12; a
+     `cdc_ncm` unbind/bind of `7-1:1.0`, then `up`, gave carrier). It kept carrier across suspend.
+   - **`resume-reopen.patch`** (ours): Omarchy locks just before suspend, so the lock's verify was
+     waiting in the daemon; after resume it died on the dead session and the daemon sent fprintd
+     `ERROR`, which failed the lock's next verify, and the lock stopped listening until a click.
+     Now an attempt cut by a resume reopens the session and serves the standing prompt. KaiT2en's
+     `t2-services-suspend.service` does nothing for Touch ID (its README: the daemon's logind
+     watcher handles it); Omarchy's `fprintd-resume` hook (restarts fprintd) is fine with it.
+   - **PAM is Omarchy's**: its fingerprint setup's `setup_pam_config` (sudo, polkit-1, behind its
+     lid-closed gate) and `omarchy-apply-lock` (the lock's `omarchy-lock-fingerprint`, the resume
+     hook). Its whole setup can't run on a T2: it finds no USB reader, then would enroll. The
+     dotfiles' loadout does the binding and PAM. The libfprint-git `aurora-apple-sep.patch` in
+     omarchy-pkgs is Apple Silicon's Touch ID (`/dev/sep-bio`), not this.
+   - **Names**: unit, config and drop-in are neutral (`t2-touchid.*`, KaiT2en's trademark); the
+     D-Bus name `org.kait2en.TouchId` is in the code, for the Touch Bar's animation: rename it with
+     the Touch Bar port. sudo's prompt says "Swipe": the virtual driver's scan type, cosmetic.
+   - **`[arch-mact2]` has a `t2-touchid` too** (KaiT2en's names, a network-setup service and a
+     NetworkManager connection; version `0.1.0.r949…`, above ours). Ours wins because
+     `[t2-arch-packages]` comes first in `pacman.conf` (`-S` and `-Syu` take the first repo that has
+     it), but an install right after a publish got theirs (the CDN served the old database):
+     replace it with `pacman -S t2-arch-packages/t2-touchid`. `epoch=1` would make ours outrank it
+     everywhere, if it bites again.
+   - **Not done**: the omarchy fork (`fix-t2.sh` installing `libfprint-git t2-touchid`; its
+     fingerprint menu entry on a T2) and a reboot test.
 10. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
    bridge link, which the udev rule keeps NetworkManager off but leaves up), `t2-kbd-backlight`
    (2026-11-29), `t2-sidecar` (2026-11-23), AirShare/AirDrop (`t2-airshare`, `t2-drop`;

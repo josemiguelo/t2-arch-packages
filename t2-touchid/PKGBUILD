@@ -1,0 +1,151 @@
+# T2 Touch ID: KaiT2en's t2-touchid daemon, which bridges the T2's Touch ID
+# sensor to stock fprintd. The T2's Secure Enclave matches the finger (fingers
+# are enrolled in macOS only); the daemon reaches its BiometricKit service over
+# the T2's internal USB network link (BridgeXPC, IPv6 link-local) and hands the
+# verdict to fprintd through libfprint's virtual storage driver.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  t2-services/t2-touchid
+# (+ t2-services/shared/protocols/t2-bridgexpc). Authors: André Eikmeyer and
+# contributors. GPL-3.0-or-later with a section 7(b) attribution term (see
+# LICENSING.md, shipped in /usr/share/licenses).
+#
+# Changes from upstream:
+# - Neutral file names (KaiT2en's trademark terms do not allow its name in
+#   redistributions): t2-touchid.service, /etc/t2-touchid.conf, the fprintd
+#   drop-in t2-touchid.conf. The D-Bus name the daemon owns for the Touch Bar's
+#   animation, org.kait2en.TouchId, is in its code and stays for now: it goes
+#   with the Touch Bar port.
+# - resume-reopen.patch: an attempt waiting when the machine went to sleep
+#   (the lock screen's, locked just before suspend) no longer reports an error
+#   to fprintd after resume; the daemon reopens its session and serves the
+#   prompt standing then, so the lock screen takes a finger without a click.
+# - A udev rule brings the T2 link up as it appears (as KaiT2en's does): the T2
+#   signals carrier once, when its NCM function is set up, so a link opened
+#   later stays NO-CARRIER. It also keeps NetworkManager off it.
+# - No SELinux policy, no authselect: PAM is Omarchy's (its fingerprint setup's
+#   sudo/polkit lines, omarchy-apply-lock for the lock screen).
+#
+# Binding: T2_TOUCHID_BIND_USER in /etc/t2-touchid.conf names the Linux account
+# the macOS fingers are bound to (default none). The fprintd drop-in Requires=
+# the daemon, so a stopped daemon means no reader and PAM falls to the password.
+
+pkgname=t2-touchid
+_ver=0.1.0
+pkgver=0.1.0.r14.c9e24f7
+pkgrel=1
+pkgdesc="Touch ID on Apple T2 Macs through fprintd (KaiT2en's t2-touchid)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+# libfprint-git (Omarchy's, every driver built) by name: a bare fprintd would
+# let pacman pick Arch's libfprint, which conflicts with Omarchy's.
+depends=('fprintd' 'libfprint-git' 'libinput' 'iproute2' 'systemd' 't2bce-stack-dkms')
+makedepends=('git' 'cargo')
+backup=('etc/t2-touchid.conf')
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}"
+        'resume-reopen.patch')
+sha256sums=('SKIP'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- t2-services/t2-touchid t2-services/shared/protocols/t2-bridgexpc)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/resume-reopen.patch"
+  cd t2-services/t2-touchid
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/t2-services/t2-touchid
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=t2-services/t2-touchid
+  install -Dm755 "$app/target/release/t2-touchid" "$pkgdir/usr/bin/t2-touchid"
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/t2-touchid.service" <<'EOF'
+[Unit]
+Description=T2 Touch ID bridge for fprintd
+# No start condition: a skipped unit satisfies fprintd's Requires=, and fprintd
+# would then wait on a reader nobody answers. Running without the T2 link, the
+# daemon tells fprintd the sensor is unreachable after its 15 s grace.
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/t2-touchid.conf
+ExecStart=/usr/bin/t2-touchid --socket ${T2_TOUCHID_SOCKET} --uid ${T2_TOUCHID_UID} --flags ${T2_TOUCHID_FLAGS} --bind-user ${T2_TOUCHID_BIND_USER}
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=t2-touchid
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/fprintd.service.d/t2-touchid.conf" <<'EOF'
+# Points fprintd at libfprint's virtual storage device, which t2-touchid drives
+# with the T2 sensor's verdicts. Tied to the daemon, so a stopped daemon means
+# no reader and PAM falls straight through to the password.
+[Unit]
+Requires=t2-touchid.service
+After=t2-touchid.service
+
+[Service]
+Environment=FP_VIRTUAL_DEVICE_STORAGE=/run/t2-touchid/fprint.sock
+ReadWritePaths=/run/t2-touchid
+RuntimeDirectory=t2-touchid
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+EOF
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/udev/rules.d/90-t2-touchid-link.rules" <<'EOF'
+# The T2's internal USB network link (Apple T2 Controller, 05ac:8233), which
+# t2-touchid reaches the Touch ID sensor over: NetworkManager leaves it alone
+# (no DHCP server on the T2), and it comes up with an IPv6 link-local address
+# as it appears. The T2 signals carrier once, when the link is set up, so a
+# link opened later stays NO-CARRIER.
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="05ac", ATTRS{idProduct}=="8233", ENV{NM_UNMANAGED}="1", RUN+="/usr/bin/ip link set dev $name addrgenmode eui64", RUN+="/usr/bin/ip link set dev $name up"
+EOF
+
+  install -Dm644 "$app/integration/dbus/org.kait2en.TouchId.conf" \
+    "$pkgdir/usr/share/dbus-1/system.d/org.kait2en.TouchId.conf"
+
+  install -Dm644 /dev/stdin "$pkgdir/etc/t2-touchid.conf" <<'EOF'
+# t2-touchid (t2-touchid.service). Restart it after a change.
+
+# The macOS user id whose enrolled fingers this machine verifies against.
+# "auto" finds the one (501 and up) that has a finger enrolled.
+T2_TOUCHID_UID=auto
+
+# Plain verify; other bits need credentials that exist only on macOS.
+T2_TOUCHID_FLAGS=0
+
+# Linux account the macOS-enrolled fingers are bound to, without a touch.
+# "none" leaves binding to a manual fprintd-enroll.
+T2_TOUCHID_BIND_USER=none
+
+T2_TOUCHID_SOCKET=/run/t2-touchid/fprint.sock
+EOF
+
+  install -Dm644 "$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

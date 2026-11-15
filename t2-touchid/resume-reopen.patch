@@ -1,0 +1,43 @@
+--- a/t2-services/t2-touchid/daemon/main.rs
++++ b/t2-services/t2-touchid/daemon/main.rs
+@@ -186,7 +186,21 @@
+             &verifying,
+             &cancel_requested,
+             &mut wait_for_fprintd_close,
++            &resumed,
+         ) {
++            // An attempt that was waiting when the machine went to sleep dies
++            // on the dead session after resume. The fprintd prompt standing
++            // now is a new one (the lock screen's, usually), so failing it
++            // would stop the lock listening for a finger: reopen the session
++            // and serve that prompt instead.
++            if resumed.load(Ordering::Relaxed) {
++                log(&format!("resume ended the attempt ({error:#}), reopening the session"));
++                verifying.store(false, Ordering::Release);
++                prompt.set(State::Idle);
++                stages_set = false;
++                session = None;
++                continue;
++            }
+             log(&format!("attempt failed: {error:#}"));
+             prompt.set(State::Failed);
+             fprint::report_failure(&config.socket);
+@@ -313,6 +327,7 @@
+     verifying: &AtomicBool,
+     cancel_requested: &AtomicBool,
+     wait_for_fprintd_close: &mut bool,
++    resumed: &AtomicBool,
+ ) -> Result<()> {
+     // First of all, before anything can take time: fprintd drops a stored
+     // finger the moment it finds the device does not have it, so the bound
+@@ -345,6 +360,10 @@
+     let mut outcome = None;
+     let mut cancelled = false;
+     while Instant::now() < deadline {
++        if resumed.load(Ordering::Relaxed) {
++            verifying.store(false, Ordering::Release);
++            anyhow::bail!("the machine resumed from sleep");
++        }
+         let event = match session.next_event(EVENT_WAIT) {
+             Ok(event) => event,
+             Err(error) => {
