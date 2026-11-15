@@ -403,8 +403,15 @@ it back, so re-check with `git log -- <path>` before starting.
      fixed a leftover `/etc/kait2en` path in its config comment (its name check now covers
      `config/`).
 11. **AirDrop and Quick Share** (`apps/t2-drop`, `apps/t2-airshare`): **packaged 2026-11-15, as an
-   exception to the one-month rule** (pin `c9e24f7`). AirDrop tested both ways with an iPhone;
-   Quick Share with Android not yet; not in the fork's `fix-t2.sh` until it is.
+   exception to the one-month rule** (pin `c9e24f7`). AirDrop tested both ways with an iPhone,
+   Quick Share both ways with a Galaxy A56 over the shared Wi-Fi (2026-11-15); the hotspot path
+   (phone off Wi-Fi) not yet. The fork's `fix-t2.sh` installs both and adds the ufw rules (same
+   comments as the dotfiles' check); the receiver stays off until the owner turns it on.
+   - **Omarchy integration** (dotfiles, not packaged): a bar widget and panel,
+     `josemiguelo.airshare` (visibility switch, send files / clipboard / last screenshot through
+     AirShare's send window, received files from the receiver's journal, trusted devices), and
+     Share-menu entries beside LocalSend's (`t2-airshare-menu`). A native device list, progress and
+     inline accept need AirShare to expose them (a `list --json`, `send --json`, receive events).
    - **Driver side already shipped**: everything both need is in `t2-wireless-dkms`' 0001-0024
      (0005 AP handshake to the host, 0006-0011 AWDL, 0012-0013 LE scan, 0014 ND offload). This Mac
      (BCM4364/4 b3, FWID 01-68d7ff80, untested upstream) keeps its 5 GHz station link while AWDL
