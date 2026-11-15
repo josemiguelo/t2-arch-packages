@@ -1,0 +1,106 @@
+# T2 AirShare: KaiT2en's file sharing for T2 Macs. Quick Share with Android
+# phones (Google's Nearby protocol: found over Bluetooth LE, then the transfer
+# over the shared Wi-Fi network, or over a short-lived hotspot the Mac opens
+# beside its own connection) and AirDrop with Apple devices (through t2-drop).
+# One send window, one accept notification, one trusted-device list; a
+# Nautilus "Send with T2 AirShare" entry and an "Open With" entry.
+#
+# Pieces:
+#   t2-airshare             the GTK4/libadwaita app (send window, settings)
+#   t2airshare daemon       the receiver, a user service (graphical-session):
+#                           Quick Share on TCP 47901 (omarchy.patch: fixed, so
+#                           a default-drop firewall can allow it; upstream
+#                           takes any free port), its own mDNS (no avahi), BLE
+#                           advertising, a GATT server, RFCOMM and L2CAP; the
+#                           T2's internal network link is kept out of mDNS
+#   t2-quickshare-hotspot   a root helper, D-Bus-activated as
+#                           org.t2airshare.QuickShareHotspot: adds t2qs0 (an AP
+#                           on the station's channel) and a NetworkManager
+#                           hotspot on it (10.42.97.1/24, a random PSK) for a
+#                           transfer that started over Bluetooth; the Wi-Fi
+#                           link drops for 1-3 s as it comes and goes
+# The firewall is the system's: allow TCP 47901, everything in on t2qs0, and
+# TCP 8770 in on awdl0 (t2-drop). The helper opens its port only with
+# firewalld; with ufw, the t2qs0 rule covers it.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  apps/t2-airshare.
+# Authors: André Eikmeyer and contributors; parts adapted from rquickshare.
+# GPL-3.0-or-later with a section 7(b) attribution term (LICENSING.md); the
+# Nearby protocol definitions are Apache-2.0 and Chromium-licensed
+# (THIRD-PARTY-NOTICES.md). All in /usr/share/licenses.
+# Changes: omarchy.patch (the fixed port; the KaiT2en wordmark removed, its
+# trademark terms; AirDrop's AppleDouble "._name" metadata files not saved as
+# hidden extra files), /usr paths (the helper in /usr/lib/t2-airshare), no
+# KDE/Nemo menus, no migration from its older name.
+
+pkgname=t2-airshare
+_ver=0.1.0
+pkgver=0.1.0.r8.c9e24f7
+pkgrel=2
+pkgdesc="Quick Share with Android and AirDrop with Apple devices for Apple T2 Macs (KaiT2en's t2-airshare)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later' 'Apache-2.0' 'BSD-3-Clause')
+depends=('gtk4' 'libadwaita' 'bluez' 'networkmanager' 'iw' 'dnsmasq' 'wpa_supplicant' 'dbus' 'systemd')
+optdepends=('t2-drop: AirDrop with Apple devices'
+            'nautilus-python: the "Send with T2 AirShare" entry in Nautilus')
+makedepends=('git' 'cargo')
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}"
+        'omarchy.patch')
+sha256sums=('SKIP'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- apps/t2-airshare)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/omarchy.patch"
+  cd apps/t2-airshare
+  sed -i -e 's|/usr/local/libexec/|/usr/lib/t2-airshare/|' -e 's|/usr/local/bin/|/usr/bin/|' \
+    -e '/^Documentation=/d' systemd/*.service
+  sed -i 's|/usr/local/bin/|/usr/bin/|g' org.t2airshare.gtk.desktop integration/org.t2airshare.send.desktop \
+    integration/t2-airshare-send.py
+  sed -i 's/endpoint_info(DeviceType::Laptop, "kait2en")/endpoint_info(DeviceType::Laptop, "t2airshare")/' src/bluetooth.rs
+  if grep -rni -e kait2en -e /usr/local src systemd dbus org.t2airshare.gtk.desktop \
+      integration/org.t2airshare.send.desktop integration/t2-airshare-send.py Cargo.toml; then
+    echo "a KaiT2en name or /usr/local path is left" >&2
+    return 1
+  fi
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/apps/t2-airshare
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=apps/t2-airshare rel=apps/t2-airshare/target/release
+  install -Dm755 "$rel/t2-airshare" "$pkgdir/usr/bin/t2-airshare"
+  install -Dm755 "$rel/t2airshare" "$pkgdir/usr/bin/t2airshare"
+  install -Dm755 "$rel/t2-quickshare-hotspot" "$pkgdir/usr/lib/t2-airshare/t2-quickshare-hotspot"
+  install -Dm644 "$app/systemd/t2-airshare.service" "$pkgdir/usr/lib/systemd/user/t2-airshare.service"
+  install -Dm644 "$app/systemd/t2-quickshare-hotspot.service" "$pkgdir/usr/lib/systemd/system/t2-quickshare-hotspot.service"
+  install -Dm644 "$app/dbus/org.t2airshare.QuickShareHotspot.conf" \
+    "$pkgdir/usr/share/dbus-1/system.d/org.t2airshare.QuickShareHotspot.conf"
+  install -Dm644 "$app/dbus/org.t2airshare.QuickShareHotspot.service" \
+    "$pkgdir/usr/share/dbus-1/system-services/org.t2airshare.QuickShareHotspot.service"
+  install -Dm644 "$app/org.t2airshare.gtk.desktop" "$pkgdir/usr/share/applications/org.t2airshare.gtk.desktop"
+  install -Dm644 "$app/integration/org.t2airshare.send.desktop" "$pkgdir/usr/share/applications/org.t2airshare.send.desktop"
+  install -Dm644 "$app/assets/icons/hicolor/scalable/apps/org.t2airshare.gtk.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.t2airshare.gtk.svg"
+  install -Dm644 "$app/integration/t2-airshare-send.py" "$pkgdir/usr/share/nautilus-python/extensions/t2-airshare-send.py"
+  install -Dm644 "$app/LICENSE" "$app/THIRD-PARTY-NOTICES.md" "$app/proto/LICENSE-Apache-2.0" \
+    "$app/proto/LICENSE-Chromium" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

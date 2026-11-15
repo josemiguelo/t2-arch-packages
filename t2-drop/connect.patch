@@ -1,0 +1,37 @@
+diff -ruN a/apps/t2-drop/src/airdrop.rs b/apps/t2-drop/src/airdrop.rs
+--- a/apps/t2-drop/src/airdrop.rs	2026-11-15 10:44:01.000000000 -0500
++++ b/apps/t2-drop/src/airdrop.rs	2026-11-15 12:35:58.672728056 -0500
+@@ -86,6 +86,9 @@
+     pub data: Vec<u8>,
+ }
+ 
++/// TCP connects to a receiver before giving up, 3 s each.
++const CONNECT_ATTEMPTS: u32 = 4;
++
+ /// An AirDrop receiver reachable on awdl0.
+ pub struct Receiver {
+     addr: SocketAddrV6,
+@@ -112,8 +115,21 @@
+     }
+ 
+     fn connect(&self, timeout: Duration) -> Result<Tls> {
+-        let tcp = TcpStream::connect_timeout(&self.addr.into(), Duration::from_secs(3))
+-            .with_context(|| format!("connect to {}", self.addr))?;
++        // Over AWDL beside a station link on another channel the first SYNs
++        // can go out while the radio is away from the peer: try a few times
++        // before giving up, as discovery does.
++        let mut attempt = 1;
++        let tcp = loop {
++            match TcpStream::connect_timeout(&self.addr.into(), Duration::from_secs(3)) {
++                Ok(tcp) => break tcp,
++                Err(err) if attempt < CONNECT_ATTEMPTS => {
++                    log::debug!("connect to {} (attempt {attempt}): {err}", self.addr);
++                    attempt += 1;
++                    std::thread::sleep(Duration::from_millis(500));
++                }
++                Err(err) => return Err(err).with_context(|| format!("connect to {}", self.addr)),
++            }
++        };
+         tcp.set_read_timeout(Some(timeout))?;
+         tcp.set_write_timeout(Some(timeout))?;
+         let name = ServerName::IpAddress(std::net::IpAddr::V6(*self.addr.ip()).into());

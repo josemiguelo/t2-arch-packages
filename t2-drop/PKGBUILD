@@ -1,0 +1,86 @@
+# T2 Drop: KaiT2en's AirDrop service for T2 Macs, over AWDL (Apple's
+# peer-to-peer Wi-Fi). t2-wireless-dkms's brcmfmac creates the awdl0 interface
+# on demand and passes its firmware events up (patches 0006-0011); this root
+# service drives it as macOS does, advertises and scans over Bluetooth LE, and
+# serves AirDrop's HTTPS on awdl0's link-local address (TCP 8770). The Mac
+# stays on its Wi-Fi network meanwhile. t2-airshare is its user-facing side.
+#
+# D-Bus-activated as org.t2drop (a program looking for receivers, or a user
+# agent registering to receive); it exits after a minute without either. It
+# receives only while the user's session is active and unlocked (logind), and
+# hands files over as descriptors: root never opens user paths.
+# NetworkManager leaves awdl* alone (90-t2-drop-awdl.conf).
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  apps/t2-drop.
+# Authors: André Eikmeyer and contributors. GPL-3.0-or-later with a section
+# 7(b) attribution term (LICENSING.md, shipped in /usr/share/licenses).
+# Changes: /usr paths, no KaiT2en name (its trademark terms), and
+# discovery.patch (ours): the AirDrop port is the SRV record of the AirDrop
+# instance, not whichever SRV a peer's frame carries last (an iPhone also
+# announces services on changing ephemeral ports, and discovery dialled one of
+# them); a session's discovery threads stop with it instead of retrying
+# against an interface that is gone. connect.patch (ours): a TCP connect to
+# the receiver is tried 4 times (3 s each) before a send or discovery attempt
+# fails: over AWDL beside a 5 GHz station link the first SYNs get lost, and a
+# send used to fail on one.
+
+pkgname=t2-drop
+_ver=0.1.0
+pkgver=0.1.0.r8.c9e24f7
+pkgrel=3
+pkgdesc="AirDrop with Apple devices over AWDL for Apple T2 Macs (KaiT2en's t2-drop)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('t2-wireless-dkms' 'bluez' 'networkmanager' 'dbus' 'systemd')
+makedepends=('git' 'cargo')
+# ring's C objects: makepkg's -flto makes them LTO bytecode, which rust-lld can't link.
+options=('!debug' '!lto')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}"
+        'discovery.patch'
+        'connect.patch')
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- apps/t2-drop)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/discovery.patch"
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/connect.patch"
+  cd apps/t2-drop
+  sed -i -e 's|/usr/local/bin/|/usr/bin/|' -e '/^Documentation=/d' systemd/t2-drop.service
+  sed -i -e 's/the kait2en brcmfmac patch/the T2 brcmfmac patches/' \
+    -e 's/kait2en wireless patches/T2 wireless patches/' src/main.rs src/nl80211.rs
+  if grep -rni -e kait2en -e /usr/local src systemd dbus networkmanager Cargo.toml; then
+    echo "a KaiT2en name or /usr/local path is left" >&2
+    return 1
+  fi
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/apps/t2-drop
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=apps/t2-drop
+  install -Dm755 "$app/target/release/t2drop" "$pkgdir/usr/bin/t2drop"
+  install -Dm644 "$app/systemd/t2-drop.service" "$pkgdir/usr/lib/systemd/system/t2-drop.service"
+  install -Dm644 "$app/dbus/org.t2drop.conf" "$pkgdir/usr/share/dbus-1/system.d/org.t2drop.conf"
+  install -Dm644 "$app/dbus/org.t2drop.service" "$pkgdir/usr/share/dbus-1/system-services/org.t2drop.service"
+  install -Dm644 "$app/networkmanager/90-t2-drop-awdl.conf" "$pkgdir/usr/lib/NetworkManager/conf.d/90-t2-drop-awdl.conf"
+  install -Dm644 "$app/LICENSE" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

@@ -1,0 +1,97 @@
+diff -ruN a/apps/t2-airshare/src/airdrop.rs b/apps/t2-airshare/src/airdrop.rs
+--- a/apps/t2-airshare/src/airdrop.rs	2026-11-15 10:44:01.000000000 -0500
++++ b/apps/t2-airshare/src/airdrop.rs	2026-11-15 12:45:37.706964905 -0500
+@@ -99,6 +99,12 @@
+     std::fs::create_dir_all(&dir)?;
+     let mut saved = Vec::new();
+     for (name, fd) in names.into_iter().zip(fds) {
++        // Apple devices send each file's metadata as an AppleDouble
++        // "._name" file beside it, which macOS folds back in; here it would
++        // only be a hidden second file.
++        if std::path::Path::new(&name).file_name().is_some_and(|n| n.to_string_lossy().starts_with("._")) {
++            continue;
++        }
+         let path = unique_path(&dir, &name);
+         let mut source = std::fs::File::from(std::os::fd::OwnedFd::from(fd));
+         let mut target = std::fs::OpenOptions::new().write(true).create_new(true).open(&path)?;
+diff -ruN a/apps/t2-airshare/src/bin/t2-airshare/main.rs b/apps/t2-airshare/src/bin/t2-airshare/main.rs
+--- a/apps/t2-airshare/src/bin/t2-airshare/main.rs	2026-11-15 10:44:01.000000000 -0500
++++ b/apps/t2-airshare/src/bin/t2-airshare/main.rs	2026-11-15 11:55:50.127468985 -0500
+@@ -166,7 +166,6 @@
+ 
+     let header = adw::HeaderBar::new();
+     header.set_title_widget(Some(&gtk::Label::new(Some("T2 AirShare"))));
+-    header.pack_start(&kait2en_brand());
+     let view = adw::ToolbarView::new();
+     view.add_top_bar(&header);
+     view.set_content(Some(&page));
+@@ -185,45 +184,6 @@
+     window.present();
+ }
+ 
+-/// The shared KaiT2en wordmark, drawn like in the other KaiT2en apps.
+-fn kait2en_brand() -> gtk::DrawingArea {
+-    let brand = gtk::DrawingArea::new();
+-    brand.set_content_width(80);
+-    brand.set_content_height(21);
+-    brand.set_size_request(80, 21);
+-    // White type for dark surfaces, dark type for light ones. Without the
+-    // light file the white one is used.
+-    let pixbuf = gtk::gdk_pixbuf::Pixbuf::from_file("/usr/local/share/kait2en/kait2en-wordmark.png");
+-    if let Ok(dark) = pixbuf {
+-        let light =
+-            gtk::gdk_pixbuf::Pixbuf::from_file("/usr/local/share/kait2en/kait2en-wordmark-light.png")
+-                .unwrap_or_else(|_| dark.clone());
+-        brand.set_draw_func(move |_area, context, width, height| {
+-            let pixbuf = if adw::StyleManager::default().is_dark() { &dark } else { &light };
+-            let scale = f64::min(
+-                width as f64 / pixbuf.width() as f64,
+-                height as f64 / pixbuf.height() as f64,
+-            );
+-            let _ = context.save();
+-            context.translate(
+-                (width as f64 - pixbuf.width() as f64 * scale) / 2.0,
+-                (height as f64 - pixbuf.height() as f64 * scale) / 2.0,
+-            );
+-            context.scale(scale, scale);
+-            context.set_source_pixbuf(pixbuf, 0.0, 0.0);
+-            let _ = context.paint();
+-            let _ = context.restore();
+-        });
+-        let weak = brand.downgrade();
+-        adw::StyleManager::default().connect_dark_notify(move |_| {
+-            if let Some(brand) = weak.upgrade() {
+-                brand.queue_draw();
+-            }
+-        });
+-    }
+-    brand
+-}
+-
+ fn show_folder(row: &adw::ActionRow, config: &Config) {
+     let path = config
+         .download_dir()
+diff -ruN a/apps/t2-airshare/src/service.rs b/apps/t2-airshare/src/service.rs
+--- a/apps/t2-airshare/src/service.rs	2026-11-15 10:44:01.000000000 -0500
++++ b/apps/t2-airshare/src/service.rs	2026-11-15 11:55:50.127361971 -0500
+@@ -25,8 +25,19 @@
+ /// How long the "open" button on a finished transfer stays usable.
+ const OFFER_TIMEOUT: Duration = Duration::from_secs(300);
+ 
++/// The Quick Share listener's port on the local network: fixed, so a firewall
++/// with a default-drop input policy (Omarchy's ufw) can allow it. Another port
++/// is taken only when this one is busy.
++const QUICK_SHARE_PORT: u16 = 47901;
++
+ pub async fn run(name: &str) -> Result<()> {
+-    let listener = TcpListener::bind(("0.0.0.0", 0)).await.context("listen")?;
++    let listener = match TcpListener::bind(("0.0.0.0", QUICK_SHARE_PORT)).await {
++        Ok(listener) => listener,
++        Err(err) => {
++            warn!("TCP port {QUICK_SHARE_PORT} is busy ({err}), listening on another one: a firewall may block it");
++            TcpListener::bind(("0.0.0.0", 0)).await.context("listen")?
++        }
++    };
+     let port = listener.local_addr()?.port();
+     let endpoint_id = random_endpoint_id();
+     let advertisement = Advertisement::start(endpoint_id, name, port)?;

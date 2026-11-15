@@ -402,10 +402,32 @@ it back, so re-check with `git log -- <path>` before starting.
      command to call `KbdBacklight.SetBrightness` with the LED's level after it. `t2-touchbar` 2
      fixed a leftover `/etc/kait2en` path in its config comment (its name check now covers
      `config/`).
-11. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
+11. **AirDrop and Quick Share** (`apps/t2-drop`, `apps/t2-airshare`): **packaged 2026-11-15, as an
+   exception to the one-month rule** (pin `c9e24f7`). AirDrop tested both ways with an iPhone;
+   Quick Share with Android not yet; not in the fork's `fix-t2.sh` until it is.
+   - **Driver side already shipped**: everything both need is in `t2-wireless-dkms`' 0001-0024
+     (0005 AP handshake to the host, 0006-0011 AWDL, 0012-0013 LE scan, 0014 ND offload). This Mac
+     (BCM4364/4 b3, FWID 01-68d7ff80, untested upstream) keeps its 5 GHz station link while AWDL
+     runs (checked: channel 48, no firmware errors).
+   - **`t2-drop` 3 carries two patches of ours**: `discovery.patch` (the AirDrop port from the AirDrop
+     instance's SRV record, not the last SRV in a peer's frame, which was an iPhone's ephemeral
+     port; with a fallback to the last SRV when the name is only a compression pointer; and a
+     session's discovery threads stop with it), `connect.patch` (4 TCP connect attempts of 3 s:
+     over AWDL beside the station link the first SYNs get lost, and a send failed on one).
+     `!lto`: makepkg's `-flto` turns `ring`'s C objects into bytecode rust-lld can't link.
+   - **`t2-airshare` 2**: `omarchy.patch` fixes the Quick Share port at 47901 (upstream: any free
+     port, which ufw can't allow), removes the KaiT2en wordmark, and skips the AppleDouble `._name`
+     files iPhones send beside each file. The hotspot helper opens its port only with firewalld;
+     the dotfiles' `t2-airshare-firewall` adds ufw rules (47901/tcp, `in on t2qs0`, 8770/tcp
+     `in on awdl0`). The receiver is a user service the app's "visible" switch runs (it makes the
+     Mac Bluetooth-discoverable); "Always trust" matches by device name only.
+   - **Seen in testing**: `t2drop list` waits 15 s and a later session's first discovery can take
+     ~15 s (the first connect lands before awdl0's address is usable), so use `--wait 30`; the app
+     browses while its window has focus. An iPhone may send a transfer twice (each upload ends
+     with a connection reset): watch.
+12. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
    bridge link, which the udev rule keeps NetworkManager off but leaves up),
-   `t2-sidecar` (2026-11-23), AirShare/AirDrop (`t2-airshare`, `t2-drop`;
-   2026-12-04), `t2-truetone` (2026-12-08), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
+   `t2-sidecar` (2026-11-23), `t2-truetone` (2026-12-08), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
    16,1's panel is on the dGPU, so low value; look at it with the dGPU work). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
    work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,
    `modules/apple-t2-alsa-ucm-conf`.

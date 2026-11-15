@@ -1,0 +1,90 @@
+diff -ruN a/apps/t2-drop/src/awdl.rs b/apps/t2-drop/src/awdl.rs
+--- a/apps/t2-drop/src/awdl.rs	2026-11-15 10:44:01.000000000 -0500
++++ b/apps/t2-drop/src/awdl.rs	2026-11-15 12:15:51.020108279 -0500
+@@ -336,7 +336,7 @@
+     fn handle_frame(&mut self, addr: [u8; 6], body: &[u8]) -> Result<()> {
+         let mut election = None;
+         let mut host = None;
+-        let mut airdrop = None;
++        let mut srvs = Vec::new();
+         let mut instance = None;
+         let mut ht = None;
+         let mut vht = None;
+@@ -365,7 +365,7 @@
+                                 instance = Some(label);
+                             }
+                         } else if kind == DNS_SRV && data.len() >= 6 {
+-                            airdrop = Some(u16::from_be_bytes([data[4], data[5]]));
++                            srvs.push((name, u16::from_be_bytes([data[4], data[5]])));
+                         }
+                     }
+                 }
+@@ -390,6 +390,13 @@
+         if host.is_some() {
+             peer.host = host;
+         }
++        // A peer announces other services too, only the SRV record of the
++        // AirDrop instance has its port. A name that is only a compression
++        // pointer can't be matched here: then the last SRV, as before.
++        let airdrop = instance
++            .as_ref()
++            .and_then(|i| srvs.iter().find(|s| names_instance(s.0, i)).map(|s| s.1))
++            .or_else(|| srvs.last().map(|s| s.1));
+         if let (Some(instance), Some(port)) = (instance, airdrop) {
+             if peer.airdrop.as_ref().map(|a| &a.0) != Some(&instance) {
+                 info!("AirDrop service {instance} on {} port {port}", mac_str(&addr));
+@@ -545,6 +548,12 @@
+     data.get(1..1 + len).map(|l| String::from_utf8_lossy(l).into_owned())
+ }
+ 
++/// Whether a record name starts with the label `instance`.
++fn names_instance(name: &[u8], instance: &str) -> bool {
++    let i = instance.as_bytes();
++    name.first() == Some(&(i.len() as u8)) && name.get(1..1 + i.len()) == Some(i)
++}
++
+ fn ifname(ifindex: u32) -> Result<String> {
+     let mut buf = [0u8; libc::IF_NAMESIZE];
+     // SAFETY: buf has IF_NAMESIZE bytes as if_indextoname requires.
+@@ -570,8 +579,11 @@
+             "10000c303561323034633462316135c007212d00000000000000224224",
+             "64626364373433632d386666322d343735392d393830372d343533653964336565396132c00c"
+         ));
+-        let (_, kind, data) = service_record(&srv).unwrap();
++        let (name, kind, data) = service_record(&srv).unwrap();
+         assert_eq!(kind, DNS_SRV);
++        assert!(names_instance(name, "05a204c4b1a5"));
++        assert!(!names_instance(name, "a8488e353528"));
++        assert!(!names_instance(&[0xc0, 0x07], "05a204c4b1a5"));
+         assert_eq!(u16::from_be_bytes([data[4], data[5]]), 8770);
+     }
+ 
+diff -ruN a/apps/t2-drop/src/session.rs b/apps/t2-drop/src/session.rs
+--- a/apps/t2-drop/src/session.rs	2026-11-15 10:44:01.000000000 -0500
++++ b/apps/t2-drop/src/session.rs	2026-11-15 12:15:51.020197097 -0500
+@@ -118,7 +118,7 @@
+     mut awdl: Awdl,
+     events: mpsc::Receiver<crate::nl80211::Event>,
+     requests: mpsc::Receiver<SendRequest>,
+-    stop: &AtomicBool,
++    stop: &Arc<AtomicBool>,
+     receiving: &AtomicBool,
+     listening: &AtomicBool,
+     changed: impl Fn(Vec<ReceiverInfo>),
+@@ -187,11 +187,16 @@
+             }
+             let Ok(receiver) = Receiver::new(&link_local(&mac), awdl.ifindex, port) else { continue };
+             let tx = found_tx.clone();
++            let stop = stop.clone();
+             std::thread::spawn(move || {
+                 // The link local address of awdl0 is unusable until its
+                 // duplicate address detection ends, so retry for a while.
+                 let mut name = None;
+                 for attempt in 1..=DISCOVER_ATTEMPTS {
++                    // The session ended and took its interface along
++                    if stop.load(Ordering::Relaxed) {
++                        return;
++                    }
+                     match receiver.discover() {
+                         Ok(n) => {
+                             name = n;
