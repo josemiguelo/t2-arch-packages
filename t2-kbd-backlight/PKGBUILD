@@ -1,0 +1,69 @@
+# T2 keyboard backlight idle timeout: KaiT2en's t2-kbd-backlight. After
+# idle_timeout_ms (default 30 s) without keyboard, trackpad or Touch Bar input
+# it fades the keyboard backlight out, and the next input (a finger resting on
+# the trackpad included) fades it back to the level it had. Before suspend it
+# puts that level back under a logind delay inhibitor, so the keyboard resumes
+# lit. No ambient light sensor: it's an idle fade, not auto-brightness.
+#
+# It sets the level through UPower's KbdBacklight (so every step reaches
+# t2-touchbar, which dims its glyphs with the keyboard), and watches input with
+# its own libinput contexts on seat0 and seat-touchbar. A root system service:
+# it also covers the login screen. It reads input, never grabs it.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  apps/t2-kbd-backlight.
+# Authors: André Eikmeyer and contributors. GPL-3.0-or-later with a section
+# 7(b) attribution term (LICENSING.md, shipped in /usr/share/licenses).
+# Changes: its config is /etc/t2-kbd-backlight/kbd-backlight.toml (KaiT2en's
+# trademark terms don't allow its name in redistributions); /usr paths.
+
+pkgname=t2-kbd-backlight
+_ver=0.1.0
+pkgver=0.1.0.r2.c9e24f7
+pkgrel=1
+pkgdesc="Keyboard backlight idle fade for Apple T2 MacBooks (KaiT2en's t2-kbd-backlight)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('libinput' 'upower' 'systemd-libs')
+optdepends=('t2-touchbar: Touch Bar touches count as input, and its glyphs dim with the keyboard')
+makedepends=('git' 'cargo')
+backup=('etc/t2-kbd-backlight/kbd-backlight.toml')
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- apps/t2-kbd-backlight)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en/apps/t2-kbd-backlight
+  sed -i 's|/etc/kait2en/kbd-backlight\.toml|/etc/t2-kbd-backlight/kbd-backlight.toml|' src/config.rs
+  sed -i 's|/usr/local/bin/|/usr/bin/|' systemd/t2-kbd-backlight.service
+  if grep -rni -e kait2en -e /usr/local src config systemd Cargo.toml; then
+    echo "a KaiT2en name or /usr/local path is left" >&2
+    return 1
+  fi
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/apps/t2-kbd-backlight
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=apps/t2-kbd-backlight
+  install -Dm755 "$app/target/release/t2-kbd-backlight" "$pkgdir/usr/bin/t2-kbd-backlight"
+  install -Dm644 "$app/systemd/t2-kbd-backlight.service" "$pkgdir/usr/lib/systemd/system/t2-kbd-backlight.service"
+  install -Dm644 "$app/config/kbd-backlight.toml" "$pkgdir/etc/t2-kbd-backlight/kbd-backlight.toml"
+  install -Dm644 LICENSING.md AUTHORS LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

@@ -387,9 +387,24 @@ it back, so re-check with `git log -- <path>` before starting.
      everywhere, if it bites again.
    - **Not done**: an ISO with it (the fork installs and enables `t2-touchid`; `libfprint-git`
      and fprintd are in its offline list for the setup).
-10. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
-   bridge link, which the udev rule keeps NetworkManager off but leaves up), `t2-kbd-backlight`
-   (2026-11-29), `t2-sidecar` (2026-11-23), AirShare/AirDrop (`t2-airshare`, `t2-drop`;
+10. **Keyboard backlight idle fade** (`apps/t2-kbd-backlight`): **done 2026-11-15, as an exception to
+   the one-month rule** (pin `c9e24f7`; one real commit, fb187c0). Not auto-brightness: it fades the
+   keyboard backlight out after 30 s without keyboard, trackpad or Touch Bar input and back on the
+   next, and sets the level back before suspend. A root system service, through UPower's
+   `KbdBacklight` (never sysfs), its own libinput contexts on `seat0` and `seat-touchbar`. Config
+   `/etc/t2-kbd-backlight/kbd-backlight.toml` (renamed). The ambient light sensor is on Linux
+   (`iio:device0` `als`, `hid_sensor_als`) but unused: KaiT2en's auto-brightness is in GNOME-only
+   `t2-truetone`.
+   - **UPower missed Omarchy's keys**: `omarchy-brightness-keyboard` writes the LED with
+     brightnessctl, and t2hid's LED has no `brightness_hw_changed`, so UPower's level went stale
+     and it signalled nothing (the fade restored old levels; the Touch Bar's glyphs, which match the
+     keys' level on UPower's signal, lagged). The dotfiles' `t2-kbd-backlight-sync` wraps the
+     command to call `KbdBacklight.SetBrightness` with the LED's level after it. `t2-touchbar` 2
+     fixed a leftover `/etc/kait2en` path in its config comment (its name check now covers
+     `config/`).
+11. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
+   bridge link, which the udev rule keeps NetworkManager off but leaves up),
+   `t2-sidecar` (2026-11-23), AirShare/AirDrop (`t2-airshare`, `t2-drop`;
    2026-12-04), `t2-truetone` (2026-12-08), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
    16,1's panel is on the dGPU, so low value; look at it with the dGPU work). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
    work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,

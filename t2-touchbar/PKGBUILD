@@ -31,7 +31,7 @@
 pkgname=t2-touchbar
 _ver=0.1.0
 pkgver=0.1.0.r39.c9e24f7
-pkgrel=1
+pkgrel=2
 pkgdesc="Touch Bar daemon for Apple T2 MacBooks (KaiT2en's, from tiny-dfr)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -69,7 +69,8 @@ prepare() {
     -e 's|/usr/share/fonts/rsms-inter-vf-fonts/InterVariable\.ttf|/usr/share/fonts/inter/InterVariable.ttf|' \
     -e 's|/usr/share/fonts/abattis-cantarell-vf-fonts/Cantarell-VF\.otf|/usr/share/fonts/cantarell/Cantarell-VF.otf|' \
     src/*.rs
-  if grep -rni 'kait2en' src Cargo.toml; then
+  sed -i 's|/etc/kait2en/kbd-backlight\.toml|/etc/t2-kbd-backlight/kbd-backlight.toml|' config/touchbar.toml
+  if grep -rni 'kait2en' src config Cargo.toml; then
     echo "a KaiT2en name is left in the sources" >&2
     return 1
   fi
