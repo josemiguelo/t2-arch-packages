@@ -30,7 +30,13 @@
 #   that file, a path and the value it reads once the reader is usable. The
 #   daemon writes /run/t2-touchid/reader: `ready` once the sensor answers and
 #   macOS has fingers enrolled, else the reason. It's read as the session user,
-#   so the runtime directory is 0711 (the socket in it stays root's).
+#   so the runtime directory is 0755 (the socket in it stays root's).
+# - t2-touchid-notify (ours, pkgrel 4): when that file says `no-fingers` (the T2
+#   lost power, and its Secure Enclave keeps the macOS fingerprints locked until
+#   a macOS login), a desktop notification says so, once per locked spell; the
+#   lock screen and sudo only fail the finger and fall back to the password.
+#   A user path unit on the file (inotify on its directory: hence 0755, not
+#   0711) and a run at login, both enabled for every user.
 #
 # Turning it on is Omarchy's fingerprint setup, with the daemon running
 # (enabled at install, as KaiT2en's installer does): its enroll step binds the
@@ -43,7 +49,7 @@
 pkgname=t2-touchid
 _ver=0.1.0
 pkgver=0.1.0.r14.c9e24f7
-pkgrel=3
+pkgrel=4
 pkgdesc="Touch ID on Apple T2 Macs through fprintd (KaiT2en's t2-touchid)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -63,8 +69,10 @@ _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
 _commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
 source=("kait2en::git+${_repo}#commit=${_commit}"
         'resume-reopen.patch'
-        'reader-status.patch')
+        'reader-status.patch'
+        't2-touchid-notify')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP'
             'SKIP')
 
@@ -99,6 +107,37 @@ package() {
   local app=t2-services/t2-touchid
   install -Dm755 "$app/target/release/t2-touchid" "$pkgdir/usr/bin/t2-touchid"
 
+  # Says why the finger fails while the Secure Enclave is locked (see the top).
+  install -Dm755 "$srcdir/t2-touchid-notify" "$pkgdir/usr/lib/t2-touchid/t2-touchid-notify"
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/user/t2-touchid-notify.service" <<'EOF'
+[Unit]
+Description=Tell the user when Touch ID is locked (a macOS login unlocks it)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/t2-touchid/t2-touchid-notify
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/user/t2-touchid-notify.path" <<'EOF'
+[Unit]
+Description=Watch Touch ID's reader state
+PartOf=graphical-session.target
+
+[Path]
+PathChanged=/run/t2-touchid/reader
+Unit=t2-touchid-notify.service
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+  install -dm755 "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
+  ln -s ../t2-touchid-notify.service "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/t2-touchid-notify.service"
+  ln -s ../t2-touchid-notify.path "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/t2-touchid-notify.path"
+
   install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/t2-touchid.service" <<'EOF'
 [Unit]
 Description=T2 Touch ID bridge for fprintd
@@ -113,7 +152,7 @@ ExecStart=/usr/bin/t2-touchid --socket ${T2_TOUCHID_SOCKET} --uid ${T2_TOUCHID_U
 Restart=on-failure
 RestartSec=5
 RuntimeDirectory=t2-touchid
-RuntimeDirectoryMode=0711
+RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
 NoNewPrivileges=true
 ProtectSystem=strict
@@ -138,7 +177,7 @@ After=t2-touchid.service
 Environment=FP_VIRTUAL_DEVICE_STORAGE=/run/t2-touchid/fprint.sock
 ReadWritePaths=/run/t2-touchid
 RuntimeDirectory=t2-touchid
-RuntimeDirectoryMode=0711
+RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
 EOF
 

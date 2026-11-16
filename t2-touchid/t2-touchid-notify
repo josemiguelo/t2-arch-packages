@@ -1,0 +1,24 @@
+#!/bin/bash
+# t2-touchid-notify: tells the session user why Touch ID takes no finger. After
+# the T2 loses power (a forced power-off, a drained battery) its Secure Enclave
+# locks the fingerprints enrolled in macOS until macOS is logged into once; the
+# daemon then writes `no-fingers` to /run/t2-touchid/reader, and the lock screen
+# and sudo just fail the finger and fall back to the password. Run by
+# t2-touchid-notify.path when that file changes and once at login; one
+# notification per locked spell (a stamp in $XDG_RUNTIME_DIR, cleared on `ready`).
+reader=${T2_TOUCHID_READER:-/run/t2-touchid/reader}
+stamp=${XDG_RUNTIME_DIR:-/tmp}/t2-touchid-locked-notified
+
+state=$(cat "$reader" 2>/dev/null) || exit 0
+case $state in
+  no-fingers)
+    [[ -e $stamp ]] && exit 0
+    notify-send -u critical -a "Touch ID" -i fingerprint "Touch ID is locked" \
+      "The T2 lost power, which locks the fingerprints enrolled in macOS. Log into macOS once with your password to unlock them; until then, use your password here."
+    : >"$stamp"
+    ;;
+  ready)
+    rm -f "$stamp"
+    ;;
+esac
+exit 0

@@ -429,7 +429,8 @@ it back, so re-check with `git log -- <path>` before starting.
    screen, before and after suspend. How it works: the T2's Secure Enclave matches the finger
    (fingers enrolled in macOS only; it reports none until macOS has been logged into once since
    the T2 last lost power: seen 2026-11-16 after a forced power-off, "no macOS user on this Mac
-   has a finger enrolled, or the SEP is still locked", every boot and wake until a macOS login); the daemon reaches its BiometricKit over BridgeXPC on the T2 link
+   has a finger enrolled, or the SEP is still locked", every boot and wake until a macOS login;
+   since pkgrel 4 a notification says so, `t2-touchid-notify`, once per locked spell); the daemon reaches its BiometricKit over BridgeXPC on the T2 link
    (`enp4s0f1u1`, the T2 at `fe80::aede:48ff:fe33:4455`, discovery port 59602) and hands verdicts to
    stock fprintd through libfprint's virtual storage driver (`FP_VIRTUAL_DEVICE_STORAGE`), which
    Omarchy's `libfprint-git` builds (`-D drivers=all`). With `--bind-user` it binds the macOS
