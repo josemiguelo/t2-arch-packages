@@ -232,6 +232,14 @@ it back, so re-check with `git log -- <path>` before starting.
      active: `ACPI table found in initrd [kernel/firmware/acpi/161CpuSSDT.aml]` and
      `Table Upgrade: override [SSDT-CpuRef- CpuSsdt]` in the kernel log. Undo: remove both files,
      rebuild, reboot (or boot a snapshot from Limine). Rerun after a firmware update.
+   - **Fresh installs** (the fork's `fix-t2.sh`, `0f2f6aca8`): it installs the package and a
+     one-shot `t2-acpi-fix.service` that runs on the first boot, after journald and before the
+     login screen (`Before=display-manager.service`): `t2-acpi-fix`, then `limine-mkinitcpio` if
+     the drop-in exists, then `/var/lib/t2-acpi-fix/done` (its `ConditionPathExists=!`, so it
+     runs once; a failure retries next boot). The fix applies from the second boot. Tested on
+     this Mac (2026-11-15) by removing the override and rebooting: the unit built the same
+     table and the image before the login (+14 s, that boot only), and the next boot loaded it
+     with no ACPI errors and skipped the unit. Not in an ISO yet.
 2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`): **done 2026-11-12, as an exception to
    the one-month rule**, at the existing pin `27fd5c9` (patches 0001-0024): `t2-bluetooth-dkms`
    became `t2-wireless-dkms`. Not taken: 0025 (iMac antenna), 0026 (BCM4377 ASPM) and 0027
