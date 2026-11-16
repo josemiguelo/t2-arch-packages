@@ -616,7 +616,36 @@ it back, so re-check with `git log -- <path>` before starting.
      ID fine. Encode only, not VA-API: Chromium/mpv/OBS don't use it; KaiT2en's Sunshine fork does.
    - The `ffmpeg` on the PATH here is Homebrew's (no VA-API, no hwaccels); `/usr/bin/ffmpeg` has
      VA-API, and the iGPU encodes and decodes HEVC through it (`renderD128`).
-14. **The rest, each with its own clock**: `t2-sidecar` (2026-11-23), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
+14. **`t2-sidecar`: done 2026-11-16, as an exception to the one-month rule** granted by the owner
+   (would have been eligible 2026-11-23). A phone/tablet as a second screen through Moonlight,
+   encoded by the T2's Sidecar encoder (`/dev/video3`, needs `t2-ave`). Not Apple's Sidecar: Sunshine
+   on the Mac, Moonlight on the device (input comes back).
+   - **`sunshine-t2`**: KaiT2en's Sunshine fork (`deqrocks/Sunshine` `t2-sidecar`, pinned `0737eec`,
+     2026-10-19), which carries LizardByte/Sunshine PR #5717 (the V4L2 mem2mem encoder,
+     `encoder = v4l2m2m`; unmerged, still updated 2026-11-14). No CUDA, no setcap (cap_sys_admin is
+     only for KMS capture). `provides`/`conflicts` `sunshine`; goes once #5717 is in a Sunshine
+     release (then `t2-sidecar` depends on Omarchy's `sunshine`). The build fetches the submodules
+     and npm. ~2 min to compile; a `-debug` package (60 MB) is built too, not published.
+   - **`t2-sidecar`** (ours; KaiT2en's `apps/t2-sidecar` drives mutter's ScreenCast virtual
+     monitor, GNOME only): `t2-sidecar on [WxH[@Hz]]` sets a Hyprland rule (`auto-right`,
+     scale 1; a fixed position made Hyprland move eDP-1) and creates the headless output
+     `SIDECAR-1`, then Sunshine in the user unit `t2-sidecar.service` with `encoder=v4l2m2m
+     capture=wlr output_name=… hevc_mode=1 av1_mode=1` on its command line (`~/.config/sunshine`
+     keeps the user, pairing, web UI); `mirror` streams eDP-1; `off` removes `SIDECAR-1`.
+   - Tested on the 16,1 with Moonlight on a Galaxy phone: 1080p60 H.264 ~7.3 Mbit/s, Sunshine
+     ~6-11 % of one core; extended display (cursor, windows, workspace 11, touch); mirror. **Portal
+     capture fails** (`Couldn't import RGB Image: 0x3009`, EGL_BAD_MATCH, every frame, both on i915;
+     likely the tiled/CCS DMA-BUF), and xdg-desktop-portal-hyprland has no RemoteDesktop and asks at
+     SelectSources, which Sunshine waits 10 s for: `wlr` (wlr-screencopy) works. A sleep ends the
+     stream (Moonlight gives up after ~10 s without video; `t2-ave-suspend` detaches the encoder,
+     back 1.5 s after wake): tap Desktop again. Harmless: "Encoder did not produce IDR frame".
+     Moonlight pairing stuck ("a pairing session with this uniqueid already exists") while it listed
+     the Mac twice: delete the entries, pair once. Web UI: `https://127.0.0.1:47990` (it listens on
+     IPv4 only; `localhost` may resolve to ::1).
+   - The fork installs both and opens ufw from 10/8, 172.16/12, 192.168/16 (Omarchy's ports from
+     `omarchy-install-service-sunshine`: TCP 47984 47989 48010, UDP 5353 47998-48000 48002 48010,
+     comment `t2-sidecar`), beside AirShare's rules; the dotfiles carry none of it.
+15. **The rest, each with its own clock**: i915 PSR (`patches/runtime/i915`, 2026-12-08; the
    16,1's panel is on the dGPU, so low value; look at it with the dGPU work). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
    work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,
    `modules/apple-t2-alsa-ucm-conf`.

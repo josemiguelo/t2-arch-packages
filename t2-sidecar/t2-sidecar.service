@@ -1,0 +1,12 @@
+[Unit]
+Description=T2 Sidecar: Sunshine streaming through the T2's encoder (t2-sidecar on|mirror|off)
+After=graphical-session.target
+PartOf=graphical-session.target
+# Sunshine's own unit runs the same server on the same ports.
+Conflicts=app-dev.lizardbyte.app.Sunshine.service
+
+[Service]
+ExecStart=/usr/lib/t2-sidecar/t2-sidecar-run
+ExecStopPost=/usr/lib/t2-sidecar/t2-sidecar-run stop
+Restart=on-failure
+RestartSec=5s

@@ -1,0 +1,73 @@
+# sunshine-t2: Sunshine with the V4L2 mem2mem encoder (encoder = v4l2m2m),
+# which streams through the T2's Sidecar encoder (/dev/video3, t2bce_sidecar):
+# 1080p60 H.264 at ~6-11 % of one core instead of several. The encoder is
+# LizardByte/Sunshine PR #5717 ("zero-copy v4l2 encoder"), not merged yet;
+# KaiT2en's fork carries it unchanged on its t2-sidecar branch, pinned here.
+# Once #5717 is in a Sunshine release, Omarchy's `sunshine` does the job and
+# this package goes (t2-sidecar then depends on sunshine).
+#
+# From the fork's packaging/linux/Arch/PKGBUILD, with: the pinned commit, no
+# CUDA, no tests, and no setcap (cap_sys_admin is only for KMS capture;
+# t2-sidecar captures with wlr-screencopy, and a network server is better
+# without it). Its udev rule gives the session uinput/uhid for remote input.
+# The build fetches npm packages (the web UI) and the submodules.
+#
+# Pinned to KaiT2en's Sunshine fork 0737eec (2026-10-19), as an exception to
+# the one-month rule granted by the owner on 2026-11-16 (would have been
+# eligible 2026-11-23 with apps/t2-sidecar); tested on a MacBookPro16,1:
+# mirror and extended display to Moonlight on a phone, touch input, a sleep.
+
+pkgname=sunshine-t2
+_commit=0737eece2ec42d23d956b7900ca0f46cd6507572
+pkgver=2026.10.19.r0.g0737eec
+pkgrel=1
+pkgdesc="Sunshine game/desktop streaming host with the V4L2 encoder for the Apple T2's Sidecar encoder (KaiT2en's fork, PR #5717)"
+arch=('x86_64')
+url="https://github.com/deqrocks/Sunshine/tree/t2-sidecar"
+license=('GPL-3.0-only')
+install=sunshine-t2.install
+depends=(
+  'avahi' 'curl' 'gcc-libs' 'gtk3' 'hicolor-icon-theme' 'libayatana-appindicator'
+  'libcap' 'libdrm' 'libevdev' 'libmfx' 'libpipewire' 'libpulse' 'libva' 'libx11'
+  'libxcb' 'libxfixes' 'libxrandr' 'libxtst' 'miniupnpc' 'numactl' 'openssl' 'opus'
+  'qt6-base' 'qt6-svg' 'udev' 'vulkan-icd-loader' 'which'
+)
+makedepends=(
+  'appstream' 'appstream-glib' 'boost' 'boost-libs' 'cmake' 'desktop-file-utils'
+  'gcc' 'git' 'make' 'nodejs' 'npm' 'python-jinja' 'shaderc'
+)
+provides=('sunshine')
+conflicts=('sunshine')
+source=("sunshine::git+https://github.com/deqrocks/Sunshine.git#commit=${_commit}"
+        'sunshine-t2.install')
+sha256sums=('SKIP' 'SKIP')
+
+prepare() {
+  cd sunshine
+  git submodule update --recursive --init --depth 1
+}
+
+build() {
+  export BRANCH="t2-sidecar"
+  export BUILD_VERSION="${pkgver%%.r*}-t2"
+  export COMMIT="${_commit}"
+  export CC=gcc CXX=g++
+  export CFLAGS="${CFLAGS/-Werror=format-security/}"
+  export CXXFLAGS="${CXXFLAGS/-Werror=format-security/}"
+  export MAKEFLAGS="${MAKEFLAGS:--j$(nproc)}"
+  cmake -S sunshine -B build -Wno-dev \
+    -D CMAKE_BUILD_TYPE=Release \
+    -D BUILD_DOCS=OFF -D BUILD_TESTS=OFF -D BUILD_WERROR=OFF \
+    -D CMAKE_INSTALL_PREFIX=/usr \
+    -D SUNSHINE_EXECUTABLE_PATH=/usr/bin/sunshine \
+    -D SUNSHINE_ASSETS_DIR=share/sunshine \
+    -D SUNSHINE_ENABLE_CUDA=OFF -D CUDA_FAIL_ON_MISSING=OFF \
+    -D SUNSHINE_PUBLISHER_NAME='LizardByte' \
+    -D SUNSHINE_PUBLISHER_WEBSITE='https://app.lizardbyte.dev' \
+    -D SUNSHINE_PUBLISHER_ISSUE_URL='https://app.lizardbyte.dev/support'
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

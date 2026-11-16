@@ -1,0 +1,54 @@
+#!/bin/bash
+# t2-sidecar: a phone, tablet or computer as a second screen (or a view of
+# this one) for a T2 Mac on Hyprland. Sunshine streams it, encoded by the T2's
+# Sidecar encoder (/dev/video3, from t2bce_sidecar + t2-ave), to Moonlight on
+# the other device, which sends touch, mouse and keyboard back.
+#
+#   t2-sidecar on [WxH[@Hz]]  extended display: a virtual monitor (SIDECAR-1)
+#                             right of the others, streamed; the size is kept
+#                             for the next `on` (default 1920x1080@60)
+#   t2-sidecar mirror         stream the built-in display instead
+#   t2-sidecar off            stop streaming; windows on SIDECAR-1 move back
+#   t2-sidecar status
+#
+# Sunshine runs in the user unit t2-sidecar.service, with its own settings
+# (~/.config/sunshine: user, pairing, web UI at https://127.0.0.1:47990) plus
+# the T2's on its command line: encoder=v4l2m2m, capture=wlr (Hyprland's portal
+# capture can't hand its frames to the T2 path), H.264 only. Moonlight: pick
+# Desktop, 1080p, H.264; match the size picked here. After the Mac sleeps the
+# stream ends; tap Desktop again. Opening the firewall for Moonlight is the
+# setup's job (local network: TCP 47984 47989 48010, UDP 47998-48010, 5353).
+set -euo pipefail
+
+OUT=SIDECAR-1
+state=${XDG_STATE_HOME:-$HOME/.local/state}/t2-sidecar
+run=${XDG_RUNTIME_DIR:?}/t2-sidecar
+
+usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d;s/^# \{0,1\}//' >&2; exit 2; }
+
+start() { # mode [size]
+  mkdir -p "$run" "$state"
+  printf 'MODE=%s\n' "$1" > "$run/mode"
+  if [[ $1 == extend ]]; then
+    local size=${2:-$(cat "$state/size" 2>/dev/null || echo 1920x1080@60)}
+    [[ $size =~ ^[0-9]+x[0-9]+(@[0-9]+)?$ ]] || { echo "t2-sidecar: size is WxH or WxH@Hz, e.g. 2560x1600@60" >&2; exit 2; }
+    [[ $size == *@* ]] || size+=@60
+    echo "$size" > "$state/size"
+    printf 'SIZE=%s\n' "$size" >> "$run/mode"
+  fi
+  systemctl --user restart t2-sidecar.service
+  echo "t2-sidecar: ${1/extend/extended display} on; in Moonlight, pick Desktop"
+}
+
+case ${1:-} in
+  on) start extend "${2:-}" ;;
+  mirror) start mirror ;;
+  off) systemctl --user stop t2-sidecar.service; echo "t2-sidecar: off" ;;
+  status)
+    if systemctl --user -q is-active t2-sidecar.service; then
+      cat "$run/mode" 2>/dev/null | tr '\n' ' '; echo
+    else
+      echo "off"
+    fi ;;
+  *) usage ;;
+esac

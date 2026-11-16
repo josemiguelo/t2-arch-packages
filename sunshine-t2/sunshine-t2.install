@@ -1,0 +1,13 @@
+# The fork's sunshine.install without setcap (see the PKGBUILD).
+do_udev_reload() {
+  udevadm control --reload-rules
+  udevadm trigger --property-match=DEVNAME=/dev/uinput
+  udevadm trigger --property-match=DEVNAME=/dev/uhid
+  udevadm trigger --subsystem-match=hidraw
+  udevadm trigger --subsystem-match=input
+  modprobe uinput || true
+  modprobe uhid || true
+}
+
+post_install() { do_udev_reload; }
+post_upgrade() { do_udev_reload; }

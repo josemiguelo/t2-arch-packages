@@ -1,0 +1,30 @@
+# t2-sidecar: a phone, tablet or computer as a second screen for a T2 Mac on
+# Hyprland, encoded by the T2. `t2-sidecar on [WxH[@Hz]]` adds a virtual
+# monitor (SIDECAR-1, right of the others) and starts Sunshine on it in the
+# user unit t2-sidecar.service; `t2-sidecar mirror` streams the built-in
+# display; `off` stops and removes the monitor. Moonlight on the other device
+# shows it and sends input back. Sunshine runs with encoder=v4l2m2m (the T2's
+# Sidecar encoder, /dev/video3), capture=wlr (Hyprland's portal capture fails
+# to hand its frames to the T2 path: EGL_BAD_MATCH) and H.264 only.
+#
+# Ours, for KaiT2en's apps/t2-sidecar (d5bddb4), which drives GNOME's mutter
+# (a ScreenCast virtual monitor); here it's Hyprland's headless outputs.
+# Needs sunshine-t2 (the V4L2 encoder) and t2-ave (the encoder's link). The
+# firewall for Moonlight is the setup's (dotfiles). Off until `t2-sidecar on`.
+
+pkgname=t2-sidecar
+pkgver=0.1
+pkgrel=1
+pkgdesc="Second screen for Apple T2 Macs on Hyprland: Sunshine on a virtual monitor, encoded by the T2"
+arch=('any')
+url="https://github.com/josemiguelo/t2-arch-packages"
+license=('GPL-3.0-or-later')
+depends=('bash' 'jq' 'hyprland' 'systemd' 'sunshine-t2' 't2-ave')
+source=('t2-sidecar' 't2-sidecar-run' 't2-sidecar.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 t2-sidecar "$pkgdir/usr/bin/t2-sidecar"
+  install -Dm755 t2-sidecar-run "$pkgdir/usr/lib/t2-sidecar/t2-sidecar-run"
+  install -Dm644 t2-sidecar.service "$pkgdir/usr/lib/systemd/user/t2-sidecar.service"
+}

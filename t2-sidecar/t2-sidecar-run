@@ -1,0 +1,31 @@
+#!/bin/bash
+# t2-sidecar.service's ExecStart: set up the monitor for the mode t2-sidecar
+# picked ($XDG_RUNTIME_DIR/t2-sidecar/mode), then Sunshine with the T2's
+# settings. ExecStopPost runs `t2-sidecar-run stop`, which removes SIDECAR-1.
+set -euo pipefail
+
+OUT=SIDECAR-1
+mode_file=${XDG_RUNTIME_DIR:?}/t2-sidecar/mode
+MODE=extend SIZE=1920x1080@60
+[[ -r $mode_file ]] && . "$mode_file"
+
+if [[ ${1:-} == stop ]]; then
+  hyprctl -j monitors all | jq -e --arg o "$OUT" 'any(.[]; .name == $o)' >/dev/null &&
+    hyprctl output remove "$OUT" >/dev/null
+  exit 0
+fi
+
+[[ -e /dev/video3 ]] || echo "t2-sidecar: no T2 Sidecar encoder (/dev/video3); is t2-ave.service running?" >&2
+
+if [[ $MODE == extend ]]; then
+  # The rule first, so the new output comes up with it: right of the others,
+  # scale 1, and the existing monitors keep their places.
+  hyprctl eval "hl.monitor({ output = \"$OUT\", mode = \"$SIZE\", position = \"auto-right\", scale = 1 })" >/dev/null
+  hyprctl -j monitors all | jq -e --arg o "$OUT" 'any(.[]; .name == $o)' >/dev/null ||
+    hyprctl output create headless "$OUT" >/dev/null
+  output=$OUT
+else
+  output=$(hyprctl -j monitors | jq -r '[.[] | select(.name | startswith("eDP"))][0].name // .[0].name')
+fi
+
+exec sunshine encoder=v4l2m2m capture=wlr "output_name=$output" hevc_mode=1 av1_mode=1 system_tray=disabled
