@@ -24,11 +24,24 @@
 #         can't connect (MacBookPro16,1 on linux-omarchy: 320 drops in a boot)
 #   0013  strict duplicate filter quirk (scans report addresses promptly)
 #   0021, 0024  hci_bcm4377 resume and registration fixes (PCIe models)
+# Added with the re-pin to 7e9903c (2026-11-16, an exception to the one-month
+# rule by the owner):
+#   0025  brcmfmac: the antenna SKU optional for firmware selection on BCM4364
+#         rev 3 (iMacPro1,1, iMac19,x); no change on a MacBookPro16,1, whose
+#         BCM4364/4 has one
+#   0026  hci_bcm4377: ASPM off only while the firmware boots (PC8 instead of
+#         PC3 on a MacBookAir9,1); the 16,1's Bluetooth is UART, unaffected
+#   0027  brcmfmac: inband device wake and deep sleep, when the firmware
+#         advertises it (shared flag 0x40000000): the chip sleeps when idle and
+#         the host wakes it before writing a ring (up to 500 ms; "no deep sleep
+#         exit after device wake" if it doesn't). No off switch but this
+#         package's previous build. Meant for PC10 with Wi-Fi associated
+#         instead of the short LTR holding the package out of it
 #
-# Pinned with the other packages at 27fd5c9, whose series is 0001-0024 (later
-# KaiT2en commits add 0025-0027: an iMac antenna check, a BCM4377 ASPM change
-# and brcmfmac deep sleep). Wi-Fi ported 2026-11-12 as an exception to the
-# one-month rule (CLAUDE.md).
+# Pinned at 7e9903c (2026-11-11, 0027 as sent upstream), whose series is
+# 0001-0027; 0001-0024 are as at the old pin 27fd5c9 (0014's description
+# aside). The 7.3 rebase of 2026-11-10 didn't touch these. Wi-Fi ported
+# 2026-11-12 as an exception to the one-month rule (CLAUDE.md).
 #
 # The sources must match the kernel the modules load into: linux-omarchy 7.2.x
 # builds plain kernel.org 7.2.15 (no stable-review patch), and its own patches
@@ -42,7 +55,7 @@
 pkgname=t2-wireless-dkms
 _kver=7.2.15
 _modname=t2-wireless
-pkgver=7.2.15.r20.27fd5c9
+pkgver=7.2.15.r25.7e9903c
 pkgrel=1
 pkgdesc="Broadcom Wi-Fi and Bluetooth drivers with KaiT2en's Apple fixes (resume, LE devices, AWDL), DKMS"
 arch=('any')
@@ -55,9 +68,10 @@ conflicts=('t2-bluetooth-dkms')
 replaces=('t2-bluetooth-dkms')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
-_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+_commit=7e9903ceb8df8c638fbfe9d3cc64c4f510bd855b
 _patches=(0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012
-          0013 0014 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024)
+          0013 0014 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024
+          0025 0026 0027)
 source=("https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${_kver}.tar.xz"
         "kait2en::git+${_repo}#commit=${_commit}")
 noextract=("linux-${_kver}.tar.xz")

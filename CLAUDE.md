@@ -242,8 +242,13 @@ it back, so re-check with `git log -- <path>` before starting.
      with no ACPI errors and skipped the unit. Not in an ISO yet.
 2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`): **done 2026-11-12, as an exception to
    the one-month rule**, at the existing pin `27fd5c9` (patches 0001-0024): `t2-bluetooth-dkms`
-   became `t2-wireless-dkms`. Not taken: 0025 (iMac antenna), 0026 (BCM4377 ASPM) and 0027
-   (brcmfmac deep sleep, new on 2026-11-10), which come with the next re-pin under the rule.
+   became `t2-wireless-dkms`. **Re-pinned 2026-11-16 to `7e9903c`** (0001-0027, the owner's
+   exception): 0025 (BCM4364 rev 3 antenna SKU, iMacs) and 0026 (BCM4377 ASPM, PCIe Bluetooth)
+   don't touch this Mac; 0027 (brcmfmac inband deep sleep) only switches on when the firmware
+   sets shared flag 0x40000000, and this Mac's (9.30.514.0.32.5.94, from macOS) doesn't: with
+   `brcmfmac debug=0x80000` and dynamic debug on, no "deep sleep" messages in 20 s idle, and
+   `pmc_core/ltr_show` `SOUTHPORT_A` still 61 us. Wi-Fi, Bluetooth LE devices, S3 and AirDrop
+   fine; first ping after idle unchanged (~2 ms).
 3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): **done 2026-11-12, as an
    exception to the one-month rule** granted by the owner (would have been eligible 2026-12-08);
    sounds like macOS, ~17% of one core while playing, 0 xruns. Packaged as `t2-dsp` at `402a353` (2026-11-08), the last DSP before
