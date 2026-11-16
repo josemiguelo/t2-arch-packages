@@ -1,0 +1,98 @@
+# The kernel's amdgpu from Linux 7.2.15 with KaiT2en's Apple GMUX runtime-PM
+# series, DKMS: on a dual-GPU T2 Mac the Radeon dGPU can then power down to
+# D3cold through the gmux (t2gmux) while the Intel iGPU drives the panel, and
+# come back for an app that asks for it (DRI_PRIME=1). Replaces the in-tree
+# amdgpu from updates/. Nothing changes while the dGPU drives the panel (the
+# boot default): that's the first stage, proving the driver.
+#
+# The series, vendored here because no single KaiT2en commit has one that fits
+# 7.2.15: KaiT2en rebased it onto 7.3 on 2026-11-10 (3fc53bf), and the older
+# version (a9a42a7, = the 27fd5c9 pin) was written against other sources.
+#   0002  GMUX runtime-PM mode: vga_switcheroo's PM domain for the gmux, the
+#         dGPU's eDP left alone while the gmux has the panel (from 3fc53bf: the
+#         7.3 version applies to 7.2.15 cleanly, the old one doesn't)
+#   0004  register access refused while the gmux keeps the GPU off
+#   0005  DP AUX refused while the gmux keeps the GPU off
+#   0006  no AC/DC notification while the GPU is runtime-suspended
+#   0007  no panel_power_savings on eDP links without a panel
+#   0008  the VBIOS-trained UCLK levels on the MacBookPro16,1 (1002:7340, Apple
+#         subsystems 106b:020f/0210)
+#   0009  Apple Navi boards may lower the power limit to 40 %
+#   0011  the UMC CDR workaround off on Apple systems
+#   0012  no MPC pipe split on the MacBookPro16,1 (ours: its #include hunk's
+#         context fixed for 7.2.15's extra <linux/minmax.h> line)
+#   0004-0012 from a9a42a7. Left out: 0001 (in the kernel since 7.2.10),
+#   0003/0013/0014 (5K iMac panels), 0015 (Polaris on 7.3).
+# Applied with no fuzz; builds without warnings in about 4 minutes (988 objects).
+#
+# The sources must match the kernel the module loads into: linux-omarchy 7.2.x
+# builds plain kernel.org 7.2.15. BUILD_EXCLUSIVE_KERNEL keeps it to 7.2.x
+# -omarchy kernels (t2-dkms-guard holds a 7.3 kernel back until this moves).
+# Only amdgpu.ko is rebuilt: every patch lands in amdgpu/, display/ or pm/,
+# all linked into it. The build tree takes ~3 GB while DKMS builds.
+#
+# Patches: https://github.com/kaiT2en/KaiT2en-Fedora  patches/runtime/gpu-runtime-pm
+
+pkgname=t2-amdgpu-dkms
+_kver=7.2.15
+_modname=t2-amdgpu
+pkgver=7.2.15.r1
+pkgrel=1
+pkgdesc="amdgpu with KaiT2en's Apple GMUX runtime PM (the dGPU off in hybrid mode) for dual-GPU T2 Macs, DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only' 'MIT')
+depends=('dkms' 't2gmux-dkms')
+_patches=(0002-drm-amdgpu-Add-Apple-GMUX-runtime-PM-support.patch
+          0004-drm-amdgpu-catch-register-access-while-GMUX-keeps-the-GPU-off.patch
+          0005-drm-amd-display-refuse-DP-AUX-while-GMUX-keeps-the-GPU-off.patch
+          0006-drm-amdgpu-skip-AC-DC-notification-while-the-GPU-is-runtime-suspended.patch
+          0007-drm-amd-display-skip-panel-power-savings-on-eDP-links-without-a-panel.patch
+          0008-drm-amd-pm-use-the-VBIOS-trained-UCLK-levels-on-the-MacBookPro16-1.patch
+          0009-drm-amd-pm-let-Apple-Navi-boards-lower-the-power-limit-to-40-percent.patch
+          0011-drm-amd-pm-remove-UMC-CDR-workaround-for-Apple-systems.patch
+          0012-drm-amd-display-avoid-MPC-pipe-split-on-the-MacBookPro16-1.patch)
+source=("https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${_kver}.tar.xz"
+        "${_patches[@]}")
+noextract=("linux-${_kver}.tar.xz")
+sha256sums=('d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab'
+            SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP)
+
+prepare() {
+  rm -rf src
+  mkdir src
+  bsdtar -xf "linux-${_kver}.tar.xz" -C src --strip-components=1 \
+    "linux-${_kver}/drivers/gpu/drm/amd"
+  cd src
+  local p out
+  for p in "${_patches[@]}"; do
+    out=$(patch -p1 --forward --no-backup-if-mismatch < "$srcdir/$p") || { echo "$out" >&2; return 1; }
+    if grep -qi fuzz <<<"$out"; then
+      echo "$p applied with fuzz:" >&2; echo "$out" >&2; return 1
+    fi
+  done
+  # Built out of tree, the trace header's path is relative to the module.
+  local trace=drivers/gpu/drm/amd/amdgpu/amdgpu_trace.h
+  grep -q '^#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/amd/amdgpu$' "$trace"
+  sed -i 's|^#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/amd/amdgpu$|#define TRACE_INCLUDE_PATH .|' "$trace"
+}
+
+package() {
+  local dst="$pkgdir/usr/src/$_modname-$_kver"
+  install -dm755 "$dst"
+  cp -a --no-preserve=ownership src/drivers/gpu/drm/amd/. "$dst/"
+  find "$dst" -name '*.orig' -delete
+  cat > "$dst/dkms.conf" <<EOF2
+PACKAGE_NAME="$_modname"
+PACKAGE_VERSION="$_kver"
+# amdgpu's Makefile finds display/, pm/ and include/ beside it (FULL_AMD_PATH).
+MAKE[0]="make -C \${kernel_source_dir} M=\${dkms_tree}/\${PACKAGE_NAME}/\${PACKAGE_VERSION}/build/amdgpu modules"
+CLEAN="make -C \${kernel_source_dir} M=\${dkms_tree}/\${PACKAGE_NAME}/\${PACKAGE_VERSION}/build/amdgpu clean"
+BUILT_MODULE_NAME[0]="amdgpu"
+BUILT_MODULE_LOCATION[0]="amdgpu/"
+DEST_MODULE_LOCATION[0]="/updates/dkms"
+AUTOINSTALL="yes"
+# t2-arch-packages: Linux 7.2 sources, for stock Omarchy 7.2.x kernels only
+BUILD_EXCLUSIVE_KERNEL="^7\.2\.[0-9]+-[0-9]+-omarchy\$"
+EOF2
+}

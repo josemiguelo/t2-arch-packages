@@ -1,0 +1,54 @@
+# t2gmux: KaiT2en's gmux driver for dual-GPU T2 Macs (MacBookPro15,1/15,3/
+# 16,1/16,4), as DKMS, in place of the kernel's apple_gmux. It registers the
+# vga_switcheroo handler with the T2 power sequencing (the dGPU powered down
+# and back for runtime PM), keeps the backlight as `gmux_backlight` (so the
+# dotfiles' and Omarchy's brightness handling stay as they are), and has
+# `boot_gpu` (-1 auto, 0 iGPU, 1 dGPU). The patched amdgpu (t2-amdgpu-dkms)
+# uses it to let the dGPU reach D3cold.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  modules/t2gmux (0.9)
+#
+# Both drivers bind ACPI APP000B, so apple_gmux is skipped where t2gmux exists
+# for the running kernel (a kernel without it keeps apple_gmux and its
+# backlight). "GMUX must provide the power callbacks before AMDGPU probes":
+# a softdep loads t2gmux first, in the initramfs too (mkinitcpio follows it).
+
+pkgname=t2gmux-dkms
+_modname=t2gmux
+_modver=0.9
+pkgver=0.9.r35.c9e24f7
+pkgrel=1
+pkgdesc="Apple T2 gmux driver (dGPU power sequencing, backlight) from KaiT2en, DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only')
+depends=('dkms')
+makedepends=('git')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_modver" \
+    "$(git rev-list --count HEAD -- modules/t2gmux)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd kait2en/modules/t2gmux
+  local dst="$pkgdir/usr/src/$_modname-$_modver"
+  install -Dm644 dkms.conf Makefile t2gmux.c -t "$dst/"
+  printf '\n# t2-arch-packages: stock Omarchy kernels only\nBUILD_EXCLUSIVE_KERNEL="%s"\n' \
+    "${T2_DKMS_KERNEL_REGEX:-.*-omarchy\$}" >> "$dst/dkms.conf"
+
+  install -dm755 "$pkgdir/usr/lib/modprobe.d"
+  cat > "$pkgdir/usr/lib/modprobe.d/t2gmux.conf" <<'EOF2'
+# t2gmux replaces apple_gmux on T2 Macs (both bind ACPI APP000B), on kernels that have t2gmux.
+install apple_gmux modinfo -k "$(uname -r)" -F filename t2gmux >/dev/null 2>&1 || /usr/bin/modprobe --ignore-install apple_gmux $CMDLINE_OPTS
+# The gmux provides amdgpu's power callbacks: it has to be there before amdgpu probes.
+softdep amdgpu pre: t2gmux
+EOF2
+}

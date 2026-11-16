@@ -261,9 +261,21 @@ it back, so re-check with `git log -- <path>` before starting.
    build time (the live ISO's `linux-t2`), and its `ship-sync-databases.sh` stops shipping
    `arch-mact2.db` since the fork no longer names it.
 5. **dGPU power, hybrid graphics** (`modules/t2gmux`, `patches/runtime/gpu-runtime-pm`,
-   `apps/t2-hybrid-gpu-control`): **deferred by the owner to linux-omarchy 7.3** (2026-11-12), to go
-   with moving `t2-wireless-dkms` to 7.3 sources, when KaiT2en's patches (rebased onto 7.3 on
-   2026-11-10) should apply as they are and have settled under the one-month rule.
+   `apps/t2-hybrid-gpu-control`): first deferred to linux-omarchy 7.3 (2026-11-12), then **done on
+   7.2.15 after all** (the owner, 2026-11-15: Omarchy's 7.3 move, omarchy-pkgs#1421, has sat as a
+   draft since 2026-10-21). **Stage 1 done 2026-11-15**: `t2gmux-dkms` (0.9, at `c9e24f7`) and
+   `t2-amdgpu-dkms` (7.2.15's amdgpu with a series vendored in the package: 0002 from the 7.3
+   rebase `3fc53bf`, which applies to 7.2.15 cleanly, and 0004-0009, 0011, 0012 from `a9a42a7`,
+   0012's include context fixed; no fuzz, checked in `prepare()`). Booting on the dGPU as before:
+   `t2gmux: Found gmux version 5.0.0 [T2]`, `amdgpu: Using Apple GMUX for runtime pm`,
+   `vga_switcheroo: enabled`, the dGPU's `power/control` now `auto` (`active`: it drives the
+   panel), `gmux_backlight` kept (t2-truetone drives it), deep sleep and wake fine (0008 logs the
+   VBIOS-trained UCLK levels on resume). `apple_gmux` is skipped by `t2gmux-dkms`' modprobe
+   `install` line where t2gmux exists, and a `softdep amdgpu pre: t2gmux` loads it first (in the
+   initramfs too). DKMS builds amdgpu in about 5-9 min (988 objects, a ~3 GB build tree, 8.9 MB
+   installed), on every kernel update; the package carries only `drivers/gpu/drm/amd` (536 MB in
+   /usr/src). `Fence fallback timer expired on ring sdma0` twice at boot, as on 2026-11-12 with the
+   stock driver: watch. **Stage 2** (below) not done yet.
    - **Why it matters:** the panel (eDP) is wired to the AMD dGPU at boot, so it never sleeps
      (`power/control` = `on`, D0): **32 W on battery** measured 2026-11-12 (~1.8 h). In hybrid mode
      the Intel iGPU drives the panel and Hyprland, and the dGPU sits in D3cold until an app asks
