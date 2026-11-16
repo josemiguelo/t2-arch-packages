@@ -162,8 +162,13 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   from kernel.org 7.2.15 with KaiT2en's patches 0001-0024; `BUILD_EXCLUSIVE_KERNEL="^7\.2\.…"`,
   so on 7.3 its sources move by hand: until then `t2-dkms-guard` (0.2) holds a 7.3 kernel back
   ("would be left out"; `T2_DKMS_GUARD_ALLOW_SKIP=1` lets it through without the module).
-  linux-omarchy is plain kernel.org (no stable-review patch); its own Bluetooth patches touch
-  only btusb/btintel*, which aren't replaced. DKMS 3.4 skips a module whose srcversion matches
+  linux-omarchy is kernel.org 7.2.15 (no stable-review patch) **plus patches of its own in some
+  of the drivers we rebuild** (found 2026-11-16, omarchy-pkgs `pkgbuilds/linux-omarchy`): its
+  Bluetooth ones touch only btusb/btintel*, but 0680/0681 touch brcmfmac, ~15 touch amdgpu,
+  ~11 i915, and 0601-0608 Thunderbolt (those change `include/linux/thunderbolt.h`, so a plain
+  7.2.15 thunderbolt doesn't build). `t2-thunderbolt-dkms` applies Omarchy's first;
+  `t2-wireless-dkms`, `t2-amdgpu-dkms` and `t2-i915-dkms` still build plain 7.2.15 and so drop
+  Omarchy's fixes in those drivers (they build and work; to fix). DKMS 3.4 skips a module whose srcversion matches
   the in-tree one ("already installed (unversioned module)"): the patches leave `brcmutil` and
   `brcmfmac-wcc/-cyw/-bca` the same code (checked by disassembly), so the stock ones stay, and
   `dkms status` reports "Differences between built and installed modules". Harmless.
@@ -411,9 +416,20 @@ it back, so re-check with `git log -- <path>` before starting.
    2026-11-12, as an exception to the one-month rule**: `t2-trackpad-actuator-dkms` (with a udev
    rule, see the facts above) and `t2-force-click`. The force click replays Apple's captured
    plain click, so it feels like a second click, not macOS's force-click haptic.
-8. **Thunderbolt hotplug and controller power-down** (`patches/runtime/thunderbolt`): **left for
-   later by the owner** (2026-11-12); eligible 2026-12-11 at the earliest, and it fits the 7.3
-   batch with the dGPU work and `t2-wireless-dkms`'s move.
+8. **Thunderbolt hotplug and controller power-down** (`patches/runtime/thunderbolt`): **stage A
+   done 2026-11-16** (the owner's exception to the one-month rule) as `t2-thunderbolt-dkms`
+   (7.2.15 `drivers/thunderbolt` + Omarchy's 0601/0602/0605/0606/0608, vendored from omarchy-pkgs
+   `48d5518`, + KaiT2en's 0001 at `4b29a99` rebased onto them: one include hunk), replacing
+   `t2thunderbolt-dkms`, **with `pcie_ports=compat` kept**: the patch's `thunderbolt-apple-power`
+   binds the Titan Ridge root ports 00:01.1/00:01.2 itself ("Thunderbolt runtime power control
+   enabled"), and 15 s after boot "Thunderbolt controller powered off": NHIs 08:00.0/7e:00.0 in
+   D3cold, ports D3hot; the dGPU's 00:01.0 untouched. Package C-states on battery, idle, hybrid:
+   PC2 ~48 %, PC3 ~2 %, **PC6 ~3 %, PC7 ~14 %** (before: PC3 at most), PC8+ 0 (no PSR);
+   PkgWatt ~2.7 W as before, battery ~12 W (screen 9 %; before ~12.4-13 W at 15 %). Suspend fine
+   (wake a little over 1 s), USB-C sticks on every port (the controller powers on for them),
+   charging fine. Not tested: PCIe tunnelling (docks, eGPUs) and hotplug, which still need the
+   port services `compat` turns off. Next (stage C): `pcie_aspm=force` for more PC7, separately
+   (KaiT2en once turned forced ASPM off for this Navi).
    - The 16,1 has two Titan Ridge 4C controllers (`8086:15ea` bridges, `15eb` NHI, `15ec` xHCI).
      `pcie_ports=compat` (half of the ~16 s to ~1 s wake) turns the PCIe port services off,
      `pciehp` included: PCIe devices behind Thunderbolt (docks' NICs/NVMe, eGPUs) only appear if
