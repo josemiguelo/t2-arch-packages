@@ -1,0 +1,88 @@
+#!/bin/bash
+# t2-kernel-args: keep the T2 Mac's kernel arguments in
+# /etc/limine-entry-tool.d/t2-mac.conf, and the boot image built with them.
+#
+# Omarchy updates have rewritten that file before (#6562, August 2026, swapped
+# pcie_ports=compat for pm_async=off, which brought back a ~16 s wake), so
+# t2-kernel-args.path runs this whenever the file changes, and
+# t2-kernel-args.service at every boot: if the file isn't the canonical one, it
+# writes it and rebuilds the boot image (limine-mkinitcpio); if it is, nothing.
+#
+#   t2-kernel-args              check, fix and rebuild (the units)
+#   t2-kernel-args --write      write the file only (fix-t2.sh during an install,
+#                               which builds the boot image itself afterwards)
+#   t2-kernel-args --check      exit 0 when the file is canonical, 1 when not
+#   t2-kernel-args --print      print the canonical file
+#
+# The arguments:
+#   intel_iommu=on iommu=pt mem_sleep_default=deep
+#   pci=noaer           Apple's firmware denies AER; Linux using it anyway stalls
+#                       resume for seconds
+#   pcie_ports=compat   no native PCIe port services on the Thunderbolt bridges,
+#                       which otherwise wait ~10 s each on resume (costs PCIe
+#                       hotplug of Thunderbolt docks/eGPUs); with t2smp the wake
+#                       takes ~1 s instead of ~16 s
+#   pcie_aspm=force pcie_aspm.policy=powersave amdgpu.aspm=1
+#                       the FADT says no ASPM, so every link stayed out of L1;
+#                       forced, a MacBookPro16,1's package spends ~36 % instead of
+#                       ~14 % in PC7 at idle; not forced on iMacs, whose Ethernet
+#                       doesn't survive it (KaiT2en's rule)
+# Not while linux-t2 is installed (its t2bce wants pm_async=off; the file is
+# shared by every kernel's entry), and only on T2 Macs.
+set -euo pipefail
+
+CONF=/etc/limine-entry-tool.d/t2-mac.conf
+LOCK=/var/lib/pacman/db.lck
+
+canonical() {
+  local force=" pcie_aspm=force" model=""
+  model=$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)
+  [[ $model == iMac* ]] && force=""
+  printf '%s\n' "# Written by t2-kernel-args (the T2 Mac's kernel arguments); edits are reverted." \
+    "KERNEL_CMDLINE[default]+=\" intel_iommu=on iommu=pt mem_sleep_default=deep pci=noaer pcie_ports=compat${force} pcie_aspm.policy=powersave amdgpu.aspm=1\""
+}
+
+t2_mac() {
+  local dev
+  for dev in /sys/bus/pci/devices/*; do
+    [[ $(<"$dev/vendor") == 0x106b && $(<"$dev/device") == 0x180[12] ]] && return 0
+  done
+  return 1
+}
+
+applicable() { t2_mac && ! pacman -Q linux-t2 &>/dev/null; }
+is_canonical() { [[ -f $CONF ]] && [[ $(<"$CONF") == "$(canonical)" ]]; }
+
+write() {
+  mkdir -p "${CONF%/*}"
+  canonical > "$CONF.new"
+  mv -f "$CONF.new" "$CONF"
+}
+
+rebuild() {
+  # Don't race another build: a pacman transaction (its hooks rebuild the
+  # image) or a build already running, e.g. the Omarchy migration that rewrote
+  # the file and rebuilds right after. Wait up to 5 min for both, then rebuild
+  # with the file in place.
+  local i
+  for i in $(seq 300); do
+    [[ -e $LOCK ]] || pgrep -x 'limine-mkinitcpio|mkinitcpio' >/dev/null || break
+    sleep 1
+  done
+  limine-mkinitcpio
+}
+
+case ${1:-} in
+  --print) canonical ;;
+  --check) applicable || exit 0; is_canonical ;;
+  --write) applicable || exit 0; is_canonical || write ;;
+  "")
+    applicable || exit 0
+    is_canonical && exit 0
+    echo "t2-kernel-args: $CONF isn't the T2 Mac's; writing it and rebuilding the boot image"
+    write
+    rebuild
+    echo "t2-kernel-args: the next boot has them"
+    ;;
+  *) sed -n '2,/^set -euo/p' "$0" | sed '$d;s/^# \{0,1\}//' >&2; exit 2 ;;
+esac

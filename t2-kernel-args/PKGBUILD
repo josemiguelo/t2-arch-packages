@@ -1,0 +1,42 @@
+# t2-kernel-args: the T2 Mac's kernel arguments, kept. It owns
+# /etc/limine-entry-tool.d/t2-mac.conf (Limine's entry tool adds the drop-ins'
+# arguments to every boot entry and the UKIs): a path unit runs t2-kernel-args
+# whenever that file changes and the service at every boot; if the file isn't
+# the canonical one, it's written back and the boot image rebuilt
+# (limine-mkinitcpio, after any pacman transaction holding its lock). Omarchy
+# updates have rewritten that file before (#6562 swapped pcie_ports=compat for
+# pm_async=off, a ~16 s wake), and its migrations run outside pacman, so a
+# pacman hook alone would miss them.
+#
+# The arguments (the script's header has why): intel_iommu=on iommu=pt
+# mem_sleep_default=deep pci=noaer pcie_ports=compat pcie_aspm=force
+# pcie_aspm.policy=powersave amdgpu.aspm=1; no pcie_aspm=force on iMacs. Only on
+# T2 Macs, and not while linux-t2 is installed.
+#
+#   t2-kernel-args [--write|--check|--print]
+# Edits to t2-mac.conf are reverted: for a test, add a drop-in of its own
+# (e.g. /etc/limine-entry-tool.d/zz-test.conf) and limine-mkinitcpio.
+# Enabled on install (both units ship their .wants links); removing the package
+# leaves t2-mac.conf as it is.
+#
+# Ours (t2-arch-packages); the arguments follow KaiT2en's
+# scripts/fedora/install-kernel-args.sh and this Mac's tests (CLAUDE.md).
+
+pkgname=t2-kernel-args
+pkgver=0.1
+pkgrel=1
+pkgdesc="Keep the Apple T2 Mac's kernel arguments (wake, ASPM) in Limine's entries and boot image"
+arch=('any')
+url="https://github.com/josemiguelo/t2-arch-packages"
+license=('GPL-3.0-or-later')
+depends=('bash' 'systemd' 'limine-mkinitcpio-hook' 'pacman')
+source=('t2-kernel-args' 't2-kernel-args.path' 't2-kernel-args.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 t2-kernel-args "$pkgdir/usr/bin/t2-kernel-args"
+  install -Dm644 t2-kernel-args.path t2-kernel-args.service -t "$pkgdir/usr/lib/systemd/system/"
+  install -dm755 "$pkgdir/usr/lib/systemd/system/paths.target.wants" "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../t2-kernel-args.path "$pkgdir/usr/lib/systemd/system/paths.target.wants/t2-kernel-args.path"
+  ln -s ../t2-kernel-args.service "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/t2-kernel-args.service"
+}

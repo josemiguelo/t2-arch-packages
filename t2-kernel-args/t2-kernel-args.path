@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch the T2 Mac's kernel arguments
+
+[Path]
+PathChanged=/etc/limine-entry-tool.d/t2-mac.conf
+Unit=t2-kernel-args.service
+
+[Install]
+WantedBy=paths.target

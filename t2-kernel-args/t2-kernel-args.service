@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the T2 Mac's kernel arguments and the boot image built with them
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/t2-kernel-args
+# A rebuild takes ~15-30 s, longer while a pacman transaction holds its lock.
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target

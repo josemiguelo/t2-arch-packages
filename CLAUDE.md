@@ -440,8 +440,24 @@ it back, so re-check with `git log -- <path>` before starting.
    PkgWatt ~2.7 W as before, battery ~12 W (screen 9 %; before ~12.4-13 W at 15 %). Suspend fine
    (wake a little over 1 s), USB-C sticks on every port (the controller powers on for them),
    charging fine. Not tested: PCIe tunnelling (docks, eGPUs) and hotplug, which still need the
-   port services `compat` turns off. Next (stage C): `pcie_aspm=force` for more PC7, separately
-   (KaiT2en once turned forced ASPM off for this Navi).
+   port services `compat` turns off.
+   **Stage C done 2026-11-16: forced ASPM kept** (`pcie_aspm=force pcie_aspm.policy=powersave
+   amdgpu.aspm=1`, KaiT2en's arguments; the FADT says no ASPM, so without them every link stays out
+   of L1). L1 on the T2 functions, the Wi-Fi, the dGPU and its bridge, the Thunderbolt NHI. Idle,
+   battery, hybrid: PC2 ~25 %, PC6 ~3.5 %, **PC7 ~36 %** (stage A ~14 %), PC8+ 0; PkgWatt ~3 W,
+   battery ~11.7 W (noisy; ~0.3-0.5 W less at most): the package was never the big consumer. The
+   Navi 14 stayed on the bus through 2 min of WebGL load (KaiT2en once excluded forced ASPM on the
+   16,1 for it, e0fa6dd, and dropped the exclusion with the trained-UCLK patch 0008, c5760b1); wake,
+   USB-C, Wi-Fi fine. Not on iMacs (their Ethernet). The arguments are `t2-kernel-args`' now
+   (below).
+   - **`t2-kernel-args`** (ours, 2026-11-16): owns `/etc/limine-entry-tool.d/t2-mac.conf` (the
+     arguments above plus `intel_iommu=on iommu=pt mem_sleep_default=deep pci=noaer
+     pcie_ports=compat`); `t2-kernel-args.path` (PathChanged) and the boot service write it back
+     and rebuild the image (`limine-mkinitcpio`, after pacman's lock and any build already
+     running) when something else rewrites it, as Omarchy's migration 1785944594 (#6562) did
+     (tested: its `sed` restored within a second, 17 s rebuild). Replaces fix-t2.sh's heredoc
+     (the fork runs `t2-kernel-args --write` at install) and the dotfiles' `t2-kernel-args`
+     script. Edits to the file are reverted; a test goes in a drop-in of its own.
    - The 16,1 has two Titan Ridge 4C controllers (`8086:15ea` bridges, `15eb` NHI, `15ec` xHCI).
      `pcie_ports=compat` (half of the ~16 s to ~1 s wake) turns the PCIe port services off,
      `pciehp` included: PCIe devices behind Thunderbolt (docks' NICs/NVMe, eGPUs) only appear if
