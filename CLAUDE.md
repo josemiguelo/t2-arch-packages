@@ -392,9 +392,8 @@ it back, so re-check with `git log -- <path>` before starting.
    keyboard backlight out after 30 s without keyboard, trackpad or Touch Bar input and back on the
    next, and sets the level back before suspend. A root system service, through UPower's
    `KbdBacklight` (never sysfs), its own libinput contexts on `seat0` and `seat-touchbar`. Config
-   `/etc/t2-kbd-backlight/kbd-backlight.toml` (renamed). The ambient light sensor is on Linux
-   (`iio:device0` `als`, `hid_sensor_als`) but unused: KaiT2en's auto-brightness is in GNOME-only
-   `t2-truetone`.
+   `/etc/t2-kbd-backlight/kbd-backlight.toml` (renamed). The ambient light sensor drives the
+   screen instead, through `t2-truetone` (item 12).
    - **UPower missed Omarchy's keys**: `omarchy-brightness-keyboard` writes the LED with
      brightnessctl, and t2hid's LED has no `brightness_hw_changed`, so UPower's level went stale
      and it signalled nothing (the fade restored old levels; the Touch Bar's glyphs, which match the
@@ -404,8 +403,11 @@ it back, so re-check with `git log -- <path>` before starting.
      `config/`).
 11. **AirDrop and Quick Share** (`apps/t2-drop`, `apps/t2-airshare`): **packaged 2026-11-15, as an
    exception to the one-month rule** (pin `c9e24f7`). AirDrop tested both ways with an iPhone,
-   Quick Share both ways with a Galaxy A56 over the shared Wi-Fi (2026-11-15); the hotspot path
-   (phone off Wi-Fi) not yet. The fork's `fix-t2.sh` installs both and adds the ufw rules (same
+   Quick Share both ways with a Galaxy A56 over the shared Wi-Fi (2026-11-15). The hotspot path
+   is untested, by the owner's choice (phone Wi-Fi stays on): with the phone's Wi-Fi *off* the
+   Mac isn't listed at all, which is expected (it couldn't join the hotspot); a btmon capture
+   showed the Mac's FEF3 advertisements on air and the phone's FE2C beacons, no connection. The
+   test needs the phone's Wi-Fi on and off any network. The fork's `fix-t2.sh` installs both and adds the ufw rules (same
    comments as the dotfiles' check); the receiver stays off until the owner turns it on.
    - **Omarchy integration** (dotfiles, not packaged): a bar widget and panel,
      `josemiguelo.airshare` (visibility switch, send files / clipboard / last screenshot through
@@ -432,9 +434,33 @@ it back, so re-check with `git log -- <path>` before starting.
      ~15 s (the first connect lands before awdl0's address is usable), so use `--wait 30`; the app
      browses while its window has focus. An iPhone may send a transfer twice (each upload ends
      with a connection reset): watch.
-12. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
+12. **True Tone and auto-brightness** (`apps/t2-truetone`): **ported 2026-11-15, as an exception to
+   the one-month rule** (pin `c9e24f7`; 8de9546, 2026-11-08, then only a lockfile sweep). Upstream
+   is GNOME-only; `omarchy.patch` (ours, about 400 lines in, 1400 out with the GTK app) swaps the
+   backends and keeps the core (sensor, white-point model, macOS curve, ramps, learning, config,
+   status file) as it is. Tested on MacBookPro16,1: the panel warms with the room (~6400 K at
+   68 lux, strength 0.2) and stacks on Omarchy's night light; brightness follows the curve, dims
+   slowly and brightens fast, and learns a manual level a second after the keys stop.
+   - **The sensor**: USB HID `05ac:8262` behind the T2, `hidraw` (lux, CCT, chromaticity by
+     `HIDIOCGINPUT` report 1) and also `iio:device0` (`hid_sensor_als`; its raw value is milli-lux
+     though `in_illuminance_scale` says 1). The package's udev rule tags the hidraw node `uaccess`.
+   - **Colour**: a gamma table through `wlr-gamma-control` (Hyprland 0.56 gives eDP-1 a 4096-entry
+     table); the compositor drops it when the daemon exits. hyprsunset (night light) uses the CTM,
+     so both apply; a second `hyprland-ctm-control` client would have broken night light. No base
+     table to read back, so the base is the identity.
+   - **Brightness**: logind `Session.SetBrightness` on the first firmware/platform/raw backlight
+     that isn't the Touch Bar's (`gmux_backlight`; `T2_TRUETONE_BACKLIGHT` overrides), floor 1 %.
+     No signal for a manual change under Omarchy, so a sysfs level it didn't write is one; changes
+     in its first 5 s are followed, not learned (the dotfiles' login listener restoring a level).
+     The dotfiles' gmux resends after wake and screen-on write the kernel's own value back, so
+     they don't count as manual.
+   - **Omarchy side** (dotfiles): the user service enabled (`t2-truetone-daemon`) and a bar widget,
+     "Ambient Light" (`josemiguelo.truetone`): the service switch, True Tone with its strength,
+     automatic brightness, the live reading, forgetting the learned curve. Its evening mode is
+     left off (night light does it). Not in the fork's `fix-t2.sh` yet.
+13. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
    bridge link, which the udev rule keeps NetworkManager off but leaves up),
-   `t2-sidecar` (2026-11-23), `t2-truetone` (2026-12-08), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
+   `t2-sidecar` (2026-11-23), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
    16,1's panel is on the dGPU, so low value; look at it with the dGPU work). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
    work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,
    `modules/apple-t2-alsa-ucm-conf`.

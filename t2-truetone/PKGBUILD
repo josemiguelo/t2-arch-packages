@@ -1,0 +1,90 @@
+# T2 TrueTone: KaiT2en's t2-truetone, ported from GNOME to Hyprland (Omarchy).
+# One user service (graphical-session) reads the T2's ambient light sensor
+# (USB HID 05ac:8262, through hidraw: lux and chromaticity every 500 ms) and
+# does two things with it:
+#   True Tone        the built-in panel's white point follows the room's light
+#                    (Bradford adaptation towards the ambient white, strength
+#                    0-0.3, a 5 s fade), as a gamma table through
+#                    wlr-gamma-control. Omarchy's night light (hyprsunset) uses
+#                    the colour transform matrix instead, so both apply.
+#   auto brightness  macOS's curve for the model (MacBookPro16,1: 10.75 % at
+#                    0 lux to 34.18 % at 262.5 lux), a 20 % dead band, slow
+#                    ramps down and quick ones up, and learning: a manual change
+#                    (brightness keys, the bar's slider) pauses it, and a second
+#                    later the curve takes that level for that light.
+# Settings: ~/.config/t2-truetone/config.toml (reloaded on change); live state:
+# $XDG_RUNTIME_DIR/t2-truetone/status.json; the learned curve:
+# ~/.local/state/t2-truetone/brightness/curve. `t2truetone status|sensor`.
+# Its evening mode is there but off by default: Omarchy's night light does that.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  apps/t2-truetone.
+# Authors: André Eikmeyer and contributors. GPL-3.0-or-later with a section
+# 7(b) attribution term (LICENSING.md, shipped in /usr/share/licenses).
+# Changes (omarchy.patch, ours): wlgamma.rs (wlr-gamma-control) replaces
+# mutter's SetCrtcGamma; the backlight is written through logind's
+# SetBrightness (as brightnessctl does) and read from sysfs, and a level the
+# service didn't write is a manual change (gnome-shell's BrightnessChanged
+# signal did that); the backlight is the kernel's first choice (firmware,
+# platform, raw) other than the Touch Bar's, or T2_TRUETONE_BACKLIGHT; level
+# changes in the first 5 s are followed, not learned (a login restoring the
+# last level); the GTK app, the gnome-shell extension, GNOME's settings
+# take-over and the old t2-autobrightness migration are gone; /usr paths.
+
+pkgname=t2-truetone
+_ver=0.1.0
+pkgver=0.1.0.r2.c9e24f7
+pkgrel=1
+pkgdesc="True Tone and automatic brightness from the ambient light sensor for Apple T2 MacBooks on Hyprland (KaiT2en's t2-truetone)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('wayland' 'systemd')
+makedepends=('git' 'cargo')
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}"
+        'omarchy.patch')
+sha256sums=('SKIP'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- apps/t2-truetone)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/omarchy.patch"
+  cd apps/t2-truetone
+  # The authors' copyright lines stay (attribution); nothing else may name KaiT2en.
+  if grep -rni -e kait2en -e /usr/local -e gnome src systemd udev Cargo.toml | grep -v 'Copyright (C)'; then
+    echo "a KaiT2en/GNOME name or /usr/local path is left" >&2
+    return 1
+  fi
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/apps/t2-truetone
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+check() {
+  cd kait2en/apps/t2-truetone
+  export CARGO_TARGET_DIR=target
+  cargo test --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=apps/t2-truetone
+  install -Dm755 "$app/target/release/t2truetone" "$pkgdir/usr/bin/t2truetone"
+  install -Dm644 "$app/systemd/t2-truetone.service" "$pkgdir/usr/lib/systemd/user/t2-truetone.service"
+  install -Dm644 "$app/udev/70-t2-truetone.rules" "$pkgdir/usr/lib/udev/rules.d/70-t2-truetone.rules"
+  install -Dm644 "$app/LICENSE" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

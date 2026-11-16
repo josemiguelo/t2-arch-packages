@@ -1,0 +1,2443 @@
+diff --git c/apps/t2-truetone/Cargo.lock i/apps/t2-truetone/Cargo.lock
+index cb041e7..a091437 100644
+--- c/apps/t2-truetone/Cargo.lock
++++ i/apps/t2-truetone/Cargo.lock
+@@ -61,7 +61,7 @@ dependencies = [
+  "polling",
+  "rustix",
+  "slab",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -119,7 +119,7 @@ dependencies = [
+  "rustix",
+  "signal-hook-registry",
+  "slab",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -177,36 +177,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+ 
+ [[package]]
+-name = "cairo-rs"
+-version = "0.20.12"
++name = "cc"
++version = "1.11.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "91e3bd0f4e25afa9cabc157908d14eeef9067d6448c49414d17b3fb55f0eadd0"
++checksum = "33ef9e3e8154a45c7a95cff4c1299702106ad94062d7bb85fdc5d3a5afd91d45"
+ dependencies = [
+- "bitflags",
+- "cairo-sys-rs",
+- "glib",
+- "libc",
+-]
+-
+-[[package]]
+-name = "cairo-sys-rs"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "059cc746549898cbfd9a47754288e5a958756650ef4652bbb6c5f71a6bda4f8b"
+-dependencies = [
+- "glib-sys",
+- "libc",
+- "system-deps",
+-]
+-
+-[[package]]
+-name = "cfg-expr"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9ba9e9ec16c447027685b1f897b720e18e9a8afd00bd7332c483537e38086c9f"
+-dependencies = [
+- "smallvec",
+- "target-lexicon",
++ "find-msvc-tools",
++ "shlex",
+ ]
+ 
+ [[package]]
+@@ -230,6 +207,12 @@ version = "0.8.23"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+ 
++[[package]]
++name = "downcast-rs"
++version = "1.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
++
+ [[package]]
+ name = "endi"
+ version = "1.1.1"
+@@ -270,7 +253,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+ dependencies = [
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -300,23 +283,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+ 
+ [[package]]
+-name = "field-offset"
+-version = "0.3.6"
++name = "find-msvc-tools"
++version = "0.1.15"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "38e2275cc4e4fc009b0669731a1e5ab7ebf11f469eaede2bab9309a5b4d6057f"
+-dependencies = [
+- "memoffset",
+- "rustc_version",
+-]
+-
+-[[package]]
+-name = "futures-channel"
+-version = "0.3.34"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
+-dependencies = [
+- "futures-core",
+-]
++checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+ 
+ [[package]]
+ name = "futures-core"
+@@ -324,17 +294,6 @@ version = "0.3.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
+ 
+-[[package]]
+-name = "futures-executor"
+-version = "0.3.34"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "031b47cf1a3c6cc8bc2fc76cd437f521619387907d469316e7c0bc278f1f5432"
+-dependencies = [
+- "futures-core",
+- "futures-task",
+- "futures-util",
+-]
+-
+ [[package]]
+ name = "futures-io"
+ version = "0.3.34"
+@@ -354,17 +313,6 @@ dependencies = [
+  "pin-project-lite",
+ ]
+ 
+-[[package]]
+-name = "futures-macro"
+-version = "0.3.34"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
+-dependencies = [
+- "proc-macro2",
+- "quote",
+- "syn 3.0.10",
+-]
+-
+ [[package]]
+ name = "futures-task"
+ version = "0.3.34"
+@@ -378,69 +326,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc"
+ dependencies = [
+  "futures-core",
+- "futures-macro",
+  "futures-task",
+  "pin-project-lite",
+  "slab",
+ ]
+ 
+-[[package]]
+-name = "gdk-pixbuf"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2fd242894c084f4beed508a56952750bce3e96e85eb68fdc153637daa163e10c"
+-dependencies = [
+- "gdk-pixbuf-sys",
+- "gio",
+- "glib",
+- "libc",
+-]
+-
+-[[package]]
+-name = "gdk-pixbuf-sys"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5b34f3b580c988bd217e9543a2de59823fafae369d1a055555e5f95a8b130b96"
+-dependencies = [
+- "gio-sys",
+- "glib-sys",
+- "gobject-sys",
+- "libc",
+- "system-deps",
+-]
+-
+-[[package]]
+-name = "gdk4"
+-version = "0.9.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "4850c9d9c1aecd1a3eb14fadc1cdb0ac0a2298037e116264c7473e1740a32d60"
+-dependencies = [
+- "cairo-rs",
+- "gdk-pixbuf",
+- "gdk4-sys",
+- "gio",
+- "glib",
+- "libc",
+- "pango",
+-]
+-
+-[[package]]
+-name = "gdk4-sys"
+-version = "0.9.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6f6eb95798e2b46f279cf59005daf297d5b69555428f185650d71974a910473a"
+-dependencies = [
+- "cairo-sys-rs",
+- "gdk-pixbuf-sys",
+- "gio-sys",
+- "glib-sys",
+- "gobject-sys",
+- "libc",
+- "pango-sys",
+- "pkg-config",
+- "system-deps",
+-]
+-
+ [[package]]
+ name = "getrandom"
+ version = "0.4.3"
+@@ -452,209 +342,12 @@ dependencies = [
+  "r-efi",
+ ]
+ 
+-[[package]]
+-name = "gio"
+-version = "0.20.12"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8e27e276e7b6b8d50f6376ee7769a71133e80d093bdc363bd0af71664228b831"
+-dependencies = [
+- "futures-channel",
+- "futures-core",
+- "futures-io",
+- "futures-util",
+- "gio-sys",
+- "glib",
+- "libc",
+- "pin-project-lite",
+- "smallvec",
+-]
+-
+-[[package]]
+-name = "gio-sys"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "521e93a7e56fc89e84aea9a52cfc9436816a4b363b030260b699950ff1336c83"
+-dependencies = [
+- "glib-sys",
+- "gobject-sys",
+- "libc",
+- "system-deps",
+- "windows-sys 0.59.0",
+-]
+-
+-[[package]]
+-name = "glib"
+-version = "0.20.12"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ffc4b6e352d4716d84d7dde562dd9aee2a7d48beb872dd9ece7f2d1515b2d683"
+-dependencies = [
+- "bitflags",
+- "futures-channel",
+- "futures-core",
+- "futures-executor",
+- "futures-task",
+- "futures-util",
+- "gio-sys",
+- "glib-macros",
+- "glib-sys",
+- "gobject-sys",
+- "libc",
+- "memchr",
+- "smallvec",
+-]
+-
+-[[package]]
+-name = "glib-macros"
+-version = "0.20.12"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e8084af62f09475a3f529b1629c10c429d7600ee1398ae12dd3bf175d74e7145"
+-dependencies = [
+- "heck",
+- "proc-macro-crate",
+- "proc-macro2",
+- "quote",
+- "syn 2.0.119",
+-]
+-
+-[[package]]
+-name = "glib-sys"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8ab79e1ed126803a8fb827e3de0e2ff95191912b8db65cee467edb56fc4cc215"
+-dependencies = [
+- "libc",
+- "system-deps",
+-]
+-
+-[[package]]
+-name = "gobject-sys"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ec9aca94bb73989e3cfdbf8f2e0f1f6da04db4d291c431f444838925c4c63eda"
+-dependencies = [
+- "glib-sys",
+- "libc",
+- "system-deps",
+-]
+-
+-[[package]]
+-name = "graphene-rs"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6b86dfad7d14251c9acaf1de63bc8754b7e3b4e5b16777b6f5a748208fe9519b"
+-dependencies = [
+- "glib",
+- "graphene-sys",
+- "libc",
+-]
+-
+-[[package]]
+-name = "graphene-sys"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "df583a85ba2d5e15e1797e40d666057b28bc2f60a67c9c24145e6db2cc3861ea"
+-dependencies = [
+- "glib-sys",
+- "libc",
+- "pkg-config",
+- "system-deps",
+-]
+-
+-[[package]]
+-name = "gsk4"
+-version = "0.9.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "61f5e72f931c8c9f65fbfc89fe0ddc7746f147f822f127a53a9854666ac1f855"
+-dependencies = [
+- "cairo-rs",
+- "gdk4",
+- "glib",
+- "graphene-rs",
+- "gsk4-sys",
+- "libc",
+- "pango",
+-]
+-
+-[[package]]
+-name = "gsk4-sys"
+-version = "0.9.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "755059de55fa6f85a46bde8caf03e2184c96bfda1f6206163c72fb0ea12436dc"
+-dependencies = [
+- "cairo-sys-rs",
+- "gdk4-sys",
+- "glib-sys",
+- "gobject-sys",
+- "graphene-sys",
+- "libc",
+- "pango-sys",
+- "system-deps",
+-]
+-
+-[[package]]
+-name = "gtk4"
+-version = "0.9.7"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f274dd0102c21c47bbfa8ebcb92d0464fab794a22fad6c3f3d5f165139a326d6"
+-dependencies = [
+- "cairo-rs",
+- "field-offset",
+- "futures-channel",
+- "gdk-pixbuf",
+- "gdk4",
+- "gio",
+- "glib",
+- "graphene-rs",
+- "gsk4",
+- "gtk4-macros",
+- "gtk4-sys",
+- "libc",
+- "pango",
+-]
+-
+-[[package]]
+-name = "gtk4-macros"
+-version = "0.9.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0ed1786c4703dd196baf7e103525ce0cf579b3a63a0570fe653b7ee6bac33999"
+-dependencies = [
+- "proc-macro-crate",
+- "proc-macro2",
+- "quote",
+- "syn 2.0.119",
+-]
+-
+-[[package]]
+-name = "gtk4-sys"
+-version = "0.9.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "41e03b01e54d77c310e1d98647d73f996d04b2f29b9121fe493ea525a7ec03d6"
+-dependencies = [
+- "cairo-sys-rs",
+- "gdk-pixbuf-sys",
+- "gdk4-sys",
+- "gio-sys",
+- "glib-sys",
+- "gobject-sys",
+- "graphene-sys",
+- "gsk4-sys",
+- "libc",
+- "pango-sys",
+- "system-deps",
+-]
+-
+ [[package]]
+ name = "hashbrown"
+ version = "0.17.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+ 
+-[[package]]
+-name = "heck"
+-version = "0.5.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+-
+ [[package]]
+ name = "hermit-abi"
+ version = "0.5.3"
+@@ -694,37 +387,6 @@ dependencies = [
+  "wasm-bindgen",
+ ]
+ 
+-[[package]]
+-name = "libadwaita"
+-version = "0.7.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "500135d29c16aabf67baafd3e7741d48e8b8978ca98bac39e589165c8dc78191"
+-dependencies = [
+- "gdk4",
+- "gio",
+- "glib",
+- "gtk4",
+- "libadwaita-sys",
+- "libc",
+- "pango",
+-]
+-
+-[[package]]
+-name = "libadwaita-sys"
+-version = "0.7.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6680988058c2558baf3f548a370e4e78da3bf7f08469daa822ac414842c912db"
+-dependencies = [
+- "gdk4-sys",
+- "gio-sys",
+- "glib-sys",
+- "gobject-sys",
+- "gtk4-sys",
+- "libc",
+- "pango-sys",
+- "system-deps",
+-]
+-
+ [[package]]
+ name = "libc"
+ version = "0.2.191"
+@@ -768,30 +430,6 @@ dependencies = [
+  "pin-project-lite",
+ ]
+ 
+-[[package]]
+-name = "pango"
+-version = "0.20.12"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6576b311f6df659397043a5fa8a021da8f72e34af180b44f7d57348de691ab5c"
+-dependencies = [
+- "gio",
+- "glib",
+- "libc",
+- "pango-sys",
+-]
+-
+-[[package]]
+-name = "pango-sys"
+-version = "0.20.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "186909673fc09be354555c302c0b3dcf753cd9fa08dcb8077fa663c80fb243fa"
+-dependencies = [
+- "glib-sys",
+- "gobject-sys",
+- "libc",
+- "system-deps",
+-]
+-
+ [[package]]
+ name = "parking"
+ version = "2.2.1"
+@@ -832,7 +470,7 @@ dependencies = [
+  "hermit-abi",
+  "pin-project-lite",
+  "rustix",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -853,6 +491,15 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "quick-xml"
++version = "0.41.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
++dependencies = [
++ "memchr",
++]
++
+ [[package]]
+ name = "quote"
+ version = "1.0.47"
+@@ -868,15 +515,6 @@ version = "6.0.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+ 
+-[[package]]
+-name = "rustc_version"
+-version = "0.4.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+-dependencies = [
+- "semver",
+-]
+-
+ [[package]]
+ name = "rustix"
+ version = "1.1.6"
+@@ -887,7 +525,7 @@ dependencies = [
+  "errno",
+  "libc",
+  "linux-raw-sys",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -896,12 +534,6 @@ version = "1.0.23"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+ 
+-[[package]]
+-name = "semver"
+-version = "1.0.28"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+-
+ [[package]]
+ name = "serde"
+ version = "1.0.229"
+@@ -966,13 +598,10 @@ dependencies = [
+ ]
+ 
+ [[package]]
+-name = "serde_spanned"
+-version = "1.1.3"
++name = "shlex"
++version = "2.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9c187e0a369471c550af028cba56d4f4fa2a489ad28151ae95a4d340a2a8b782"
+-dependencies = [
+- "serde_core",
+-]
++checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+ 
+ [[package]]
+ name = "signal-hook-registry"
+@@ -1018,39 +647,20 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
+-[[package]]
+-name = "system-deps"
+-version = "7.0.8"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "396a35feb67335377e0251fcbc1092fc85c484bd4e3a7a54319399da127796e7"
+-dependencies = [
+- "cfg-expr",
+- "heck",
+- "pkg-config",
+- "toml 1.2.1+spec-1.1.0",
+- "version-compare",
+-]
+-
+ [[package]]
+ name = "t2-truetone"
+ version = "0.1.0"
+ dependencies = [
+  "anyhow",
+- "gtk4",
+- "libadwaita",
+  "libc",
+  "serde",
+  "serde_json",
+- "toml 0.8.23",
++ "toml",
++ "wayland-client",
++ "wayland-protocols-wlr",
+  "zbus",
+ ]
+ 
+-[[package]]
+-name = "target-lexicon"
+-version = "0.13.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
+-
+ [[package]]
+ name = "tempfile"
+ version = "3.27.0"
+@@ -1061,7 +671,7 @@ dependencies = [
+  "getrandom",
+  "once_cell",
+  "rustix",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -1071,26 +681,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
+ dependencies = [
+  "serde",
+- "serde_spanned 0.6.9",
++ "serde_spanned",
+  "toml_datetime 0.6.11",
+  "toml_edit 0.22.27",
+ ]
+ 
+-[[package]]
+-name = "toml"
+-version = "1.2.1+spec-1.1.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d5755c51863cdac711f1956baf8eb9588e060755f7d3c4c979e70ea1e1f32cd7"
+-dependencies = [
+- "indexmap",
+- "serde_core",
+- "serde_spanned 1.1.3",
+- "toml_datetime 1.1.3+spec-1.1.0",
+- "toml_parser",
+- "toml_writer",
+- "winnow 1.0.5",
+-]
+-
+ [[package]]
+ name = "toml_datetime"
+ version = "0.6.11"
+@@ -1117,7 +712,7 @@ checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
+ dependencies = [
+  "indexmap",
+  "serde",
+- "serde_spanned 0.6.9",
++ "serde_spanned",
+  "toml_datetime 0.6.11",
+  "toml_write",
+  "winnow 0.7.15",
+@@ -1150,12 +745,6 @@ version = "0.1.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
+ 
+-[[package]]
+-name = "toml_writer"
+-version = "1.2.0+spec-1.1.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
+-
+ [[package]]
+ name = "tracing"
+ version = "0.1.44"
+@@ -1195,7 +784,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
+ dependencies = [
+  "memoffset",
+  "tempfile",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -1215,12 +804,6 @@ dependencies = [
+  "wasm-bindgen",
+ ]
+ 
+-[[package]]
+-name = "version-compare"
+-version = "0.2.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "03c2856837ef78f57382f06b2b8563a2f512f7185d732608fd9176cb3b8edf0e"
+-
+ [[package]]
+ name = "wasm-bindgen"
+ version = "0.2.130"
+@@ -1265,21 +848,82 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "wayland-backend"
++version = "0.3.17"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "38a91b4eaddff87b1cd1074985e3713da4af2c49742d1b356b2c01670a67a078"
++dependencies = [
++ "cc",
++ "downcast-rs",
++ "rustix",
++ "smallvec",
++ "wayland-sys",
++]
++
++[[package]]
++name = "wayland-client"
++version = "0.31.15"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e3c36a0f861ad76d0901f2800b46321410d9f73f2ea88aac0650d86c32688073"
++dependencies = [
++ "bitflags",
++ "rustix",
++ "wayland-backend",
++ "wayland-scanner",
++]
++
++[[package]]
++name = "wayland-protocols"
++version = "0.32.13"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "23d0c813de3daa2ed6520af85a3bd49b0e722a3078506899aa9686fea58dc4b6"
++dependencies = [
++ "bitflags",
++ "wayland-backend",
++ "wayland-client",
++ "wayland-scanner",
++]
++
++[[package]]
++name = "wayland-protocols-wlr"
++version = "0.3.12"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "eb04e52f7836d7c7976c78ca0250d61e33873c34156a2a1fc9474828ec268234"
++dependencies = [
++ "bitflags",
++ "wayland-backend",
++ "wayland-client",
++ "wayland-protocols",
++ "wayland-scanner",
++]
++
++[[package]]
++name = "wayland-scanner"
++version = "0.31.11"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "338e30461b3a2b67d70eb30a6d89f8e0c93a833e07d2ae89085cd070c4a00ac0"
++dependencies = [
++ "proc-macro2",
++ "quick-xml",
++ "quote",
++]
++
++[[package]]
++name = "wayland-sys"
++version = "0.31.11"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d8eab23fefc9e41f8e841df4a9c707e8a8c4ed26e944ef69297184de2785e3be"
++dependencies = [
++ "pkg-config",
++]
++
+ [[package]]
+ name = "windows-link"
+ version = "0.2.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+ 
+-[[package]]
+-name = "windows-sys"
+-version = "0.59.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
+-dependencies = [
+- "windows-targets",
+-]
+-
+ [[package]]
+ name = "windows-sys"
+ version = "0.61.2"
+@@ -1289,70 +933,6 @@ dependencies = [
+  "windows-link",
+ ]
+ 
+-[[package]]
+-name = "windows-targets"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
+-dependencies = [
+- "windows_aarch64_gnullvm",
+- "windows_aarch64_msvc",
+- "windows_i686_gnu",
+- "windows_i686_gnullvm",
+- "windows_i686_msvc",
+- "windows_x86_64_gnu",
+- "windows_x86_64_gnullvm",
+- "windows_x86_64_msvc",
+-]
+-
+-[[package]]
+-name = "windows_aarch64_gnullvm"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
+-
+-[[package]]
+-name = "windows_aarch64_msvc"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
+-
+-[[package]]
+-name = "windows_i686_gnu"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
+-
+-[[package]]
+-name = "windows_i686_gnullvm"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
+-
+-[[package]]
+-name = "windows_i686_msvc"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
+-
+-[[package]]
+-name = "windows_x86_64_gnu"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
+-
+-[[package]]
+-name = "windows_x86_64_gnullvm"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
+-
+-[[package]]
+-name = "windows_x86_64_msvc"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+-
+ [[package]]
+ name = "winnow"
+ version = "0.7.15"
+@@ -1399,7 +979,7 @@ dependencies = [
+  "tracing",
+  "uds_windows",
+  "uuid",
+- "windows-sys 0.61.2",
++ "windows-sys",
+  "winnow 1.0.5",
+  "zbus_macros",
+  "zbus_names",
+diff --git c/apps/t2-truetone/Cargo.toml i/apps/t2-truetone/Cargo.toml
+index a14bb7e..f3bb099 100644
+--- c/apps/t2-truetone/Cargo.toml
++++ i/apps/t2-truetone/Cargo.toml
+@@ -3,25 +3,16 @@ name = "t2-truetone"
+ version = "0.1.0"
+ edition = "2024"
+ license = "GPL-3.0-or-later"
+-description = "Ambient white point adaptation, evening mode and automatic brightness for T2 MacBooks under GNOME"
++description = "Ambient white point adaptation, evening mode and automatic brightness for T2 MacBooks under Hyprland"
+ 
+ [lib]
+ name = "t2_truetone"
+ path = "src/lib.rs"
+ 
+-[[bin]]
+-name = "t2-truetone"
+-path = "src/bin/t2-truetone.rs"
+-required-features = ["gui"]
+-
+ [[bin]]
+ name = "t2truetone"
+ path = "src/bin/t2truetone.rs"
+ 
+-[features]
+-default = ["gui"]
+-gui = ["dep:gtk4", "dep:adw"]
+-
+ [dependencies]
+ anyhow = "1.0"
+ libc = "0.2"
+@@ -29,8 +20,8 @@ serde = { version = "1", features = ["derive"] }
+ serde_json = "1"
+ toml = "0.8"
+ zbus = "5"
+-gtk4 = { version = "0.9", features = ["v4_12"], optional = true }
+-adw = { package = "libadwaita", version = "0.7", features = ["v1_4"], optional = true }
++wayland-client = "0.31"
++wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+ 
+ [profile.release]
+ lto = true
+diff --git c/apps/t2-truetone/assets/icons/hicolor/scalable/apps/org.t2truetone.gtk.svg i/apps/t2-truetone/assets/icons/hicolor/scalable/apps/org.t2truetone.gtk.svg
+deleted file mode 100644
+index 3d2241a..0000000
+--- c/apps/t2-truetone/assets/icons/hicolor/scalable/apps/org.t2truetone.gtk.svg
++++ /dev/null
+@@ -1,12 +0,0 @@
+-<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 14 72 72">
+-  <circle cx="50" cy="50" r="32" fill="#101010" stroke="#5a5a5a" stroke-width="3"/>
+-  <path d="M50 18a32 32 0 0 1 24 11" fill="none" stroke="#e4003b" stroke-width="4" stroke-linecap="round"/>
+-  <g fill="none" stroke="#e8ecef" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+-    <rect x="31" y="35" width="38" height="25" rx="3"/>
+-    <path d="M44 67h12M50 60v7"/>
+-    <g stroke="#78c8ea" stroke-width="2.5">
+-      <circle cx="50" cy="47.5" r="5"/>
+-      <path d="M50 38.5v2M50 54.5v2M41 47.5h2M57 47.5h2M43.6 41.1l1.4 1.4M55 52.5l1.4 1.4M43.6 53.9l1.4-1.4M55 42.5l1.4-1.4"/>
+-    </g>
+-  </g>
+-</svg>
+diff --git c/apps/t2-truetone/integration/gnome-shell/kait2en-autobrightness@kait2en/extension.js i/apps/t2-truetone/integration/gnome-shell/kait2en-autobrightness@kait2en/extension.js
+deleted file mode 100644
+index eec1d28..0000000
+--- c/apps/t2-truetone/integration/gnome-shell/kait2en-autobrightness@kait2en/extension.js
++++ /dev/null
+@@ -1,44 +0,0 @@
+-// SPDX-License-Identifier: GPL-3.0-or-later
+-
+-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+-import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
+-
+-function followBacklight(manager) {
+-    const global = manager.globalScale;
+-    const scales = [...manager.scales];
+-    if (!global || scales.length === 0 || manager._inhibitUpdates)
+-        return;
+-
+-    const max = Math.max(...scales.map(scale => scale.value));
+-    if (Math.abs(global.value - max) < 0.001)
+-        return;
+-
+-    manager._inhibitUpdates = true;
+-    try {
+-        if (max > 0.01)
+-            scales.forEach(scale => scale.updateScaleFactor(max));
+-        global.value = max;
+-    } finally {
+-        manager._inhibitUpdates = false;
+-    }
+-}
+-
+-export default class AutoBrightnessExtension extends Extension {
+-    enable() {
+-        const manager = Main.brightnessManager;
+-        if (!manager)
+-            return;
+-
+-        this._injections = new InjectionManager();
+-        this._injections.overrideMethod(manager, '_sync', original => function (...args) {
+-            original.call(this, ...args);
+-            followBacklight(this);
+-        });
+-        followBacklight(manager);
+-    }
+-
+-    disable() {
+-        this._injections?.clear();
+-        this._injections = null;
+-    }
+-}
+diff --git c/apps/t2-truetone/integration/gnome-shell/kait2en-autobrightness@kait2en/metadata.json i/apps/t2-truetone/integration/gnome-shell/kait2en-autobrightness@kait2en/metadata.json
+deleted file mode 100644
+index f15f89d..0000000
+--- c/apps/t2-truetone/integration/gnome-shell/kait2en-autobrightness@kait2en/metadata.json
++++ /dev/null
+@@ -1,7 +0,0 @@
+-{
+-  "uuid": "kait2en-autobrightness@kait2en",
+-  "name": "KaiT2en Auto Brightness",
+-  "description": "Keeps the brightness slider on the real brightness while t2-truetone adjusts the panel. No settings.",
+-  "shell-version": ["50", "51"],
+-  "url": "https://github.com/kaiT2en/KaiT2en-Fedora"
+-}
+diff --git c/apps/t2-truetone/org.t2truetone.gtk.desktop i/apps/t2-truetone/org.t2truetone.gtk.desktop
+deleted file mode 100644
+index 931b550..0000000
+--- c/apps/t2-truetone/org.t2truetone.gtk.desktop
++++ /dev/null
+@@ -1,12 +0,0 @@
+-[Desktop Entry]
+-Type=Application
+-Version=1.0
+-Name=T2 TrueTone
+-Comment=Adapt the display white to the ambient light, evening mode and automatic brightness
+-Exec=/usr/local/bin/t2-truetone
+-TryExec=/usr/local/bin/t2-truetone
+-Icon=org.t2truetone.gtk
+-Terminal=false
+-Categories=Settings;HardwareSettings;
+-Keywords=True Tone;white point;night;brightness;display;
+-StartupNotify=true
+diff --git c/apps/t2-truetone/src/autobright/backlight.rs i/apps/t2-truetone/src/autobright/backlight.rs
+index 3471621..60d5a7b 100644
+--- c/apps/t2-truetone/src/autobright/backlight.rs
++++ i/apps/t2-truetone/src/autobright/backlight.rs
+@@ -1,58 +1,77 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+-//! The built-in panel backlight through mutter.
++//! The built-in panel backlight: read from sysfs, written through logind.
+ //!
+-//! gnome-shell takes every backlight change it did not make itself into its
+-//! slider, as long as its own automatic target is off. Writing through mutter
+-//! therefore keeps the slider and the brightness keys on the real value.
++//! logind's Session.SetBrightness lets the session's own user set a
++//! backlight without root, the way brightnessctl (and so Omarchy's
++//! brightness keys) does. Nothing announces a change made elsewhere, so the
++//! service tells a manual change from its own writes by the value: anything
++//! in sysfs other than what it last wrote or saw is somebody else's.
+ 
+-use std::collections::HashMap;
++use std::fs;
++use std::path::PathBuf;
+ 
+-use anyhow::{Context, Result};
++use anyhow::{Context, Result, anyhow};
+ use zbus::blocking::{Connection, Proxy};
+-use zbus::proxy::CacheProperties;
+-use zbus::zvariant::OwnedValue;
+ 
+ #[derive(Clone, Debug)]
+ pub struct Backlight {
+-    pub serial: u32,
+-    pub connector: String,
++    pub name: String,
++    dir: PathBuf,
+     pub min: i32,
+     pub max: i32,
+ }
+ 
+-fn proxy(connection: &Connection) -> Result<Proxy<'_>> {
+-    Ok(zbus::blocking::proxy::Builder::new(connection)
+-        .destination("org.gnome.Mutter.DisplayConfig")?
+-        .path("/org/gnome/Mutter/DisplayConfig")?
+-        .interface("org.gnome.Mutter.DisplayConfig")?
+-        .cache_properties(CacheProperties::No)
+-        .build()?)
++/// Backlights of other things than the panel (the Touch Bar's).
++fn excluded(name: &str) -> bool {
++    name.contains("tb_backlight")
+ }
+ 
+-/// `None` when mutter controls no backlight, as on a desktop Mac.
+-pub fn read(connection: &Connection) -> Result<Option<Backlight>> {
+-    let (serial, outputs): (u32, Vec<HashMap<String, OwnedValue>>) =
+-        proxy(connection)?.get_property("Backlight").context("reading mutter Backlight")?;
+-    let backlights: Vec<Backlight> = outputs
+-        .into_iter()
+-        .filter(|output| output.get("active").and_then(|v| bool::try_from(v).ok()).unwrap_or(false))
+-        .filter_map(|output| {
+-            let int = |key: &str| output.get(key).and_then(|v| i32::try_from(v).ok());
+-            Some(Backlight {
+-                serial,
+-                connector: output.get("connector").and_then(|v| v.try_clone().ok()).and_then(|v| String::try_from(v).ok())?,
+-                min: int("min")?,
+-                max: int("max")?,
+-            })
+-        })
+-        .collect();
+-    let builtin = backlights.iter().position(|backlight| backlight.connector.starts_with("eDP")).unwrap_or(0);
+-    Ok(backlights.into_iter().nth(builtin))
++/// The panel's backlight: `T2_TRUETONE_BACKLIGHT` if set, else the kernel's
++/// order of preference, firmware, platform, raw. `None` when there is none.
++pub fn find() -> Result<Option<Backlight>> {
++    let root = PathBuf::from("/sys/class/backlight");
++    let wanted = std::env::var("T2_TRUETONE_BACKLIGHT").ok().filter(|v| !v.is_empty());
++    let mut found: Vec<(usize, String)> = Vec::new();
++    for entry in fs::read_dir(&root).context("reading /sys/class/backlight")? {
++        let name = entry?.file_name().to_string_lossy().into_owned();
++        if wanted.as_deref().is_some_and(|w| w != name) || (wanted.is_none() && excluded(&name)) {
++            continue;
++        }
++        let kind = fs::read_to_string(root.join(&name).join("type")).unwrap_or_default();
++        let rank = ["firmware", "platform", "raw"].iter().position(|k| *k == kind.trim()).unwrap_or(3);
++        found.push((rank, name));
++    }
++    found.sort();
++    let Some((_, name)) = found.into_iter().next() else { return Ok(None) };
++    let dir = root.join(&name);
++    let max: i32 = fs::read_to_string(dir.join("max_brightness"))
++        .with_context(|| format!("reading {name} max_brightness"))?
++        .trim()
++        .parse()
++        .with_context(|| format!("{name} max_brightness"))?;
++    if max < 1 {
++        return Err(anyhow!("{name}: max_brightness {max}"));
++    }
++    // 1 %: some panels go fully dark at 0.
++    Ok(Some(Backlight { name, dir, min: (max / 100).max(1), max }))
+ }
+ 
+-pub fn set(connection: &Connection, backlight: &Backlight, value: i32) -> Result<()> {
+-    proxy(connection)?
+-        .call_method("SetBacklight", &(backlight.serial, backlight.connector.as_str(), value))
+-        .context("mutter SetBacklight")?;
+-    Ok(())
++impl Backlight {
++    pub fn read(&self) -> Result<i32> {
++        let p = self.dir.join("brightness");
++        Ok(fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?.trim().parse()?)
++    }
++
++    pub fn set(&self, system: &Connection, value: i32) -> Result<()> {
++        let session = Proxy::new(
++            system,
++            "org.freedesktop.login1",
++            "/org/freedesktop/login1/session/auto",
++            "org.freedesktop.login1.Session",
++        )?;
++        session
++            .call_method("SetBrightness", &("backlight", self.name.as_str(), value.max(0) as u32))
++            .context("logind SetBrightness")?;
++        Ok(())
++    }
+ }
+diff --git c/apps/t2-truetone/src/autobright/gnome.rs i/apps/t2-truetone/src/autobright/gnome.rs
+deleted file mode 100644
+index 9670040..0000000
+--- c/apps/t2-truetone/src/autobright/gnome.rs
++++ /dev/null
+@@ -1,72 +0,0 @@
+-// SPDX-License-Identifier: GPL-3.0-or-later
+-//! Keeps GNOME's own brightness automatics out of the way while the service
+-//! runs, and gives the user's settings back when it stops.
+-//!
+-//! The previous values are written to disk before anything is changed, and
+-//! only if no saved copy exists yet, so a crash and restart doesn't overwrite
+-//! the user's original settings with the service's own.
+-
+-use std::fs;
+-use std::path::Path;
+-use std::process::Command;
+-
+-use anyhow::{Context, Result, bail};
+-
+-const SCHEMA: &str = "org.gnome.settings-daemon.plugins.power";
+-/// Ambient light handling in gsd-power, and idle dimming, which would write
+-/// its own value back on wake.
+-const KEYS: [&str; 2] = ["ambient-enabled", "idle-dim"];
+-
+-fn gsettings(args: &[&str]) -> Result<String> {
+-    let output = Command::new("gsettings").args(args).output().context("running gsettings")?;
+-    if !output.status.success() {
+-        bail!("gsettings {} failed: {}", args.join(" "), String::from_utf8_lossy(&output.stderr).trim());
+-    }
+-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+-}
+-
+-pub fn take_over(saved: &Path) -> Result<()> {
+-    if !saved.exists() {
+-        let mut text = String::new();
+-        for key in KEYS {
+-            text.push_str(&format!("{key}={}\n", gsettings(&["get", SCHEMA, key])?));
+-        }
+-        fs::write(saved, text).with_context(|| format!("writing {}", saved.display()))?;
+-    }
+-    for key in KEYS {
+-        gsettings(&["set", SCHEMA, key, "false"])?;
+-    }
+-    Ok(())
+-}
+-
+-/// The extension keeps the shell's slider on the brightness the service sets.
+-/// It is turned on for every user the service runs for, unless the user
+-/// switched it off, which puts it on the disabled list.
+-pub fn enable_extension(uuid: &str) -> Result<()> {
+-    let quoted = format!("'{uuid}'");
+-    if gsettings(&["get", "org.gnome.shell", "disabled-extensions"])?.contains(&quoted) {
+-        return Ok(());
+-    }
+-    let enabled = gsettings(&["get", "org.gnome.shell", "enabled-extensions"])?;
+-    if enabled.contains(&quoted) {
+-        return Ok(());
+-    }
+-    let list = match enabled.trim_start_matches("@as ").trim_end_matches(']').trim() {
+-        "[" => format!("[{quoted}]"),
+-        start => format!("{start}, {quoted}]"),
+-    };
+-    gsettings(&["set", "org.gnome.shell", "enabled-extensions", &list])?;
+-    Ok(())
+-}
+-
+-pub fn restore(saved: &Path) -> Result<()> {
+-    let Ok(text) = fs::read_to_string(saved) else {
+-        return Ok(());
+-    };
+-    for (key, value) in text.lines().filter_map(|line| line.split_once('=')) {
+-        if KEYS.contains(&key) {
+-            gsettings(&["set", SCHEMA, key, value])?;
+-        }
+-    }
+-    fs::remove_file(saved).with_context(|| format!("removing {}", saved.display()))
+-}
+diff --git c/apps/t2-truetone/src/autobright/mod.rs i/apps/t2-truetone/src/autobright/mod.rs
+index 3e815de..c33d768 100644
+--- c/apps/t2-truetone/src/autobright/mod.rs
++++ i/apps/t2-truetone/src/autobright/mod.rs
+@@ -9,28 +9,26 @@
+ //! the brightness by hand pauses the automatics, and one second after the
+ //! last movement the curve learns the new point.
+ //!
+-//! On GNOME the service writes through mutter with gnome-shell's own
+-//! automatics off. Its shell extension moves the slider along, so the slider
+-//! and the brightness keys always start from the real brightness.
++//! The service writes through logind, as the brightness keys do (Omarchy's
++//! go through brightnessctl), and reads the level back from sysfs. A level it
++//! did not write is a manual change: brightness keys, the bar's slider.
+ //!
+-//! This was the standalone t2-autobrightness service. It runs as a thread of
+-//! the t2-truetone daemon and gets its lux from the shared sensor poller.
++//! It runs as a thread of the t2-truetone daemon and gets its lux from the
++//! shared sensor poller.
+ 
+ pub mod backlight;
+ pub mod curve;
+-pub mod gnome;
+-pub mod shell;
+ 
+ use std::env;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::sync::atomic::{AtomicBool, Ordering};
+-use std::sync::mpsc::{self, Receiver};
++use std::sync::mpsc::Receiver;
+ use std::sync::{Arc, Mutex};
+ use std::thread::sleep;
+ use std::time::{Duration, Instant};
+ 
+-use anyhow::{Context, Result, anyhow};
++use anyhow::{Context, Result};
+ use zbus::blocking::Connection;
+ 
+ use backlight::Backlight;
+@@ -41,30 +39,27 @@ const MIN_STEP: Duration = Duration::from_millis(10);
+ const WAKE: Duration = Duration::from_millis(50);
+ const DEAD_BAND: f32 = 0.2;
+ const STEPS_PER_UNIT: f32 = 1024.0;
+-pub const EXTENSION: &str = "kait2en-autobrightness@kait2en";
++/// After start, changes are other startup writers (a login restoring the
++/// last level): followed, not learned.
++const SETTLE: Duration = Duration::from_secs(5);
+ 
+-/// The built-in panel: written through mutter, read back from the kernel.
++/// The built-in panel: written through logind, read back from sysfs.
+ /// Brightness inside the service is linear, `raw / max`.
+ struct Panel<'a> {
+-    connection: &'a Connection,
++    system: &'a Connection,
+     backlight: Backlight,
+-    actual: PathBuf,
++    /// The raw level last written or seen: any other is a manual change.
++    known: i32,
+ }
+ 
+ impl<'a> Panel<'a> {
+-    fn find(connection: &'a Connection, backlight: Backlight) -> Result<Self> {
+-        let read = |path: &Path| fs::read_to_string(path).ok()?.trim().parse::<i32>().ok();
+-        let device = fs::read_dir("/sys/class/backlight")
+-            .context("reading /sys/class/backlight")?
+-            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+-            .find(|device| read(&device.join("max_brightness")) == Some(backlight.max))
+-            .ok_or_else(|| anyhow!("no backlight device with max {}", backlight.max))?;
+-        Ok(Panel { connection, backlight, actual: device.join("actual_brightness") })
++    fn new(system: &'a Connection, backlight: Backlight) -> Result<Self> {
++        let known = backlight.read()?;
++        Ok(Panel { system, backlight, known })
+     }
+ 
+     fn linear(&self) -> Result<f32> {
+-        let text = fs::read_to_string(&self.actual).with_context(|| format!("reading {}", self.actual.display()))?;
+-        Ok(text.trim().parse::<f32>()? / self.backlight.max as f32)
++        Ok(self.backlight.read()? as f32 / self.backlight.max as f32)
+     }
+ 
+     fn min_linear(&self) -> f32 {
+@@ -75,15 +70,22 @@ impl<'a> Panel<'a> {
+         ((linear * self.backlight.max as f32).round() as i32).clamp(self.backlight.min, self.backlight.max)
+     }
+ 
+-    /// mutter hands out a new serial when the monitor setup changes, so a
+-    /// refused write is retried once with fresh data.
+     fn show(&mut self, linear: f32) -> Result<()> {
+         let value = self.raw(linear);
+-        if backlight::set(self.connection, &self.backlight, value).is_ok() {
++        if value == self.known {
+             return Ok(());
+         }
+-        self.backlight = backlight::read(self.connection)?.ok_or_else(|| anyhow!("the built-in backlight is gone"))?;
+-        backlight::set(self.connection, &self.backlight, value)
++        self.backlight.set(self.system, value)?;
++        self.known = value;
++        Ok(())
++    }
++
++    /// Whether the level moved since the last write or look.
++    fn changed(&mut self) -> Result<bool> {
++        let now = self.backlight.read()?;
++        let moved = now != self.known;
++        self.known = now;
++        Ok(moved)
+     }
+ }
+ 
+@@ -144,36 +146,23 @@ pub struct Live {
+ pub fn run(lux: Receiver<f32>, stop: Arc<AtomicBool>, live: Arc<Mutex<Live>>) -> Result<()> {
+     let state = state_dir()?;
+     fs::create_dir_all(&state).with_context(|| format!("creating {}", state.display()))?;
+-    migrate(&state);
+     let curve_path = state.join("curve");
+-    let saved_settings = state.join("gnome-settings");
+ 
+     // Without a controllable built-in panel there is nothing to do.
+-    let connection = Connection::session().context("connecting to the session bus")?;
+-    let Some(backlight) = backlight::read(&connection)? else {
+-        return unsupported("mutter reports no built-in backlight");
+-    };
+-    let mut panel = match Panel::find(&connection, backlight) {
+-        Ok(panel) => panel,
+-        Err(error) => return unsupported(&format!("{error:#}")),
++    let system = Connection::system().context("connecting to the system bus")?;
++    let Some(backlight) = backlight::find()? else {
++        return unsupported("no backlight device");
+     };
++    let mut panel = Panel::new(&system, backlight)?;
+     let product = fs::read_to_string("/sys/class/dmi/id/product_name").unwrap_or_default();
+     let product = product.trim();
+     let curve = Curve::load(&curve_path).unwrap_or_else(|| Curve::factory(product));
+     log(&format!(
+         "{product}, {} range {}..{}, curve {curve:?}",
+-        panel.backlight.connector, panel.backlight.min, panel.backlight.max
++        panel.backlight.name, panel.backlight.min, panel.backlight.max
+     ));
+ 
+-    gnome::take_over(&saved_settings)?;
+-    if let Err(error) = gnome::enable_extension(EXTENSION) {
+-        log(&format!("enabling the shell extension failed: {error:#}"));
+-    }
+-    shell::disable_auto_target(&connection)?;
+     let result = run_loop(lux, &stop, &live, &mut panel, curve, &curve_path);
+-    if let Err(error) = gnome::restore(&saved_settings) {
+-        log(&format!("restoring GNOME settings failed: {error:#}"));
+-    }
+     *live.lock().unwrap() = Live::default();
+     result
+ }
+@@ -186,9 +175,7 @@ fn run_loop(
+     mut curve: Curve,
+     curve_path: &Path,
+ ) -> Result<()> {
+-    let (manual_sender, manual) = mpsc::channel();
+-    shell::watch(manual_sender);
+-
++    let started = Instant::now();
+     let mut ramp: Option<Ramp> = None;
+     let mut commit_at: Option<Instant> = None;
+     let mut lux: Option<f32> = None;
+@@ -198,13 +185,16 @@ fn run_loop(
+     while !stop.load(Ordering::SeqCst) {
+         let now = Instant::now();
+ 
+-        let changes = manual.try_iter().count();
+-        if changes > 0 {
+-            if commit_at.is_none() {
+-                log(&format!("manual brightness change ({changes} signals), automatics paused"));
+-            }
++        if panel.changed()? {
+             ramp = None;
+-            commit_at = Some(now + COMMIT_DELAY);
++            if now.duration_since(started) < SETTLE {
++                force = true;
++            } else {
++                if commit_at.is_none() {
++                    log("manual brightness change, automatics paused");
++                }
++                commit_at = Some(now + COMMIT_DELAY);
++            }
+         }
+ 
+         let fresh = readings.try_iter().last().map(f32::floor);
+@@ -225,7 +215,7 @@ fn run_loop(
+         }
+ 
+         if commit_at.is_none()
+-            && let (Some(_), Some(at)) = (fresh, lux)
++            && let (true, Some(at)) = (fresh.is_some() || force, lux)
+         {
+             let target = curve.linear_for_lux(at, panel.min_linear(), 1.0);
+             let current = panel.linear()?;
+@@ -283,33 +273,6 @@ fn state_dir() -> Result<PathBuf> {
+     Ok(state_base()?.join("t2-truetone").join("brightness"))
+ }
+ 
+-/// Take over the learned curve and the saved GNOME settings of the former
+-/// t2-autobrightness service, once.
+-fn migrate(state: &Path) {
+-    let Ok(old) = state_base().map(|b| b.join("t2-autobrightness")) else { return };
+-    for name in ["curve", "gnome-settings"] {
+-        let (from, to) = (old.join(name), state.join(name));
+-        if !from.exists() || to.exists() {
+-            continue;
+-        }
+-        match fs::copy(&from, &to) {
+-            Ok(_) => {
+-                log(&format!("took over {}", from.display()));
+-                if let Err(e) = fs::remove_file(&from) {
+-                    log(&format!("could not remove {}: {e}", from.display()));
+-                }
+-            }
+-            Err(e) => log(&format!("could not take over {}: {e}", from.display())),
+-        }
+-    }
+-    // Only an empty directory goes, anything else in it is left in place.
+-    if fs::read_dir(&old).is_ok_and(|mut d| d.next().is_none()) {
+-        if let Err(e) = fs::remove_dir(&old) {
+-            log(&format!("could not remove {}: {e}", old.display()));
+-        }
+-    }
+-}
+-
+ pub(crate) fn log(message: &str) {
+     eprintln!("t2-truetone: brightness: {message}");
+ }
+diff --git c/apps/t2-truetone/src/autobright/shell.rs i/apps/t2-truetone/src/autobright/shell.rs
+deleted file mode 100644
+index 3a62983..0000000
+--- c/apps/t2-truetone/src/autobright/shell.rs
++++ /dev/null
+@@ -1,47 +0,0 @@
+-// SPDX-License-Identifier: GPL-3.0-or-later
+-//! gnome-shell's brightness manager, which owns the slider in GNOME 50 and 51.
+-//!
+-//! The service keeps the shell's automatic target off, so the shell adopts the
+-//! service's writes instead of adding a target on top. The shell emits
+-//! `BrightnessChanged` for slider and key changes only, never for an adopted
+-//! change, which is what tells a manual change apart.
+-
+-use std::sync::mpsc::Sender;
+-use std::thread;
+-
+-use anyhow::{Context, Result};
+-use zbus::blocking::{Connection, Proxy};
+-
+-const DESTINATION: &str = "org.gnome.Shell";
+-const PATH: &str = "/org/gnome/Shell/Brightness";
+-const INTERFACE: &str = "org.gnome.Shell.Brightness";
+-
+-fn proxy(connection: &Connection) -> Result<Proxy<'_>> {
+-    Ok(Proxy::new(connection, DESTINATION, PATH, INTERFACE)?)
+-}
+-
+-/// A negative target switches the shell's own automatics off.
+-pub fn disable_auto_target(connection: &Connection) -> Result<()> {
+-    proxy(connection)?
+-        .call_method("SetAutoBrightnessTarget", &(-1.0f64,))
+-        .context("gnome-shell SetAutoBrightnessTarget")?;
+-    Ok(())
+-}
+-
+-pub fn watch(sender: Sender<()>) {
+-    thread::spawn(move || {
+-        if let Err(error) = run_watch(&sender) {
+-            super::log(&format!("gnome-shell watch stopped: {error:#}"));
+-        }
+-    });
+-}
+-
+-fn run_watch(sender: &Sender<()>) -> Result<()> {
+-    let connection = Connection::session()?;
+-    for _ in proxy(&connection)?.receive_signal("BrightnessChanged")? {
+-        if sender.send(()).is_err() {
+-            break;
+-        }
+-    }
+-    Ok(())
+-}
+diff --git c/apps/t2-truetone/src/bin/t2-truetone.rs i/apps/t2-truetone/src/bin/t2-truetone.rs
+deleted file mode 100644
+index 03772c1..0000000
+--- c/apps/t2-truetone/src/bin/t2-truetone.rs
++++ /dev/null
+@@ -1,283 +0,0 @@
+-// SPDX-License-Identifier: GPL-3.0-or-later
+-//! t2-truetone: settings and live state for the T2 TrueTone session daemon.
+-
+-use std::cell::RefCell;
+-use std::process::Command;
+-use std::rc::Rc;
+-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+-
+-use adw::prelude::*;
+-use gtk4::glib;
+-
+-use t2_truetone::config;
+-use t2_truetone::model::DEFAULT_STRENGTH;
+-use t2_truetone::{SERVICE, status};
+-
+-const APP_ID: &str = "org.t2truetone.gtk";
+-
+-fn systemctl(args: &[&str]) -> bool {
+-    Command::new("systemctl").arg("--user").args(args).status().map(|s| s.success()).unwrap_or(false)
+-}
+-
+-fn daemon_active() -> bool {
+-    Command::new("systemctl")
+-        .args(["--user", "is-active", "--quiet", SERVICE])
+-        .status()
+-        .map(|s| s.success())
+-        .unwrap_or(false)
+-}
+-
+-/// Strength is stored as the model value 0..STRENGTH_MAX and shown as 0..100 %.
+-const STRENGTH_MAX: f64 = 0.3;
+-
+-fn scale_row(title: &str, tooltip: &str, min: f64, max: f64, step: f64, value: f64, unit: &'static str) -> (adw::ActionRow, gtk4::Scale) {
+-    let row = adw::ActionRow::builder().title(title).tooltip_text(tooltip).build();
+-    let scale = gtk4::Scale::with_range(gtk4::Orientation::Horizontal, min, max, step);
+-    scale.set_value(value);
+-    scale.set_digits(0);
+-    scale.set_draw_value(true);
+-    scale.set_format_value_func(move |_, v| format!("{v:.0} {unit}"));
+-    scale.set_hexpand(true);
+-    scale.set_width_request(220);
+-    scale.set_valign(gtk4::Align::Center);
+-    row.add_suffix(&scale);
+-    (row, scale)
+-}
+-
+-fn build(app: &adw::Application) {
+-    let (loaded, load_error) = config::load_checked();
+-    let cfg = Rc::new(RefCell::new(loaded));
+-    let save = {
+-        let cfg = cfg.clone();
+-        move || {
+-            if let Err(e) = config::save(&cfg.borrow()) {
+-                eprintln!("t2-truetone: could not save {}: {e}", config::path().display());
+-            }
+-        }
+-    };
+-
+-    let banner = gtk4::Label::builder()
+-        .label("GNOME Night Light and auto brightness are turned off while T2 TrueTone is active")
+-        .wrap(true)
+-        .justify(gtk4::Justification::Center)
+-        .margin_top(12)
+-        .margin_start(12)
+-        .margin_end(12)
+-        .build();
+-
+-    let page = adw::PreferencesPage::new();
+-
+-    // Live state
+-    let state = adw::PreferencesGroup::builder().title("Status").build();
+-    let row_daemon = adw::ActionRow::builder().title("Service").build();
+-    let btn_daemon = gtk4::Button::builder().valign(gtk4::Align::Center).build();
+-    row_daemon.add_suffix(&btn_daemon);
+-    let row_light = adw::ActionRow::builder().title("Ambient light").build();
+-    let row_white = adw::ActionRow::builder().title("Display white").build();
+-    let row_bright = adw::ActionRow::builder().title("Brightness").build();
+-    for r in [&row_daemon, &row_light, &row_white, &row_bright] {
+-        state.add(r);
+-    }
+-    page.add(&state);
+-
+-    // True Tone
+-    let tt = adw::PreferencesGroup::builder().title("True Tone").build();
+-    let sw_tt = adw::SwitchRow::builder()
+-        .title("True Tone")
+-        .tooltip_text("Adapts the white of the display to the color of the ambient light")
+-        .active(cfg.borrow().true_tone)
+-        .build();
+-    let default_pct = DEFAULT_STRENGTH / STRENGTH_MAX * 100.0;
+-    let strength_pct = cfg.borrow().strength / STRENGTH_MAX * 100.0;
+-    let (row_strength, sc_strength) = scale_row(
+-        "Strength",
+-        &format!("How far the display follows the ambient light. Default {default_pct:.0} %"),
+-        0.0,
+-        100.0,
+-        1.0,
+-        strength_pct,
+-        "%",
+-    );
+-    sc_strength.add_mark(default_pct, gtk4::PositionType::Bottom, Some("Default"));
+-    let (row_fade, sc_fade) =
+-        scale_row("Transition", "Time to settle after the ambient light changes", 0.0, 10.0, 1.0, cfg.borrow().fade_s, "s");
+-    tt.add(&sw_tt);
+-    tt.add(&row_strength);
+-    tt.add(&row_fade);
+-    page.add(&tt);
+-
+-    // Evening mode
+-    let ev = adw::PreferencesGroup::builder().title("Evening mode").build();
+-    let sw_night = adw::SwitchRow::builder()
+-        .title("Evening mode")
+-        .tooltip_text("A warmer display white on a daily schedule")
+-        .active(cfg.borrow().night)
+-        .build();
+-    let en_from = adw::EntryRow::builder().title("From (HH:MM)").text(cfg.borrow().night_from.as_str()).build();
+-    let en_to = adw::EntryRow::builder().title("Until (HH:MM)").text(cfg.borrow().night_to.as_str()).build();
+-    let (row_k, sc_k) = scale_row("Color temperature", "Display white at full evening mode", 1900.0, 6000.0, 100.0, cfg.borrow().night_kelvin, "K");
+-    let (row_ramp, sc_ramp) =
+-        scale_row("Fade", "Time to fade in at the start and out at the end", 0.0, 10.0, 1.0, cfg.borrow().night_ramp_min, "min");
+-    for w in [sw_night.upcast_ref::<gtk4::Widget>(), en_from.upcast_ref(), en_to.upcast_ref(), row_k.upcast_ref(), row_ramp.upcast_ref()] {
+-        ev.add(w);
+-    }
+-    page.add(&ev);
+-
+-    // Brightness
+-    let br = adw::PreferencesGroup::builder().title("Auto brightness").build();
+-    let sw_auto = adw::SwitchRow::builder()
+-        .title("Auto brightness")
+-        .tooltip_text("Follows the ambient light like macOS. Setting the brightness by hand teaches it the new point.")
+-        .active(cfg.borrow().auto_brightness)
+-        .build();
+-    br.add(&sw_auto);
+-    page.add(&br);
+-
+-    let update_banner = {
+-        let banner = banner.clone();
+-        let cfg = cfg.clone();
+-        move || {
+-            let c = cfg.borrow();
+-            banner.set_visible(c.true_tone || c.night || c.auto_brightness);
+-        }
+-    };
+-    update_banner();
+-
+-    macro_rules! on_switch {
+-        ($sw:expr, $field:ident) => {{
+-            let (cfg, save, ub) = (cfg.clone(), save.clone(), update_banner.clone());
+-            $sw.connect_active_notify(move |s| {
+-                cfg.borrow_mut().$field = s.is_active();
+-                save();
+-                ub();
+-            });
+-        }};
+-    }
+-    on_switch!(sw_tt, true_tone);
+-    on_switch!(sw_night, night);
+-    on_switch!(sw_auto, auto_brightness);
+-
+-    macro_rules! on_scale {
+-        ($sc:expr, $field:ident) => {{
+-            let (cfg, save) = (cfg.clone(), save.clone());
+-            $sc.connect_value_changed(move |s| {
+-                cfg.borrow_mut().$field = s.value();
+-                save();
+-            });
+-        }};
+-    }
+-    {
+-        let (cfg, save) = (cfg.clone(), save.clone());
+-        // Near the mark the slider stores the default exactly.
+-        sc_strength.connect_value_changed(move |s| {
+-            let v = s.value();
+-            cfg.borrow_mut().strength =
+-                if (v - default_pct).abs() < 1.0 { DEFAULT_STRENGTH } else { v / 100.0 * STRENGTH_MAX };
+-            save();
+-        });
+-    }
+-    on_scale!(sc_fade, fade_s);
+-    on_scale!(sc_k, night_kelvin);
+-    on_scale!(sc_ramp, night_ramp_min);
+-
+-    macro_rules! on_time {
+-        ($en:expr, $field:ident) => {{
+-            let (cfg, save) = (cfg.clone(), save.clone());
+-            $en.connect_changed(move |e| {
+-                let t = e.text().to_string();
+-                if config::parse_hhmm(&t).is_some() {
+-                    e.remove_css_class("error");
+-                    cfg.borrow_mut().$field = t;
+-                    save();
+-                } else {
+-                    e.add_css_class("error");
+-                }
+-            });
+-        }};
+-    }
+-    on_time!(en_from, night_from);
+-    on_time!(en_to, night_to);
+-
+-    btn_daemon.connect_clicked(|_| {
+-        if daemon_active() {
+-            systemctl(&["disable", "--now", SERVICE]);
+-        } else {
+-            systemctl(&["enable", "--now", SERVICE]);
+-        }
+-    });
+-
+-    let refresh = {
+-        let cfg = cfg.clone();
+-        move || {
+-            let active = daemon_active();
+-            row_daemon.set_subtitle(if active { "Running" } else { "Stopped" });
+-            btn_daemon.set_label(if active { "Stop" } else { "Start" });
+-            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+-            let st = status::read().filter(|s| active && now.saturating_sub(s.unix_time) < 5);
+-            match st {
+-                Some(s) if s.sensor => {
+-                    row_light.set_subtitle(&format!("{:.1} lx, {:.0} K", s.lux, s.ambient_cct));
+-                    let night = if s.night_factor > 0.0 {
+-                        format!(", evening mode {:.0}%", s.night_factor * 100.0)
+-                    } else {
+-                        String::new()
+-                    };
+-                    row_white.set_subtitle(&format!("{:.0} K{}", s.white_cct, night));
+-                }
+-                Some(s) => {
+-                    row_light.set_subtitle(s.error.as_deref().unwrap_or("Waiting for the sensor"));
+-                    row_white.set_subtitle("D65");
+-                }
+-                None => {
+-                    row_light.set_subtitle("Service not running");
+-                    row_white.set_subtitle("Not controlled");
+-                }
+-            }
+-            let c = cfg.borrow();
+-            row_bright.set_subtitle(&match status::read().and_then(|s| s.brightness) {
+-                Some(b) if c.auto_brightness && active => format!("Automatic, {:.0}%", b * 100.0),
+-                _ if c.auto_brightness => "Automatic".to_string(),
+-                _ => "Manual".to_string(),
+-            });
+-        }
+-    };
+-    refresh();
+-    glib::timeout_add_local(Duration::from_secs(1), move || {
+-        refresh();
+-        glib::ControlFlow::Continue
+-    });
+-
+-    let content = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+-    if let Some(e) = load_error {
+-        let err = gtk4::Label::builder()
+-            .label(format!("The settings could not be read and the defaults are shown. Saving replaces them. {e}"))
+-            .wrap(true)
+-            .margin_top(12)
+-            .margin_start(12)
+-            .margin_end(12)
+-            .css_classes(["error"])
+-            .build();
+-        content.append(&err);
+-    }
+-    content.append(&banner);
+-    content.append(&page);
+-    page.set_vexpand(true);
+-    let view = adw::ToolbarView::new();
+-    view.add_top_bar(&adw::HeaderBar::new());
+-    view.set_content(Some(&content));
+-
+-    let win = adw::ApplicationWindow::builder()
+-        .application(app)
+-        .title("T2 TrueTone")
+-        .default_width(560)
+-        .default_height(760)
+-        .content(&view)
+-        .build();
+-    win.present();
+-}
+-
+-fn main() -> glib::ExitCode {
+-    let app = adw::Application::builder().application_id(APP_ID).build();
+-    app.connect_activate(build);
+-    app.run()
+-}
+diff --git c/apps/t2-truetone/src/config.rs i/apps/t2-truetone/src/config.rs
+index 024032b..b47187f 100644
+--- c/apps/t2-truetone/src/config.rs
++++ i/apps/t2-truetone/src/config.rs
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ //! User settings in $XDG_CONFIG_HOME/t2-truetone/config.toml, written by the
+-//! GUI and reloaded by the daemon when the file changes.
++//! Omarchy bar plugin and reloaded by the daemon when the file changes.
+ 
+ use std::fs;
+ use std::path::PathBuf;
+diff --git c/apps/t2-truetone/src/daemon.rs i/apps/t2-truetone/src/daemon.rs
+index 0ffd142..96a0eb0 100644
+--- c/apps/t2-truetone/src/daemon.rs
++++ i/apps/t2-truetone/src/daemon.rs
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ //! Session daemon: sensor in, gamma LUT and brightness target out, at 10 Hz.
++//! The LUT goes to the built-in panel through wlr-gamma-control (wlgamma).
+ 
+ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::sync::mpsc;
+@@ -11,10 +12,9 @@ use anyhow::Result;
+ use crate::als::{self, Sample};
+ use crate::autobright;
+ use crate::config::{self, Config};
+-use crate::gamma::{self, Base, LUT_LEN};
+-use crate::gnome;
++use crate::gamma::{self, Base};
+ use crate::model::{self, Locus, Vec3};
+-use crate::mutter::{Mutter, Panel};
++use crate::wlgamma::Panel;
+ use crate::night;
+ use crate::status::{self, Status};
+ 
+@@ -29,7 +29,6 @@ extern "C" fn on_signal(_: libc::c_int) {
+ }
+ 
+ struct Output {
+-    mutter: Mutter,
+     panel: Panel,
+     base: Base,
+     sent: Option<[f64; 3]>,
+@@ -38,35 +37,14 @@ struct Output {
+ 
+ impl Output {
+     fn open() -> Result<Self> {
+-        let mutter = Mutter::connect()?;
+-        let panel = mutter.panel()?;
+-        let cur = mutter.get_gamma(&panel)?;
+-        let base = if cur[0].len() != LUT_LEN {
+-            let b = gamma::base_from(&cur);
+-            gamma::save_base(&b);
+-            b
+-        } else {
+-            gamma::load_base().unwrap_or_else(gamma::identity)
+-        };
+-        Ok(Output { mutter, panel, base, sent: None, checked: Instant::now() })
++        let panel = Panel::open()?;
++        Ok(Output { panel, base: gamma::identity(), sent: None, checked: Instant::now() })
+     }
+ 
+-    /// Re-read the panel and detect a LUT that mutter rewrote on its own.
++    /// Handle what the compositor sent: a panel or a control that is gone.
+     fn check(&mut self) -> Result<()> {
+         self.checked = Instant::now();
+-        let panel = self.mutter.panel()?;
+-        if panel.serial != self.panel.serial || panel.crtc != self.panel.crtc {
+-            self.panel = panel;
+-            self.sent = None;
+-        }
+-        let len = self.mutter.gamma_len(&self.panel)?;
+-        if len != LUT_LEN {
+-            let cur = self.mutter.get_gamma(&self.panel)?;
+-            self.base = gamma::base_from(&cur);
+-            gamma::save_base(&self.base);
+-            self.sent = None;
+-        }
+-        Ok(())
++        self.panel.check()
+     }
+ 
+     fn apply(&mut self, gains: [f64; 3]) -> Result<()> {
+@@ -75,19 +53,22 @@ impl Output {
+                 return Ok(());
+             }
+         }
+-        self.mutter.set_gamma(&self.panel, &gamma::build(&self.base, gains))?;
++        let lut = gamma::build(&self.base, gains, self.panel.size);
++        self.panel.set(&lut)?;
+         self.sent = Some(gains);
+         Ok(())
+     }
+ 
+-    /// Fade back to the base LUT over about 1.5 s.
++    /// Fade back to the panel's own table over about 1.5 s; dropping the
++    /// control afterwards hands it back to the compositor.
+     fn restore(&mut self) {
+         let from = self.sent.unwrap_or([1.0; 3]);
+         for i in 1..=15 {
+             let t = i as f64 / 15.0;
+             let k = t * t * (3.0 - 2.0 * t);
+             let g = [0, 1, 2].map(|c| from[c] + (1.0 - from[c]) * k);
+-            if let Err(e) = self.mutter.set_gamma(&self.panel, &gamma::build(&self.base, g)) {
++            let lut = gamma::build(&self.base, g, self.panel.size);
++            if let Err(e) = self.panel.set(&lut) {
+                 eprintln!("t2-truetone: could not restore the panel LUT: {e:#}");
+                 return;
+             }
+@@ -96,14 +77,6 @@ impl Output {
+     }
+ }
+ 
+-fn gnome_sync(c: &Config) {
+-    if c.true_tone || c.night {
+-        gnome::take_over(gnome::NIGHT_LIGHT);
+-    } else {
+-        gnome::give_back(gnome::NIGHT_LIGHT);
+-    }
+-}
+-
+ fn smooth_lab(state: &mut Option<Vec3>, target: Vec3, dt: f64, tau: f64) -> Vec3 {
+     let s = state.get_or_insert(target);
+     let k = if tau <= 0.0 { 1.0 } else { 1.0 - (-dt / tau).exp() };
+@@ -144,7 +117,7 @@ impl Brightness {
+         Brightness { tx, stop, handle }
+     }
+ 
+-    /// Stop and wait, which gives GNOME its settings back.
++    /// Stop and wait.
+     fn stop(self) {
+         self.stop.store(true, Ordering::SeqCst);
+         if self.handle.join().is_err() {
+@@ -164,7 +137,6 @@ pub fn run() -> Result<()> {
+     let locus = Locus::new();
+     let mut cfg = config::load();
+     let mut cfg_mtime = config::mtime();
+-    gnome_sync(&cfg);
+ 
+     let mut out: Option<Output> = None;
+     let mut out_retry = Instant::now();
+@@ -195,8 +167,7 @@ pub fn run() -> Result<()> {
+                 }
+             }
+             cfg = new;
+-            gnome_sync(&cfg);
+-        }
++                }
+         while let Ok(s) = rx.try_recv() {
+             sample = Some(s);
+             // The thread ends on its own when there is no panel to control.
+diff --git c/apps/t2-truetone/src/gamma.rs i/apps/t2-truetone/src/gamma.rs
+index f497643..cf81158 100644
+--- c/apps/t2-truetone/src/gamma.rs
++++ i/apps/t2-truetone/src/gamma.rs
+@@ -1,13 +1,7 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+-//! Gamma LUT built from per channel linear gains on top of mutter's own LUT.
+-//!
+-//! mutter writes the panel LUT from the color profile whenever its color
+-//! device updates. That LUT has the hardware size. Ours has LUT_LEN entries,
+-//! mutter resamples it to the hardware size. A LUT of any other length than
+-//! LUT_LEN is therefore mutter's and becomes the new base.
+-
+-use std::fs;
+-use std::path::PathBuf;
++//! Gamma LUT built from per channel linear gains on top of a base LUT (the
++//! identity: wlr-gamma-control can't read the compositor's own table back),
++//! at the size the compositor asks for.
+ 
+ pub const LUT_LEN: usize = 1024;
+ 
+@@ -26,23 +20,6 @@ pub fn identity() -> Base {
+     [ch.clone(), ch.clone(), ch]
+ }
+ 
+-/// Resample a mutter LUT (any length) to LUT_LEN normalized entries.
+-pub fn base_from(lut: &[Vec<u16>; 3]) -> Base {
+-    lut.clone().map(|ch| {
+-        if ch.len() < 2 {
+-            return identity()[0].clone();
+-        }
+-        (0..LUT_LEN)
+-            .map(|i| {
+-                let p = i as f64 / (LUT_LEN - 1) as f64 * (ch.len() - 1) as f64;
+-                let j = (p.floor() as usize).min(ch.len() - 2);
+-                let t = p - j as f64;
+-                (ch[j] as f64 * (1.0 - t) + ch[j + 1] as f64 * t) / 65535.0
+-            })
+-            .collect()
+-    })
+-}
+-
+ fn sample(base: &[f64], v: f64) -> f64 {
+     let p = v.clamp(0.0, 1.0) * (base.len() - 1) as f64;
+     let j = (p.floor() as usize).min(base.len() - 2);
+@@ -51,11 +28,11 @@ fn sample(base: &[f64], v: f64) -> f64 {
+ }
+ 
+ /// LUT for linear channel gains (each in 0..=1) composed with the base.
+-pub fn build(base: &Base, gains: [f64; 3]) -> [Vec<u16>; 3] {
++pub fn build(base: &Base, gains: [f64; 3], len: usize) -> [Vec<u16>; 3] {
+     [0, 1, 2].map(|c| {
+-        (0..LUT_LEN)
++        (0..len)
+             .map(|i| {
+-                let v = i as f64 / (LUT_LEN - 1) as f64;
++                let v = i as f64 / (len - 1) as f64;
+                 let out = srgb_encode(srgb_decode(v) * gains[c].clamp(0.0, 1.0));
+                 (sample(&base[c], out) * 65535.0).round().clamp(0.0, 65535.0) as u16
+             })
+@@ -63,40 +40,6 @@ pub fn build(base: &Base, gains: [f64; 3]) -> [Vec<u16>; 3] {
+     })
+ }
+ 
+-fn base_path() -> Option<PathBuf> {
+-    let dir = std::env::var_os("XDG_STATE_HOME")
+-        .map(PathBuf::from)
+-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
+-    Some(dir.join("t2-truetone").join("base-lut"))
+-}
+-
+-/// Kept so that a restart after a crash, with our LUT still on the panel,
+-/// knows what to fade back to.
+-pub fn save_base(base: &Base) {
+-    let Some(p) = base_path() else { return };
+-    let text: String = base
+-        .iter()
+-        .map(|ch| ch.iter().map(|v| format!("{v:.6}")).collect::<Vec<_>>().join(" ") + "\n")
+-        .collect();
+-    let res = p.parent().map_or(Ok(()), fs::create_dir_all).and_then(|_| fs::write(&p, text));
+-    if let Err(e) = res {
+-        eprintln!("t2-truetone: could not save {}: {e}", p.display());
+-    }
+-}
+-
+-pub fn load_base() -> Option<Base> {
+-    let text = fs::read_to_string(base_path()?).ok()?;
+-    let chans: Vec<Vec<f64>> = text
+-        .lines()
+-        .map(|l| l.split_whitespace().filter_map(|v| v.parse().ok()).collect())
+-        .collect();
+-    if chans.len() == 3 && chans.iter().all(|c| c.len() == LUT_LEN) {
+-        Some([chans[0].clone(), chans[1].clone(), chans[2].clone()])
+-    } else {
+-        None
+-    }
+-}
+-
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -104,7 +47,7 @@ mod tests {
+     #[test]
+     fn unity_gains_reproduce_base() {
+         let b = identity();
+-        let l = build(&b, [1.0, 1.0, 1.0]);
++        let l = build(&b, [1.0, 1.0, 1.0], LUT_LEN);
+         for (i, v) in l[0].iter().enumerate() {
+             let want = (i as f64 / (LUT_LEN - 1) as f64 * 65535.0).round() as i64;
+             assert!((*v as i64 - want).abs() <= 1);
+@@ -113,7 +56,7 @@ mod tests {
+ 
+     #[test]
+     fn white_scaled_by_gain() {
+-        let l = build(&identity(), [1.0, 0.5, 0.25]);
++        let l = build(&identity(), [1.0, 0.5, 0.25], LUT_LEN);
+         let top = |c: usize| srgb_decode(l[c][LUT_LEN - 1] as f64 / 65535.0);
+         assert!((top(1) - 0.5).abs() < 1e-3);
+         assert!((top(2) - 0.25).abs() < 1e-3);
+diff --git c/apps/t2-truetone/src/gnome.rs i/apps/t2-truetone/src/gnome.rs
+deleted file mode 100644
+index 550f0ca..0000000
+--- c/apps/t2-truetone/src/gnome.rs
++++ /dev/null
+@@ -1,74 +0,0 @@
+-// SPDX-License-Identifier: GPL-3.0-or-later
+-//! GNOME Night Light writes the same gamma LUT. While t2-truetone controls the
+-//! white point, Night Light is turned off. Its previous value is kept and
+-//! restored when t2-truetone gives control back. Automatic brightness keeps
+-//! its own handling in the autobright module.
+-
+-use std::fs;
+-use std::path::PathBuf;
+-use std::process::Command;
+-
+-pub const NIGHT_LIGHT: (&str, &str) = ("org.gnome.settings-daemon.plugins.color", "night-light-enabled");
+-
+-pub fn get(key: (&str, &str)) -> Option<bool> {
+-    let out = Command::new("gsettings").args(["get", key.0, key.1]).output().ok()?;
+-    match String::from_utf8_lossy(&out.stdout).trim() {
+-        "true" => Some(true),
+-        "false" => Some(false),
+-        _ => None,
+-    }
+-}
+-
+-pub fn set(key: (&str, &str), v: bool) -> bool {
+-    Command::new("gsettings")
+-        .args(["set", key.0, key.1, if v { "true" } else { "false" }])
+-        .status()
+-        .map(|s| s.success())
+-        .unwrap_or(false)
+-}
+-
+-fn saved_path(key: (&str, &str)) -> Option<PathBuf> {
+-    let dir = std::env::var_os("XDG_STATE_HOME")
+-        .map(PathBuf::from)
+-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
+-    Some(dir.join("t2-truetone").join(format!("saved-{}", key.1)))
+-}
+-
+-fn log(msg: &str) {
+-    eprintln!("t2-truetone: {msg}");
+-}
+-
+-/// Take the GNOME feature over: remember its value once, then turn it off.
+-/// Nothing is changed unless the original value is safely on disk.
+-pub fn take_over(key: (&str, &str)) {
+-    let Some(p) = saved_path(key) else {
+-        return log("no state directory, leaving GNOME settings alone");
+-    };
+-    if !p.exists() {
+-        let Some(v) = get(key) else {
+-            return log(&format!("could not read {} {}, leaving it alone", key.0, key.1));
+-        };
+-        let saved = p
+-            .parent()
+-            .map_or(Ok(()), fs::create_dir_all)
+-            .and_then(|_| fs::write(&p, if v { "true" } else { "false" }));
+-        if let Err(e) = saved {
+-            return log(&format!("could not save {}: {e}, leaving {} alone", p.display(), key.1));
+-        }
+-    }
+-    if get(key) != Some(false) && !set(key, false) {
+-        log(&format!("could not turn off {} {}", key.0, key.1));
+-    }
+-}
+-
+-/// Give the GNOME feature back with the value it had before.
+-pub fn give_back(key: (&str, &str)) {
+-    let Some(p) = saved_path(key) else { return };
+-    let Ok(v) = fs::read_to_string(&p) else { return };
+-    if !set(key, v.trim() == "true") {
+-        return log(&format!("could not restore {} {}, keeping {}", key.0, key.1, p.display()));
+-    }
+-    if let Err(e) = fs::remove_file(&p) {
+-        log(&format!("could not remove {}: {e}", p.display()));
+-    }
+-}
+diff --git c/apps/t2-truetone/src/lib.rs i/apps/t2-truetone/src/lib.rs
+index 25859e1..d887611 100644
+--- c/apps/t2-truetone/src/lib.rs
++++ i/apps/t2-truetone/src/lib.rs
+@@ -1,15 +1,14 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ //! T2 TrueTone: ambient white point adaptation, evening mode and automatic
+-//! brightness for the built-in panel of T2 MacBooks under GNOME.
++//! brightness for the built-in panel of T2 MacBooks under Hyprland (Omarchy).
+ 
+ pub mod als;
+ pub mod autobright;
+ pub mod config;
+ pub mod daemon;
+ pub mod gamma;
+-pub mod gnome;
+ pub mod model;
+-pub mod mutter;
++pub mod wlgamma;
+ pub mod night;
+ pub mod status;
+ 
+diff --git c/apps/t2-truetone/src/mutter.rs i/apps/t2-truetone/src/mutter.rs
+deleted file mode 100644
+index 8c06608..0000000
+--- c/apps/t2-truetone/src/mutter.rs
++++ /dev/null
+@@ -1,83 +0,0 @@
+-// SPDX-License-Identifier: GPL-3.0-or-later
+-//! org.gnome.Mutter.DisplayConfig: gamma LUT of the built-in panel.
+-
+-use std::collections::HashMap;
+-
+-use anyhow::{Context, Result, anyhow};
+-use zbus::blocking::Connection;
+-use zbus::zvariant::OwnedValue;
+-
+-type Props = HashMap<String, OwnedValue>;
+-type Crtc = (u32, i64, i32, i32, i32, i32, i32, u32, Vec<u32>, Props);
+-type Output = (u32, i64, i32, Vec<u32>, String, Vec<u32>, Vec<u32>, Props);
+-type Mode = (u32, i64, u32, u32, f64, u32);
+-
+-#[zbus::proxy(
+-    interface = "org.gnome.Mutter.DisplayConfig",
+-    default_service = "org.gnome.Mutter.DisplayConfig",
+-    default_path = "/org/gnome/Mutter/DisplayConfig",
+-    gen_async = false,
+-    gen_blocking = true
+-)]
+-pub trait DisplayConfig {
+-    #[allow(clippy::type_complexity)]
+-    fn get_resources(&self) -> zbus::Result<(u32, Vec<Crtc>, Vec<Output>, Vec<Mode>, i32, i32)>;
+-    fn get_crtc_gamma(&self, serial: u32, crtc: u32) -> zbus::Result<(Vec<u16>, Vec<u16>, Vec<u16>)>;
+-    fn set_crtc_gamma(&self, serial: u32, crtc: u32, red: &[u16], green: &[u16], blue: &[u16]) -> zbus::Result<()>;
+-    #[zbus(signal)]
+-    fn monitors_changed(&self) -> zbus::Result<()>;
+-}
+-
+-#[derive(Clone, Debug)]
+-pub struct Panel {
+-    pub serial: u32,
+-    pub crtc: u32,
+-    pub connector: String,
+-}
+-
+-pub struct Mutter {
+-    proxy: DisplayConfigProxy<'static>,
+-}
+-
+-impl Mutter {
+-    pub fn connect() -> Result<Self> {
+-        let conn = Connection::session().context("connecting to the session bus")?;
+-        let proxy = DisplayConfigProxy::builder(&conn)
+-            .cache_properties(zbus::proxy::CacheProperties::No)
+-            .build()
+-            .context("DisplayConfig proxy")?;
+-        Ok(Mutter { proxy })
+-    }
+-
+-    pub fn proxy(&self) -> &DisplayConfigProxy<'static> {
+-        &self.proxy
+-    }
+-
+-    /// The built-in eDP panel and the CRTC driving it.
+-    pub fn panel(&self) -> Result<Panel> {
+-        let (serial, _crtcs, outputs, _, _, _) = self.proxy.get_resources()?;
+-        for o in outputs {
+-            let builtin = o.7.get("connector-type").and_then(|v| String::try_from(v.clone()).ok())
+-                == Some("eDP".into())
+-                || o.4.starts_with("eDP");
+-            if builtin && o.2 >= 0 {
+-                return Ok(Panel { serial, crtc: o.2 as u32, connector: o.4 });
+-            }
+-        }
+-        Err(anyhow!("no active built-in panel"))
+-    }
+-
+-    pub fn gamma_len(&self, p: &Panel) -> Result<usize> {
+-        Ok(self.proxy.get_crtc_gamma(p.serial, p.crtc)?.0.len())
+-    }
+-
+-    pub fn get_gamma(&self, p: &Panel) -> Result<[Vec<u16>; 3]> {
+-        let (r, g, b) = self.proxy.get_crtc_gamma(p.serial, p.crtc)?;
+-        Ok([r, g, b])
+-    }
+-
+-    pub fn set_gamma(&self, p: &Panel, lut: &[Vec<u16>; 3]) -> Result<()> {
+-        self.proxy.set_crtc_gamma(p.serial, p.crtc, &lut[0], &lut[1], &lut[2])?;
+-        Ok(())
+-    }
+-}
+diff --git c/apps/t2-truetone/src/wlgamma.rs i/apps/t2-truetone/src/wlgamma.rs
+new file mode 100644
+index 0000000..375c11b
+--- /dev/null
++++ i/apps/t2-truetone/src/wlgamma.rs
+@@ -0,0 +1,170 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++//! Gamma LUT of the built-in panel through wlr-gamma-control (Hyprland and
++//! other wlroots-style compositors), in place of mutter's SetCrtcGamma.
++//!
++//! The compositor keeps our table only while the gamma control object lives:
++//! dropping it (or the daemon dying) gives the panel its own table back. Only
++//! one client per output gets control; a second one gets `failed`. Omarchy's
++//! night light (hyprsunset) uses the colour transform matrix instead, so both
++//! apply, one after the other.
++
++use std::io::{Seek, SeekFrom, Write};
++use std::os::fd::{AsFd, FromRawFd, OwnedFd};
++
++use anyhow::{Context, Result, anyhow, bail};
++use wayland_client::globals::{GlobalListContents, registry_queue_init};
++use wayland_client::protocol::{wl_output, wl_registry};
++use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle, delegate_noop};
++use wayland_protocols_wlr::gamma_control::v1::client::zwlr_gamma_control_manager_v1::ZwlrGammaControlManagerV1;
++use wayland_protocols_wlr::gamma_control::v1::client::zwlr_gamma_control_v1::{self, ZwlrGammaControlV1};
++
++struct Out {
++    global: u32,
++    output: wl_output::WlOutput,
++    name: Option<String>,
++}
++
++#[derive(Default)]
++struct State {
++    outputs: Vec<Out>,
++    size: Option<u32>,
++    failed: bool,
++    panel_global: Option<u32>,
++}
++
++impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
++    fn event(
++        state: &mut Self,
++        _: &wl_registry::WlRegistry,
++        event: wl_registry::Event,
++        _: &GlobalListContents,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++    ) {
++        if let wl_registry::Event::GlobalRemove { name } = event {
++            if state.panel_global == Some(name) {
++                state.failed = true;
++            }
++        }
++    }
++}
++
++impl Dispatch<wl_output::WlOutput, u32> for State {
++    fn event(
++        state: &mut Self,
++        _: &wl_output::WlOutput,
++        event: wl_output::Event,
++        global: &u32,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++    ) {
++        if let wl_output::Event::Name { name } = event {
++            if let Some(o) = state.outputs.iter_mut().find(|o| o.global == *global) {
++                o.name = Some(name);
++            }
++        }
++    }
++}
++
++impl Dispatch<ZwlrGammaControlV1, ()> for State {
++    fn event(
++        state: &mut Self,
++        _: &ZwlrGammaControlV1,
++        event: zwlr_gamma_control_v1::Event,
++        _: &(),
++        _: &Connection,
++        _: &QueueHandle<Self>,
++    ) {
++        match event {
++            zwlr_gamma_control_v1::Event::GammaSize { size } => state.size = Some(size),
++            zwlr_gamma_control_v1::Event::Failed => state.failed = true,
++            _ => {}
++        }
++    }
++}
++
++delegate_noop!(State: ignore ZwlrGammaControlManagerV1);
++
++/// The built-in panel's gamma control.
++pub struct Panel {
++    conn: Connection,
++    queue: EventQueue<State>,
++    state: State,
++    control: ZwlrGammaControlV1,
++    pub connector: String,
++    pub size: usize,
++}
++
++fn builtin(name: &str) -> bool {
++    ["eDP", "LVDS", "DSI"].iter().any(|p| name.starts_with(p))
++}
++
++impl Panel {
++    pub fn open() -> Result<Self> {
++        let conn = Connection::connect_to_env().context("connecting to the Wayland compositor")?;
++        let (globals, mut queue) = registry_queue_init::<State>(&conn).context("reading Wayland globals")?;
++        let qh = queue.handle();
++        let manager: ZwlrGammaControlManagerV1 =
++            globals.bind(&qh, 1..=1, ()).context("the compositor has no wlr-gamma-control")?;
++        let mut state = State::default();
++        for g in globals.contents().clone_list() {
++            if g.interface == wl_output::WlOutput::interface().name && g.version >= 4 {
++                let output = globals.registry().bind::<wl_output::WlOutput, _, _>(g.name, 4, &qh, g.name);
++                state.outputs.push(Out { global: g.name, output, name: None });
++            }
++        }
++        queue.roundtrip(&mut state).context("Wayland roundtrip")?;
++        let (global, output, connector) = state
++            .outputs
++            .iter()
++            .find_map(|o| {
++                o.name.as_deref().filter(|n| builtin(n)).map(|n| (o.global, o.output.clone(), n.to_string()))
++            })
++            .ok_or_else(|| anyhow!("no active built-in panel"))?;
++        state.panel_global = Some(global);
++        let control = manager.get_gamma_control(&output, &qh, ());
++        queue.roundtrip(&mut state).context("Wayland roundtrip")?;
++        if state.failed {
++            bail!("{connector}: another program holds its gamma table");
++        }
++        let size = state.size.ok_or_else(|| anyhow!("{connector}: no gamma size"))? as usize;
++        if size < 2 {
++            bail!("{connector}: gamma size {size}");
++        }
++        Ok(Panel { conn, queue, state, control, connector, size })
++    }
++
++    /// Handle what the compositor sent: a lost panel or a lost control.
++    pub fn check(&mut self) -> Result<()> {
++        self.queue.roundtrip(&mut self.state).context("Wayland roundtrip")?;
++        if self.state.failed {
++            bail!("{}: gamma control lost", self.connector);
++        }
++        Ok(())
++    }
++
++    /// `lut` has `self.size` entries per channel.
++    pub fn set(&mut self, lut: &[Vec<u16>; 3]) -> Result<()> {
++        if lut.iter().any(|ch| ch.len() != self.size) {
++            bail!("gamma table of the wrong size");
++        }
++        let fd = unsafe { libc::memfd_create(c"t2-truetone-gamma".as_ptr(), libc::MFD_CLOEXEC) };
++        if fd < 0 {
++            return Err(std::io::Error::last_os_error()).context("memfd_create");
++        }
++        let mut file = std::fs::File::from(unsafe { OwnedFd::from_raw_fd(fd) });
++        let bytes: Vec<u8> = lut.iter().flatten().flat_map(|v| v.to_ne_bytes()).collect();
++        file.write_all(&bytes).context("writing the gamma table")?;
++        file.seek(SeekFrom::Start(0)).context("rewinding the gamma table")?;
++        self.control.set_gamma(file.as_fd());
++        self.conn.flush().context("Wayland flush")?;
++        Ok(())
++    }
++}
++
++impl Drop for Panel {
++    fn drop(&mut self) {
++        self.control.destroy();
++        let _ = self.conn.flush();
++    }
++}
+diff --git c/apps/t2-truetone/systemd/t2-truetone.service i/apps/t2-truetone/systemd/t2-truetone.service
+index b5401cc..5dc225e 100644
+--- c/apps/t2-truetone/systemd/t2-truetone.service
++++ i/apps/t2-truetone/systemd/t2-truetone.service
+@@ -1,12 +1,11 @@
+ [Unit]
+ Description=T2 TrueTone ambient white point, evening mode and automatic brightness
+-Documentation=https://kait2en.org/documentation.html
+ PartOf=graphical-session.target
+ After=graphical-session.target
+ 
+ [Service]
+ Type=exec
+-ExecStart=/usr/local/bin/t2truetone daemon
++ExecStart=/usr/bin/t2truetone daemon
+ Restart=on-failure
+ RestartSec=3
+ 
