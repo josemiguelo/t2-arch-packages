@@ -312,6 +312,16 @@ it back, so re-check with `git log -- <path>` before starting.
      killed (which doesn't come back); their Titan Ridge runtime-PM work
      (`patches/currently-testing/titan-ridge-runtime-pm`, needs `pcie_ports=compat` gone) is the
      next lead, with its resume-time cost to measure.
+   - **Never runtime-PM the dGPU's PCIe path**: root port `00:01.0` and bridges `01:00.0`/`02:00.0`
+     must stay `power/control=on` (the default; t2gmux handles the dGPU's own D3cold). The
+     2026-11-16 power test set every PCI device but the T2's to `auto`: from then on every dGPU
+     wake failed ("Unable to change power state from D3cold to D0, device inaccessible", SMU and
+     atombios errors), a `lspci` hung on it, and the next `reboot` hung on a black screen (forced
+     power-off, which also relocks Touch ID). A reboot clears it. KaiT2en's `t2-power-tune` sets
+     `auto` broadly: exclude this path if it's ever ported.
+   - **The fork** (`ebbfbf798`) installs the four packages on dual-GPU Macs (found by PCI class in
+     sysfs, which doesn't wake the dGPU) and leaves the boot GPU alone; the dotfiles'
+     `t2-hybrid-boot` switches to hybrid. Not in an ISO yet.
    - **Why it matters:** the panel (eDP) is wired to the AMD dGPU at boot, so it never sleeps
      (`power/control` = `on`, D0): **32 W on battery** measured 2026-11-12 (~1.8 h). In hybrid mode
      the Intel iGPU drives the panel and Hyprland, and the dGPU sits in D3cold until an app asks
