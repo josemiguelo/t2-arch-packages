@@ -105,17 +105,26 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Procedures
 
-- **Omarchy bar plugins and menu entries ship with their packages** (2026-11-16): a package puts
-  its plugin under `/usr/share/t2-omarchy/plugins/<id>/` and its menu entries under
-  `/usr/share/t2-omarchy/menu/<name>.jsonc`, and depends on `t2-omarchy-plugins`, whose
-  `t2-omarchy-setup` links the plugins into `~/.config/omarchy/plugins` (Omarchy loads third-party
-  plugins and menu extensions only from there; the scan follows links), puts them on the bar
-  before Bluetooth in the order of its `order` file, and keeps each menu file as a marked block in
-  `~/.config/omarchy/extensions/omarchy-menu.jsonc`. The fork's first login runs it; an installed
-  Mac runs it once after a package adds a plugin. KaiT2en's GNOME apps become plugins like these
-  and their GTK apps are dropped (the owner, 2026-11-16); the dotfiles keep only where a widget
-  sits. Plugins: `josemiguelo.truetone` (t2-truetone), `josemiguelo.airshare` and its Share-menu
-  entries (t2-airshare), `josemiguelo.sidecar` (t2-sidecar).
+- **One T2 panel on Omarchy's bar, a tab per feature; tabs and menu entries ship with their
+  packages** (the owner, 2026-11-16). `t2-omarchy-plugins` ships the panel (`t2.panel`, in
+  `/usr/share/t2-omarchy/plugins/t2.panel/`: the bar icon, a dot while a tab's indicator unit
+  runs, the tab row, `t2hub` listing the tabs) and `t2-omarchy-setup`, which links it into
+  `~/.config/omarchy/plugins` (Omarchy loads third-party plugins and menu extensions only from
+  there; the scan follows links), puts it before Bluetooth, keeps each package's menu file as a
+  marked block in `~/.config/omarchy/extensions/omarchy-menu.jsonc`, and removes links to plugins
+  no package ships any more. Each package ships a tab under `/usr/share/t2-omarchy/tabs/<id>/`
+  (`Tab.qml`, `tab.json`: title, icon, order, indicator unit; a helper beside it) and its menu
+  entries under `/usr/share/t2-omarchy/menu/<name>.jsonc`, and depends on `t2-omarchy-plugins`.
+  Tabs: `battery` (t2-smc-control: battery, power, charge limit, SMC clock), `fans`
+  (t2-fan-control: the curve or the SMC, the target, both fans, temperatures), `light` (t2-truetone), `airshare` (t2-airshare, with its Share-menu entries;
+  indicator t2-airshare.service), `sidecar` (t2-sidecar; indicator t2-sidecar.service). A tab is
+  an Item taking bar, foreground, urgent, dim, fontFamily, with optional moveCursor,
+  moveSideways (true when used; else ←/→ switch tabs), activateCursor, textKey and a
+  closeRequested signal. The fork's first login runs the setup; an installed Mac runs it once
+  after an update adds the panel. KaiT2en's GNOME apps become tabs and their GTK launchers go (the
+  binaries stay where they are the daemons: t2-fancontrol-gtk, t2-smc-control, t2-force-click).
+  No owner's name in plugin ids or code: it all goes to the fork. The dotfiles keep only where
+  the panel sits.
 - **Software goes in packages, never in the dotfiles' scripts** (the owner, 2026-11-16): sleep
   hooks, udev rules, units, watchers, uwsm env snippets ship with a package (`/usr/lib/...`,
   `/usr/share/uwsm/env-hyprland.d/`); the dotfiles only set options (e.g. `/etc/t2-charge-limit.conf`)
@@ -445,7 +454,8 @@ it back, so re-check with `git log -- <path>` before starting.
      `/dev/uinput`, the bar's light and the actuator's `play`. A new group reaches the user
      session only after a reboot: the user's systemd manager keeps its groups across logins while
      anything else runs. Fonts patched to Arch's (`adwaita-fonts`). The Touch ID D-Bus name is
-     `io.github.josemiguelo.T2TouchId` on both sides (`t2-touchid` 3).
+     `t2.TouchId` (path `/t2/TouchId`) on both sides since `t2-touchid` -6 / `t2-touchbar` -3
+     (`io.github.josemiguelo.T2TouchId` from `t2-touchid` 3; no owner's name in code).
    - **Live testing** (how it was proven): `modprobe -r hid_apple && modprobe t2hid <options>` with a
      `systemd-run --on-active=` revert armed; then `t2touchbar_kbd`, `t2bdrm`, the global enable,
      `systemctl start t2-touchbar-attach`, the user service. A revert has to stop the user service
@@ -577,10 +587,9 @@ it back, so re-check with `git log -- <path>` before starting.
    showed the Mac's FEF3 advertisements on air and the phone's FE2C beacons, no connection. The
    test needs the phone's Wi-Fi on and off any network. The fork's `fix-t2.sh` installs both and adds the ufw rules (same
    comments as the dotfiles' check); the receiver stays off until the owner turns it on.
-   - **Omarchy integration** (dotfiles, not packaged): a bar widget and panel,
-     `josemiguelo.airshare` (visibility switch, send files / clipboard / last screenshot through
+   - **Omarchy integration**: the T2 panel's AirShare tab (visibility switch, send files / clipboard / last screenshot through
      AirShare's send window, received files from the receiver's journal, trusted devices), and
-     Share-menu entries beside LocalSend's (`t2-airshare-menu`). A native device list, progress and
+     Share-menu entries beside LocalSend's (both in the package since 2026-11-16). A native device list, progress and
      inline accept need AirShare to expose them (a `list --json`, `send --json`, receive events).
    - **Driver side already shipped**: everything both need is in `t2-wireless-dkms`' 0001-0024
      (0005 AP handshake to the host, 0006-0011 AWDL, 0012-0013 LE scan, 0014 ND offload). This Mac
@@ -622,8 +631,8 @@ it back, so re-check with `git log -- <path>` before starting.
      in its first 5 s are followed, not learned (the dotfiles' login listener restoring a level).
      The dotfiles' gmux resends after wake and screen-on write the kernel's own value back, so
      they don't count as manual.
-   - **Omarchy side** (dotfiles): the user service enabled (`t2-truetone-daemon`) and a bar widget,
-     "Ambient Light" (`josemiguelo.truetone`): the service switch, True Tone with its strength,
+   - **Omarchy side**: the user service enabled (dotfiles: `t2-truetone-daemon`) and the T2
+     panel's Ambient Light tab (in the package): the service switch, True Tone with its strength,
      automatic brightness, the live reading, forgetting the learned curve. Its evening mode is
      left off (night light does it). The fork's `fix-t2.sh` installs it and enables the user
      service globally (`aaa3b48d9`); not in an ISO yet.
@@ -674,14 +683,11 @@ it back, so re-check with `git log -- <path>` before starting.
      Moonlight pairing stuck ("a pairing session with this uniqueid already exists") while it listed
      the Mac twice: delete the entries, pair once. Web UI: `https://127.0.0.1:47990` (it listens on
      IPv4 only; `localhost` may resolve to ::1).
-   - **The Omarchy bar plugin** `josemiguelo.sidecar` (`t2-sidecar` 0.2, 2026-11-16, in
-     `/usr/share/t2-sidecar/omarchy-plugin`): the switch, Extended/Mirror, the size (1280×800,
+   - **The T2 panel's Sidecar tab** (`t2-sidecar` 0.2 as a plugin, a tab since 0.4): the switch, Extended/Mirror, the size (1280×800,
      1920×1080, 2560×1600), "Streaming"/"Waiting for Moonlight" (Sunshine's `CLIENT
      CONNECTED`/`DISCONNECTED` in the unit's journal since it started), Sunshine's PIN page.
-     Omarchy loads third-party plugins only from `~/.config/omarchy/plugins` (the scan follows a
-     symlinked folder): `t2-sidecar setup-plugin` links it there and `omarchy-bar put`s it before
-     Bluetooth; the fork's first login runs it (`install/user/first-run/t2-sidecar.sh`). The shell's
-     "Module path … is outside of the config folder" warning shows for every third-party plugin.
+     The shell's "Module path … is outside of the config folder" warning shows for every
+     third-party plugin.
      `t2-sidecar start` resumes the mode used last.
    - The fork installs both and opens ufw from 10/8, 172.16/12, 192.168/16 (Omarchy's ports from
      `omarchy-install-service-sunshine`: TCP 47984 47989 48010, UDP 5353 47998-48000 48002 48010,

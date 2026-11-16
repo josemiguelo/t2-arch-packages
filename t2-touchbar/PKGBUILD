@@ -25,13 +25,13 @@
 # Changes from upstream (KaiT2en's trademark terms don't allow its name in
 # redistributions): binary, units, udev rule, group, /etc/t2-touchbar,
 # ~/.config/t2-touchbar, T2_TOUCHBAR_* variables and log prefixes renamed; the
-# Touch ID D-Bus name is io.github.josemiguelo.T2TouchId (t2-touchid >= 3 owns
-# it). Font paths are Arch's (adwaita-fonts first).
+# Touch ID D-Bus name is t2.TouchId, path /t2/TouchId (t2-touchid >= 0.1.0.r14-6
+# owns it; before, io.github.josemiguelo.T2TouchId). Font paths are Arch's (adwaita-fonts first).
 
 pkgname=t2-touchbar
 _ver=0.1.0
 pkgver=0.1.0.r39.c9e24f7
-pkgrel=2
+pkgrel=3
 pkgdesc="Touch Bar daemon for Apple T2 MacBooks (KaiT2en's, from tiny-dfr)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -39,6 +39,9 @@ license=('GPL-3.0-or-later' 'MIT')
 depends=('libinput' 'systemd-libs' 'adwaita-fonts' 't2-touchbar-dkms')
 optdepends=('t2-trackpad-actuator-dkms: haptic feedback on key presses'
             't2-touchid: the touch-to-unlock prompt while Touch ID waits')
+# The D-Bus name changed with t2-touchid 0.1.0.r14-6: an older daemon signals
+# on the old one, and the prompt would never show.
+conflicts=('t2-touchid<0.1.0.r14.c9e24f7-6')
 makedepends=('git' 'cargo')
 backup=('etc/t2-touchbar/touchbar.toml')
 options=('!debug')
@@ -59,8 +62,8 @@ prepare() {
   cd kait2en/apps/t2-touchbar
   sed -i 's/^name = "kait2en-touchbar"$/name = "t2-touchbar"/' Cargo.toml Cargo.lock
   sed -i \
-    -e 's|org\.kait2en\.TouchId|io.github.josemiguelo.T2TouchId|g' \
-    -e 's|/org/kait2en/TouchId|/io/github/josemiguelo/T2TouchId|g' \
+    -e 's|org\.kait2en\.TouchId|t2.TouchId|g' \
+    -e 's|/org/kait2en/TouchId|/t2/TouchId|g' \
     -e 's|/etc/kait2en/touchbar\.toml|/etc/t2-touchbar/touchbar.toml|g' \
     -e 's|KAIT2EN_TOUCHBAR_|T2_TOUCHBAR_|g' \
     -e 's|kait2en-keys-|t2-touchbar-keys-|g' \

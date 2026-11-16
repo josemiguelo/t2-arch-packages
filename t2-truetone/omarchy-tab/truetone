@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The True Tone panel's helper (josemiguelo.truetone): t2-truetone's state and
+"""The T2 panel's Ambient Light tab helper: t2-truetone's state and
 settings for the Omarchy bar, where the panel has no TOML of its own.
 
   status                         JSON: installed, running, enabled, settings, live state

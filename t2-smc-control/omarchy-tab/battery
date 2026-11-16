@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""The T2 panel's Battery tab helper: the battery, power draw and clock as the T2
+SMC reports them (t2smc's hwmon and rtc, world-readable), as the session user.
+
+  status       JSON: battery, adapter, charge limit, power, clock offset
+  sync-clock   the SMC's clock to the system time (pkexec hwclock: asks for the
+               admin password)
+
+The charge limit is read-only here: the setup sets it (/etc/t2-charge-limit.conf,
+t2-charge-limit.service).
+"""
+
+import glob
+import json
+import os
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+BAT = Path("/sys/class/power_supply/BAT0")
+ADP = Path("/sys/class/power_supply/ADP1")
+
+
+def read(path, default=None):
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return default
+
+
+def num(path, scale=1.0):
+    v = read(path)
+    try:
+        return int(v) if scale == 1.0 else int(v) / scale
+    except (TypeError, ValueError):
+        return None
+
+
+def hwmon():
+    for d in glob.glob("/sys/class/hwmon/hwmon*"):
+        if read(f"{d}/name") in ("t2smc", "macsmc"):
+            return Path(d)
+    return None
+
+
+def labelled(hw, kind):
+    """{SMC key: path of its _input} for temp*/power* attributes."""
+    out = {}
+    for label in hw.glob(f"{kind}*_label"):
+        key = read(label)
+        if key:
+            out[key] = label.with_name(label.name.replace("_label", "_input"))
+    return out
+
+
+
+def rtc_offset():
+    """Seconds the SMC's clock is off the system's, and its rtc dir."""
+    for d in glob.glob("/sys/class/rtc/rtc*"):
+        if (read(f"{d}/name") or "").startswith("t2smc"):
+            date, tm = read(f"{d}/date"), read(f"{d}/time")
+            try:
+                rtc = datetime.strptime(f"{date} {tm}", "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                return None, d
+            return round(rtc.timestamp() - time.time()), d
+    return None, None
+
+
+def status():
+    hw = hwmon()
+    if hw is None:
+        print(json.dumps({"installed": False}))
+        return
+    power = labelled(hw, "power")
+    now_uah = num(hw / "smc_battery_charge_now_uah")
+    full_uah = num(hw / "smc_battery_charge_full_uah")
+    current = num(hw / "smc_battery_current_ua")  # negative while discharging
+    limit = num(hw / "battery_charge_limit")
+    hours = None
+    if now_uah and current and abs(current) > 50000:
+        if current < 0:
+            hours = now_uah / -current
+        elif full_uah and limit:
+            hours = max(0.0, (full_uah * min(limit, 100) / 100 - now_uah) / current)
+    design = num(BAT / "charge_full_design")
+    offset, _ = rtc_offset()
+
+
+    def watts(key):
+        v = num(power[key], 1e6) if key in power else None
+        return round(v, 1) if v is not None else None
+
+    print(json.dumps({
+        "installed": True,
+        "battery": {
+            "percent": num(hw / "smc_battery_capacity_percent") or num(BAT / "capacity"),
+            "status": read(BAT / "status", ""),
+            "watts": round((num(hw / "smc_battery_power_uw") or 0) / 1e6, 1),
+            "hours": round(hours, 2) if hours is not None else None,
+            "cycles": num(hw / "smc_battery_cycle_count"),
+            "health": round(full_uah / design * 100) if full_uah and design else None,
+        },
+        "adapter": {
+            "online": read(ADP / "online") == "1",
+            "watts": round((num(hw / "smc_adapter_power_uw") or 0) / 1e6, 1),
+        },
+        "limit": {"value": limit, "suspended": read(hw / "battery_charge_limit_suspended") == "1"},
+        "power": {"system": watts("PSTR"), "cpu": watts("PCPT")},
+        "clockOffset": offset,
+    }))
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "status":
+        status()
+    elif cmd == "sync-clock":
+        _, d = rtc_offset()
+        if not d:
+            sys.exit("no T2 SMC clock")
+        dev = f"/dev/{os.path.basename(d)}"
+        sys.exit(subprocess.run(["pkexec", "/usr/sbin/hwclock", "--rtc", dev, "--utc", "--systohc"]).returncode)
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

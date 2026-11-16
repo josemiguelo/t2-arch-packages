@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Sidecar panel's helper (josemiguelo.sidecar): t2-sidecar's state and
+"""The T2 panel's Sidecar tab helper: t2-sidecar's state and
 actions for the Omarchy bar.
 
   status             JSON: installed, running, mode, size, encoder, t2Ave, client

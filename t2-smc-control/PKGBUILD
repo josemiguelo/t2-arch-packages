@@ -20,12 +20,12 @@
 pkgname=t2-smc-control
 _ver=0.1.0
 pkgver=0.1.0.r34.27fd5c9
-pkgrel=2
+pkgrel=3
 pkgdesc="SMC control app and battery gauging daemon for Apple T2 Macs (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')
-depends=('gtk4' 'libadwaita' 'polkit' 't2smc-dkms')
+depends=('gtk4' 'libadwaita' 'polkit' 't2smc-dkms' 'python' 'util-linux' 't2-omarchy-plugins')
 makedepends=('git' 'cargo')
 options=('!debug')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
@@ -73,9 +73,14 @@ package() {
   cd kait2en
   local app=apps/t2-smc-control
   install -Dm755 "$app/target/release/t2-smc-control" "$pkgdir/usr/bin/t2-smc-control"
-  install -Dm644 "$app/org.t2smccontrol.gtk.desktop" "$pkgdir/usr/share/applications/org.t2smccontrol.gtk.desktop"
-  install -Dm644 "$app/assets/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg" \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg"
+  # No GTK window: its launcher entry and icon aren't installed; the binary
+  # stays for t2-smc-gaugingd (`--daemon`). The Battery tab of the T2 panel on
+  # Omarchy's bar (ours, below; the panel is t2-omarchy-plugins') shows the
+  # battery, power, charge limit and syncs the SMC clock; the fans are
+  # t2-fan-control's tab.
+  local tab="$startdir/omarchy-tab" dest="$pkgdir/usr/share/t2-omarchy/tabs/battery"
+  install -Dm644 "$tab/Tab.qml" "$tab/tab.json" -t "$dest/"
+  install -Dm755 "$tab/battery" "$dest/battery"
   install -Dm644 "$app/systemd/t2-smc-gaugingd.service" "$pkgdir/usr/lib/systemd/system/t2-smc-gaugingd.service"
   # Ours: the charge limit written at every boot, from /etc/t2-charge-limit.conf
   # (LIMIT=1..100; the SMC stops charging 5 points below it). Off until the

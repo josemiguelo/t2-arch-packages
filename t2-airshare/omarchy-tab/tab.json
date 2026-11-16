@@ -1,0 +1,6 @@
+{
+  "title": "AirShare",
+  "icon": "󰥦",
+  "order": 30,
+  "indicator": {"unit": "t2-airshare.service", "text": "AirShare visible"}
+}

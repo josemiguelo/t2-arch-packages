@@ -1,0 +1,6 @@
+{
+  "title": "Sidecar",
+  "icon": "󰍺",
+  "order": 40,
+  "indicator": {"unit": "t2-sidecar.service", "text": "Sidecar on"}
+}

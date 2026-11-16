@@ -36,7 +36,7 @@
 pkgname=t2-airshare
 _ver=0.1.0
 pkgver=0.1.0.r8.c9e24f7
-pkgrel=3
+pkgrel=4
 pkgdesc="Quick Share with Android and AirDrop with Apple devices for Apple T2 Macs (KaiT2en's t2-airshare)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -103,11 +103,12 @@ package() {
   install -Dm644 "$app/integration/t2-airshare-send.py" "$pkgdir/usr/share/nautilus-python/extensions/t2-airshare-send.py"
   install -Dm644 "$app/LICENSE" "$app/THIRD-PARTY-NOTICES.md" "$app/proto/LICENSE-Apache-2.0" \
     "$app/proto/LICENSE-Chromium" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
-  # The Omarchy bar plugin and Share-menu entries (ours), kept in their own
-  # files here: t2-omarchy-setup links the plugin into ~/.config/omarchy/plugins
-  # and writes the entries into the menu's extensions.
-  local plugin="$startdir/omarchy-plugin" dest="$pkgdir/usr/share/t2-omarchy/plugins/josemiguelo.airshare"
-  install -Dm644 "$plugin/manifest.json" "$plugin/Panel.qml" -t "$dest/"
-  install -Dm755 "$plugin/airshare" "$dest/airshare"
+  # The AirShare tab of the T2 panel on Omarchy's bar and the Share-menu
+  # entries (ours), kept in their own files here: the hub is
+  # t2-omarchy-plugins', whose t2-omarchy-setup writes the entries into the
+  # menu's extensions.
+  local tab="$startdir/omarchy-tab" dest="$pkgdir/usr/share/t2-omarchy/tabs/airshare"
+  install -Dm644 "$tab/Tab.qml" "$tab/tab.json" -t "$dest/"
+  install -Dm755 "$tab/airshare" "$dest/airshare"
   install -Dm644 "$startdir/omarchy-menu.jsonc" "$pkgdir/usr/share/t2-omarchy/menu/t2-airshare.jsonc"
 }

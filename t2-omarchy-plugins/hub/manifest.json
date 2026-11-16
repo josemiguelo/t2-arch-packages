@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "t2.panel",
+  "name": "T2",
+  "version": "1.0.0",
+  "author": "t2-arch-packages",
+  "license": "GPL-3.0-or-later",
+  "description": "The T2 Mac in one panel: a tab for each T2 feature installed (Mac: battery and fans, Ambient Light, AirShare, Sidecar, ...)",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "T2",
+    "description": "Battery and fans, Ambient Light, AirShare, Sidecar and the other T2 features, as tabs",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

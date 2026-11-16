@@ -12,16 +12,27 @@
 #
 # The KaiT2en wordmark is removed from the GUI header (no-wordmark.patch):
 # KaiT2en's trademark terms do not allow its name or logo in redistributions.
+#
+# The daemon's socket (/run/t2-fancontrol/daemon.sock, 0666) checked no one:
+# any local process could change the fans or the daemon's own enablement,
+# carried out as root. peer-check.patch keeps reading open and takes changes
+# only from root or the active local session's user (SO_PEERCRED + logind,
+# as t2-force-click does).
+#
+# No GTK window: its launcher entry and icon aren't installed. The fans are the
+# Fans tab of the T2 panel on Omarchy's bar (ours, below; the panel is
+# t2-omarchy-plugins'), which talks to this daemon; the binary stays, since it
+# is the daemon (`--daemon`).
 
 pkgname=t2-fan-control
 _ver=0.1.0
 pkgver=0.1.0.r27.8c7f725
-pkgrel=1
+pkgrel=2
 pkgdesc="Fan control daemon and GTK app for Apple T2 Macs (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')
-depends=('gtk4' 'libadwaita' 't2smc-dkms')
+depends=('gtk4' 'libadwaita' 't2smc-dkms' 'python' 't2-omarchy-plugins')
 makedepends=('git' 'cargo')
 # No conflicts=(t2fanrd): both can coexist on a dual-kernel system, since the
 # unit only starts where t2smc is loaded. Drop t2fanrd once linux-t2 is gone.
@@ -31,8 +42,10 @@ options=('!debug')
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
 _commit=8c7f72585d1aa3df8c115721cbfe3d35673481ff
 source=("kait2en::git+${_repo}#commit=${_commit}"
-        'no-wordmark.patch')
+        'no-wordmark.patch'
+        'peer-check.patch')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP')
 
 pkgver() {
@@ -45,6 +58,7 @@ pkgver() {
 prepare() {
   cd kait2en
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/no-wordmark.patch"
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/peer-check.patch"
   cd apps/t2-fan-control
   sed -i 's|/usr/local/bin/|/usr/bin/|g' org.t2fancontrol.gtk.desktop systemd/t2-fancontrol.service
   grep -rq '/usr/local' src org.t2fancontrol.gtk.desktop systemd &&
@@ -65,15 +79,12 @@ package() {
   cd kait2en
   local app=apps/t2-fan-control
   install -Dm755 "$app/target/release/t2-fancontrol-gtk" "$pkgdir/usr/bin/t2-fancontrol-gtk"
-  install -Dm644 "$app/org.t2fancontrol.gtk.desktop" "$pkgdir/usr/share/applications/org.t2fancontrol.gtk.desktop"
-  install -Dm644 "$app/assets/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg" \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg"
   install -Dm644 "$app/systemd/t2-fancontrol.service" "$pkgdir/usr/lib/systemd/system/t2-fancontrol.service"
   # Default config. Upstream's built-in system chill target (45 C, the average
   # of system + GPU sensors) pins a MacBookPro16,1 at 100% permanently: with a
   # dGPU that average sits at 55-60 C even with fans at max. 80 C keeps the
   # forced-cooling safety net and lets the curve run (tested 2026-11-08 on
-  # MacBookPro16,1: ~2.6k rpm at ~70 C). The GUI saves its changes here, and
+  # MacBookPro16,1: ~2.6k rpm at ~70 C). The daemon saves changes here, and
   # backup= keeps them across upgrades.
   install -Dm644 /dev/stdin "$pkgdir/etc/t2-fancontrol/config.txt" <<'EOF'
 config_version=2
@@ -86,6 +97,10 @@ any_sensor_temp_c=100
 curve_sensor_key=
 custom_curve=0:10,70:25,95:65
 EOF
+
+  local tab="$startdir/omarchy-tab" dest="$pkgdir/usr/share/t2-omarchy/tabs/fans"
+  install -Dm644 "$tab/Tab.qml" "$tab/tab.json" -t "$dest/"
+  install -Dm755 "$tab/fans" "$dest/fans"
 
   install -Dm644 "$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"

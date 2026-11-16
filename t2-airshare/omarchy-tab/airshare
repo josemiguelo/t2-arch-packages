@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The AirShare panel's helper (josemiguelo.airshare): T2 AirShare's state and
+"""The T2 panel's AirShare tab helper: T2 AirShare's state and
 actions for the Omarchy bar, where the panel has no D-Bus or TOML of its own.
 
   status                 JSON: installed, visible, downloadDir, trusted, recent
@@ -29,7 +29,7 @@ from pathlib import Path
 UNIT = "t2-airshare.service"
 APP = "t2-airshare"
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "t2-airshare" / "config.toml"
-RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "josemiguelo.airshare"
+RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "t2-airshare-tab"
 RECENT = 8
 
 

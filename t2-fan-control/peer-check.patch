@@ -1,0 +1,107 @@
+diff -ruN a/apps/t2-fan-control/Cargo.lock b/apps/t2-fan-control/Cargo.lock
+--- a/apps/t2-fan-control/Cargo.lock	2026-11-14 07:24:01.000000000 -0500
++++ b/apps/t2-fan-control/Cargo.lock	2026-11-16 17:33:46.655436509 -0500
+@@ -645,6 +645,7 @@
+  "glob",
+  "gtk4",
+  "libadwaita",
++ "libc",
+  "signal-hook",
+  "thiserror",
+ ]
+diff -ruN a/apps/t2-fan-control/Cargo.toml b/apps/t2-fan-control/Cargo.toml
+--- a/apps/t2-fan-control/Cargo.toml	2026-11-14 07:24:01.000000000 -0500
++++ b/apps/t2-fan-control/Cargo.toml	2026-11-16 17:33:46.655248492 -0500
+@@ -11,6 +11,7 @@
+ [dependencies]
+ glib = "0.20"
+ glob = "0.3"
++libc = "0.2"
+ gtk4 = { version = "0.9", features = ["v4_12"] }
+ signal-hook = "0.3"
+ thiserror = "2"
+diff -ruN a/apps/t2-fan-control/src/ipc.rs b/apps/t2-fan-control/src/ipc.rs
+--- a/apps/t2-fan-control/src/ipc.rs	2026-11-14 07:24:01.000000000 -0500
++++ b/apps/t2-fan-control/src/ipc.rs	2026-11-16 17:33:46.655644933 -0500
+@@ -1,8 +1,9 @@
+ use std::{
+     fs,
+     io::{BufRead, BufReader, Write},
+-    os::unix::{fs::PermissionsExt, net::{UnixListener, UnixStream}},
++    os::{fd::AsRawFd, unix::{fs::PermissionsExt, net::{UnixListener, UnixStream}}},
+     path::{Path, PathBuf},
++    process::Command,
+ };
+ 
+ use crate::{
+@@ -531,6 +532,57 @@
+     if value { "1" } else { "0" }
+ }
+ 
++/// Whether a request may come from this connection. Reading the state is open
++/// to every local user (the socket is 0666); changing anything, which the
++/// daemon carries out as root (fan speeds, its own unit's enablement), only
++/// from root or the active local session's user, as t2-force-click does.
++/// (t2-arch-packages: the upstream daemon checked no one.)
++pub fn may_change(stream: &UnixStream) -> bool {
++    match peer_uid(stream) {
++        Some(0) => true,
++        Some(uid) => active_session_uids().contains(&uid),
++        None => false,
++    }
++}
++
++fn peer_uid(stream: &UnixStream) -> Option<u32> {
++    let mut credentials = libc::ucred { pid: 0, uid: 0, gid: 0 };
++    let mut length = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
++    // SAFETY: `credentials` and `length` point to initialized writable
++    // storage of exactly the type and length SO_PEERCRED asks for.
++    let result = unsafe {
++        libc::getsockopt(
++            stream.as_raw_fd(),
++            libc::SOL_SOCKET,
++            libc::SO_PEERCRED,
++            (&mut credentials as *mut libc::ucred).cast(),
++            &mut length,
++        )
++    };
++    (result == 0 && length == std::mem::size_of::<libc::ucred>() as libc::socklen_t).then_some(credentials.uid)
++}
++
++/// The uids of logind's active sessions.
++fn active_session_uids() -> Vec<u32> {
++    let value = |session: &str, property: &str| {
++        Command::new("loginctl")
++            .args(["show-session", session, "--property", property, "--value"])
++            .output()
++            .ok()
++            .filter(|output| output.status.success())
++            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
++    };
++    let Ok(sessions) = Command::new("loginctl").args(["list-sessions", "--no-legend", "--no-pager"]).output() else {
++        return Vec::new();
++    };
++    String::from_utf8_lossy(&sessions.stdout)
++        .lines()
++        .filter_map(|line| line.split_whitespace().next().map(str::to_owned))
++        .filter(|id| value(id, "Active").as_deref() == Some("yes"))
++        .filter_map(|id| value(&id, "User")?.parse().ok())
++        .collect()
++}
++
+ fn protocol_error(message: String) -> FanControlError {
+     FanControlError::Protocol(message)
+ }
+diff -ruN a/apps/t2-fan-control/src/main.rs b/apps/t2-fan-control/src/main.rs
+--- a/apps/t2-fan-control/src/main.rs	2026-11-14 07:24:01.000000000 -0500
++++ b/apps/t2-fan-control/src/main.rs	2026-11-16 17:33:46.656288663 -0500
+@@ -411,6 +411,9 @@
+             Ok(Some(Ok((stream, _addr)))) => {
+                 let request = ipc::read_request(&stream);
+                 match request {
++                    Ok(request) if !matches!(request, Request::GetState) && !ipc::may_change(&stream) => {
++                        let _ = ipc::write_error(&stream, "changes are taken only from root or the active local user");
++                    }
+                     Ok(request) => match runtime.handle_request(request) {
+                         Ok(state) => {
+                             let _ = ipc::write_response(&stream, &state);

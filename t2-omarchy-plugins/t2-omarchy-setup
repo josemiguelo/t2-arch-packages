@@ -6,15 +6,15 @@
 #   t2-omarchy-setup          link, place on the bar, write the menu entries
 #   t2-omarchy-setup --check  exit 0 when everything is in place, 1 when not
 #
-# - Plugins: every /usr/share/t2-omarchy/plugins/<id> (shipped by t2-truetone,
-#   t2-airshare, t2-sidecar, ...) is linked as ~/.config/omarchy/plugins/<id>,
+# - Plugins: every /usr/share/t2-omarchy/plugins/<id> (the T2 panel,
+#   t2.panel, whose tabs the T2 packages ship under
+#   /usr/share/t2-omarchy/tabs/) is linked as ~/.config/omarchy/plugins/<id>,
 #   so package updates reach it; a folder of the same name (a copy from before)
 #   is moved to ~/.local/state/t2-omarchy/replaced. Links to a removed
 #   package's plugin are taken away.
-# - Bar: each is put before Bluetooth, in the order of
-#   /usr/share/t2-omarchy/order (then any other), through `omarchy-bar put`,
-#   which leaves a widget already on the bar where it is. Needs the shell
-#   running: Omarchy's first login runs this (the fork's
+# - Bar: the panel is put before Bluetooth through `omarchy-bar put`, which
+#   leaves a widget already on the bar where it is. Needs the shell running:
+#   Omarchy's first login runs this (the fork's
 #   install/user/first-run/t2-omarchy.sh).
 # - Menu: every /usr/share/t2-omarchy/menu/<name>.jsonc is kept as a marked
 #   block in ~/.config/omarchy/extensions/omarchy-menu.jsonc; a block from a
@@ -34,12 +34,6 @@ ids=()
 for dir in "$SHARE"/plugins/*/; do
   [[ -f $dir/manifest.json ]] && ids+=("$(basename "$dir")")
 done
-# The order file first, then any plugin it doesn't name.
-ordered=()
-while read -r id; do
-  [[ -n $id && $id != \#* && -f $SHARE/plugins/$id/manifest.json ]] && ordered+=("$id")
-done < <(cat "$SHARE/order" 2>/dev/null)
-for id in "${ids[@]}"; do [[ " ${ordered[*]} " == *" $id "* ]] || ordered+=("$id"); done
 
 # The menu blocks, by python: the menu file is JSONC, edited as lines.
 menu() { # check|write
@@ -109,16 +103,20 @@ done
 for link in "$PLUGINS"/*; do
   [[ -L $link ]] || continue
   target=$(readlink "$link")
-  [[ $target == "$SHARE"/plugins/* || $target == /usr/share/t2-sidecar/omarchy-plugin ]] || continue
-  [[ -e $link/manifest.json && $target == "$SHARE"/* ]] || { rm -f "$link"; echo "t2-omarchy-setup: removed $link"; }
+  [[ $target == "$SHARE"/plugins/* ]] || continue
+  if [[ ! -e $link/manifest.json ]]; then
+    omarchy-plugin-disable "${link##*/}" >/dev/null 2>&1 || true
+    rm -f "$link"
+    echo "t2-omarchy-setup: removed ${link##*/} (its package no longer ships it)"
+  fi
 done
 
 menu write
 
 omarchy-shell -q shell rescanPlugins || true
-for id in "${ordered[@]}"; do
+for id in "${ids[@]}"; do
   omarchy-bar put "$id" --before omarchy.bluetooth >/dev/null 2>&1 ||
     omarchy-bar put "$id" --section right >/dev/null 2>&1 ||
     echo "t2-omarchy-setup: couldn't put $id on the bar (is the shell running?)" >&2
 done
-echo "t2-omarchy-setup: ${ordered[*]:-no plugins} in place"
+echo "t2-omarchy-setup: ${ids[*]:-no plugins} in place"

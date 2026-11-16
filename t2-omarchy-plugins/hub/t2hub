@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""The T2 panel's helper (t2.panel): which tabs the installed T2 packages
+ship, which of them are active right now (for the bar icon's dot), and the tab
+shown last.
+
+  status          JSON: tabs [{id, title, icon, dir}], active [{id, text}], last
+  remember <id>   the tab to open with next time
+
+Each package puts a tab under /usr/share/t2-omarchy/tabs/<id>/: Tab.qml and
+tab.json ({"title", "icon", "order", "indicator": {"unit", "text"}}), where an
+indicator's user unit running lights the dot (AirShare visible, Sidecar
+streaming).
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+TABS = Path("/usr/share/t2-omarchy/tabs")
+STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "t2-omarchy" / "tab"
+# The shell caches compiled QML by path for its lifetime, so each version of a
+# tab is loaded from a path of its own: a link <id>-<mtime> to the tab's folder.
+RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "t2-omarchy" / "tabs"
+
+
+def tabs():
+    out = []
+    for f in sorted(TABS.glob("*/tab.json")):
+        try:
+            meta = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if not (f.parent / "Tab.qml").exists():
+            continue
+        out.append({"id": f.parent.name, "dir": versioned(f.parent), **meta})
+    return sorted(out, key=lambda t: (t.get("order", 100), t["id"]))
+
+
+def versioned(folder):
+    """A path for this version of the tab: RUNTIME/<id>-<mtime> -> folder."""
+    stamp = int((folder / "Tab.qml").stat().st_mtime)
+    link = RUNTIME / f"{folder.name}-{stamp}"
+    try:
+        RUNTIME.mkdir(parents=True, exist_ok=True)
+        for old in RUNTIME.glob(f"{folder.name}-*"):
+            if old != link and old.is_symlink():
+                old.unlink()
+        if not link.is_symlink():
+            link.symlink_to(folder)
+        return str(link)
+    except OSError:
+        return str(folder)
+
+
+def active(ts):
+    units = {t["id"]: t["indicator"] for t in ts if isinstance(t.get("indicator"), dict)}
+    if not units:
+        return []
+    names = [u["unit"] for u in units.values()]
+    states = subprocess.run(["systemctl", "--user", "is-active", *names], text=True, capture_output=True).stdout.split()
+    return [{"id": tid, "text": u["text"]} for (tid, u), st in zip(units.items(), states) if st == "active"]
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "status":
+        ts = tabs()
+        try:
+            last = STATE.read_text().strip()
+        except OSError:
+            last = ""
+        print(json.dumps({"tabs": [{k: t.get(k) for k in ("id", "title", "icon", "dir")} for t in ts],
+                          "active": active(ts), "last": last}))
+    elif cmd == "remember" and len(argv) == 2:
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(argv[1] + "\n")
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

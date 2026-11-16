@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""The T2 panel's Fans tab helper: t2-fan-control's daemon (through its socket,
+/run/t2-fancontrol/daemon.sock) and the T2 SMC's temperatures (t2smc's hwmon,
+world-readable), as the session user.
+
+  status            JSON: fans (curve on/off, target, percent, each fan), temps
+  auto on|off       the custom curve drives the fans, or the SMC's own control
+  target <30-100>   the system temperature the curve cools to (keeps the curve)
+
+The daemon takes changes from root or the active session's user only.
+"""
+
+import glob
+import json
+import socket
+import sys
+from pathlib import Path
+
+FAN_SOCKET = "/run/t2-fancontrol/daemon.sock"
+
+
+def read(path, default=None):
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return default
+
+
+def smc_temps():
+    """{SMC key: °C} from t2smc's hwmon."""
+    for d in glob.glob("/sys/class/hwmon/hwmon*"):
+        if read(f"{d}/name") not in ("t2smc", "macsmc"):
+            continue
+        out = {}
+        for label in Path(d).glob("temp*_label"):
+            value = read(label.with_name(label.name.replace("_label", "_input")))
+            if value and value.lstrip("-").isdigit():
+                out[read(label)] = round(int(value) / 1000)
+        return out
+    return {}
+
+
+def request(line):
+    """One request to the daemon: {key: value}, or None."""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(3)
+            s.connect(FAN_SOCKET)
+            s.sendall((line + "\n").encode())
+            data = b""
+            while not data.endswith(b"\n\n"):
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+    except OSError:
+        return None
+    out = {}
+    for row in data.decode(errors="replace").split("\n"):
+        if "=" in row:
+            k, v = row.split("=", 1)
+            out[k] = v.replace("\\n", "\n").replace("\\=", "=").replace("\\\\", "\\")
+    return out
+
+
+def fans():
+    st = request("GET_STATE")
+    if not st or st.get("ok") != "1":
+        return {"available": False, "error": (st or {}).get("error", "")}
+    count = int(st.get("fan_count", "0") or 0)
+    return {
+        "available": True,
+        "auto": st.get("control_active") == "1",
+        "target": int(st.get("system_temp_target_c", "80") or 80),
+        "percent": int(st.get("target_percent", "0") or 0),
+        "cpu": int(st.get("cpu_temp_c") or 0) or None,
+        "gpu": int(st.get("gpu_temp_c") or 0) or None,
+        "fans": [
+            {
+                "name": f"Fan {i + 1}",
+                "rpm": int(st.get(f"fan.{i}.current_speed", "0") or 0),
+                "min": int(st.get(f"fan.{i}.min_speed", "0") or 0),
+                "max": int(st.get(f"fan.{i}.max_speed", "0") or 0),
+            }
+            for i in range(count)
+        ],
+    }
+
+
+def done(reply):
+    sys.exit(0 if reply and reply.get("ok") == "1" else (reply or {}).get("error", "no fan daemon"))
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "status":
+        t = smc_temps()
+        print(json.dumps({"fans": fans(), "temps": {"ambient": t.get("TA0V"), "battery": t.get("TB0T")}}))
+    elif cmd == "auto" and len(argv) == 2 and argv[1] in ("on", "off"):
+        done(request(f"SET_ACTIVE {1 if argv[1] == 'on' else 0}"))
+    elif cmd == "target" and len(argv) == 2 and argv[1].isdigit():
+        curve = (request("GET_STATE") or {}).get("custom_curve")
+        if not curve:
+            sys.exit("no fan daemon")
+        done(request(f"SET_CURVE {max(30, min(100, int(argv[1])))} {curve}"))
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

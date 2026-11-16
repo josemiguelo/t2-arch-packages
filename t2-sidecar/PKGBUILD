@@ -13,13 +13,12 @@
 # firewall for Moonlight is the Omarchy fork's installer's. Off until
 # `t2-sidecar on`.
 #
-# The Omarchy bar plugin josemiguelo.sidecar (/usr/share/t2-omarchy/plugins/):
+# The Sidecar tab of the T2 panel on Omarchy's bar (/usr/share/t2-omarchy/tabs/):
 # the switch, extended or mirrored, the size, whether a device is watching,
-# Sunshine's PIN page. t2-omarchy-setup (t2-omarchy-plugins) links it into
-# ~/.config/omarchy/plugins and places it; the fork's first login runs it.
+# Sunshine's PIN page. The hub and its setup are t2-omarchy-plugins'.
 
 pkgname=t2-sidecar
-pkgver=0.3
+pkgver=0.4
 pkgrel=1
 pkgdesc="Second screen for Apple T2 Macs on Hyprland: Sunshine on a virtual monitor, encoded by the T2"
 arch=('any')
@@ -34,7 +33,7 @@ package() {
   install -Dm755 t2-sidecar-run "$pkgdir/usr/lib/t2-sidecar/t2-sidecar-run"
   install -Dm644 t2-sidecar.service "$pkgdir/usr/lib/systemd/user/t2-sidecar.service"
   # The plugin keeps its own folder here (makepkg's sources can't be in one).
-  local plugin="$startdir/omarchy-plugin" dest="$pkgdir/usr/share/t2-omarchy/plugins/josemiguelo.sidecar"
-  install -Dm644 "$plugin/manifest.json" "$plugin/Panel.qml" -t "$dest/"
-  install -Dm755 "$plugin/sidecar" "$dest/sidecar"
+  local tab="$startdir/omarchy-tab" dest="$pkgdir/usr/share/t2-omarchy/tabs/sidecar"
+  install -Dm644 "$tab/Tab.qml" "$tab/tab.json" -t "$dest/"
+  install -Dm755 "$tab/sidecar" "$dest/sidecar"
 }

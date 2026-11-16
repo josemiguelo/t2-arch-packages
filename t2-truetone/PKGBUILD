@@ -35,7 +35,7 @@
 pkgname=t2-truetone
 _ver=0.1.0
 pkgver=0.1.0.r2.c9e24f7
-pkgrel=3
+pkgrel=4
 pkgdesc="True Tone and automatic brightness from the ambient light sensor for Apple T2 MacBooks on Hyprland (KaiT2en's t2-truetone)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -89,9 +89,9 @@ package() {
   install -Dm644 "$app/systemd/t2-truetone.service" "$pkgdir/usr/lib/systemd/user/t2-truetone.service"
   install -Dm644 "$app/udev/70-t2-truetone.rules" "$pkgdir/usr/lib/udev/rules.d/70-t2-truetone.rules"
   install -Dm644 "$app/LICENSE" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
-  # The Omarchy bar plugin (ours; "Ambient Light"), kept in its own folder here:
-  # t2-omarchy-setup links it into the user's ~/.config/omarchy/plugins.
-  local plugin="$startdir/omarchy-plugin" dest="$pkgdir/usr/share/t2-omarchy/plugins/josemiguelo.truetone"
-  install -Dm644 "$plugin/manifest.json" "$plugin/Panel.qml" -t "$dest/"
-  install -Dm755 "$plugin/truetone" "$dest/truetone"
+  # The Ambient Light tab of the T2 panel on Omarchy's bar (ours; the hub is
+  # t2-omarchy-plugins'), kept in its own folder here.
+  local tab="$startdir/omarchy-tab" dest="$pkgdir/usr/share/t2-omarchy/tabs/light"
+  install -Dm644 "$tab/Tab.qml" "$tab/tab.json" -t "$dest/"
+  install -Dm755 "$tab/truetone" "$dest/truetone"
 }
