@@ -213,13 +213,17 @@ In order of value for the MacBookPro16,1. "Eligible" is the earliest date under 
 rule (30 days after the path's last real change as seen on 2026-11-12); any later change pushes
 it back, so re-check with `git log -- <path>` before starting.
 
-1. **ACPI fixes** (`scripts/fedora/acpi-autofix.py`, `install-acpi-fixes.sh`): eligible now
-   (last real change 2026-10-07). An override for the CpuSSDT sub-table loading error and the
-   DSDT `_OSC` buffer overflow; this Mac logs the first on every boot (`AE_ALREADY_EXISTS ...
-   Aborting method \_PR.CPU0._OSC/_PDC`). KaiT2en ships it for dracut
-   (`acpi_override`); here it would go through mkinitcpio's ACPI override in the UKI. A DSDT
-   override is high-risk (a bad table can stop the boot): test from a snapshot with the Limine
-   fallback entry at hand.
+1. **ACPI fixes** (`scripts/fedora/acpi-autofix.py`, `install-acpi-fixes.sh`): **skipped
+   2026-11-15, log noise only on this Mac.** Every boot logs 18 `AE_ALREADY_EXISTS` lines: the
+   `CpuSsdt`'s `GCAP` re-loads sub-tables the kernel already loaded, aborting `\_PR.CPU0._OSC`,
+   CPU1's `APPT`/`APCT` and CPU0-2's `_PDC`; the firmware then loads `ApPsd` itself. Cost: none
+   found. `intel_pstate` active with HWP (no `_PSS`), turbo to 5.0 GHz, `intel_idle`'s own table
+   (no `_CST`), C10 reached constantly. The DSDT `_OSC` buffer overflow the script also fixes
+   doesn't happen here (platform and PCIe `_OSC` succeed), so only the low-risk CpuSSDT half would
+   apply. The script generates the override from the machine's own tables (`Name (\SDTL, Zero)`
+   set to a mask of the already-loaded sub-tables); on Omarchy it would go through mkinitcpio's
+   `acpi_override` hook (needs `iasl` from `acpica`, and a drop-in after `00-omarchy-hooks.conf`,
+   which resets HOOKS). Not measured: idle battery draw (on AC at the time).
 2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`): **done 2026-11-12, as an exception to
    the one-month rule**, at the existing pin `27fd5c9` (patches 0001-0024): `t2-bluetooth-dkms`
    became `t2-wireless-dkms`. Not taken: 0025 (iMac antenna), 0026 (BCM4377 ASPM) and 0027
