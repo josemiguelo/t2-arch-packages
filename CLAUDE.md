@@ -551,9 +551,28 @@ it back, so re-check with `git log -- <path>` before starting.
      automatic brightness, the live reading, forgetting the learned curve. Its evening mode is
      left off (night light does it). The fork's `fix-t2.sh` installs it and enables the user
      service globally (`aaa3b48d9`); not in an ISO yet.
-13. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
-   bridge link, which the udev rule keeps NetworkManager off but leaves up),
-   `t2-sidecar` (2026-11-23), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
+13. **`t2-services`**: **done 2026-11-16** (the owner's exception to the one-month rule), both over
+   the T2 link `t2-touchid`'s udev rule brings up (upstream's `t2-services-common` does the same
+   and is otherwise Fedora migration scripts: not packaged).
+   - **`t2-journal`** (at `c9e24f7`): `t2journal`, run as the user, pulls a bridgeOS sysdiagnose
+     over BridgeXPC and merges the T2's unified logs with a Linux boot (`t2journal -b --grep
+     'suspend|smc'`, `--list-boots`, `refresh [--sysdiagnose]`; snapshot in
+     `~/.local/state/t2-journal`, ~41 MB, ~30 s to refresh). Tested; Touch ID unaffected.
+   - **`t2-ave`** (at `27fd5c9`, the `t2bce-stack-dkms` pin, so `t2remote` matches the installed
+     `t2bce_ave`/`t2bce_sidecar`; upstream later renames them `t2-ave`/`t2-sidecar` on
+     `apple-t2-bridge`): `t2-ave.service` (ours, for `kait2en-t2-remote.service`) loads the modules
+     and runs `t2remote daemon` (root, `/run/t2remote.sock` root-only), which holds
+     `com.apple.aveservice` and `…videoprocessingd.encode.remote`; the T2 then shows the Sidecar
+     encoder as USB `05ac:9312`. V4L2 mem2mem: "Apple T2 HEVC Encoder" (`/dev/video2`, NV12/P010)
+     and "Apple T2 Sidecar Encoder" (`/dev/video3`, H.264/HEVC). `/usr/bin/ffmpeg` with
+     `hevc_v4l2m2m`/`h264_v4l2m2m` encoded 10 s of 1080p30 at 8 Mbit/s in ~4 s; ffmpeg's own device
+     pick took the Sidecar encoder for both. `t2-ave-suspend.service` (ours, for upstream's
+     `sleep.d` hook) runs `t2remote pre-suspend`/`post-resume` around sleep: two S3 cycles, the
+     Sidecar device removed in 150 ms and both sessions back in ~0.1 s, encodes fine after, Touch
+     ID fine. Encode only, not VA-API: Chromium/mpv/OBS don't use it; KaiT2en's Sunshine fork does.
+   - The `ffmpeg` on the PATH here is Homebrew's (no VA-API, no hwaccels); `/usr/bin/ffmpeg` has
+     VA-API, and the iGPU encodes and decodes HEVC through it (`renderD128`).
+14. **The rest, each with its own clock**: `t2-sidecar` (2026-11-23), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
    16,1's panel is on the dGPU, so low value; look at it with the dGPU work). Skip `t2-power-tune`/`t2-zone-power` until the dGPU
    work lands. New on 2026-11-11, not before 2026-12-11: `modules/apple-t2-bridge`,
    `modules/apple-t2-alsa-ucm-conf`.

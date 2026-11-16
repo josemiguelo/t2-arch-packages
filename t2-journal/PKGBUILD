@@ -1,0 +1,65 @@
+# T2 journal: KaiT2en's t2-journal, which pulls the T2's own logs (a bridgeOS
+# sysdiagnose, over BridgeXPC on the T2's internal USB network link) and shows
+# them merged with a Linux boot's journal, for debugging what the T2 did around
+# a suspend, a Touch ID lock or a T2 panic. A command-line tool run as the user:
+#   t2journal -b [-1] | --allboots | --list-boots | -b --grep 'suspend|smc'
+#   t2journal refresh [--sysdiagnose]   (a new T2 snapshot; one is kept in
+#                                        ~/.local/state/t2-journal)
+# The link must be up: t2-touchid's udev rule brings it up as it appears and
+# keeps NetworkManager off it (upstream's t2-services-common does the same).
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  t2-services/t2-journal
+# (+ t2-services/shared/protocols/t2-bridgexpc). Authors: André Eikmeyer and
+# contributors. GPL-3.0-or-later with a section 7(b) attribution term
+# (LICENSING.md); the vendored macos-unifiedlogs 0.6.0 is Apache-2.0. Both in
+# /usr/share/licenses. No changes but /usr paths and no Fedora lifecycle
+# scripts.
+
+pkgname=t2-journal
+_ver=0.1.0
+pkgver=0.1.0.r9.c9e24f7
+pkgrel=1
+pkgdesc="Apple T2 bridgeOS logs merged with the Linux journal (KaiT2en's t2-journal)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later' 'Apache-2.0')
+depends=('gcc-libs' 'systemd' 't2-touchid')
+makedepends=('git' 'cargo')
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- t2-services/t2-journal)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en/t2-services/t2-journal
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/t2-services/t2-journal
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+check() {
+  cd kait2en/t2-services/t2-journal
+  export CARGO_TARGET_DIR=target
+  cargo test --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=t2-services/t2-journal
+  install -Dm755 "$app/target/release/t2journal" "$pkgdir/usr/bin/t2journal"
+  install -Dm644 "$app/LICENSE" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+  install -Dm644 "$app/libs/macos-unifiedlogs/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-macos-unifiedlogs"
+}

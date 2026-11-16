@@ -1,0 +1,116 @@
+# T2 AVE: the T2's hardware video encoders as V4L2 mem2mem devices. KaiT2en's
+# t2-ave userspace: `t2remote daemon`, a root service that holds the two T2
+# sessions the encoders need over BridgeXPC (com.apple.aveservice, and
+# com.apple.videoprocessingd.encode.remote, which makes the T2 expose its
+# Sidecar encoder as USB 05ac:9312), with the kernel modules from
+# t2bce-stack-dkms: t2bce_ave ("Apple T2 HEVC Encoder", HEVC 8/10-bit up to
+# 4096x2304, one session) and t2bce_sidecar (H.264/HEVC, low latency). Encode
+# only; reachable through ffmpeg's hevc_v4l2m2m/h264_v4l2m2m (and KaiT2en's
+# Sunshine fork), not VA-API, so Chromium/mpv/OBS don't use it.
+#
+#   systemctl enable --now t2-ave.service      (loads the modules, starts the daemon)
+#   t2remote status
+# t2-ave-suspend.service closes the T2 sessions before sleep and reopens them
+# after (upstream's hook in t2-services-common's t2-ncm-sleep, here a unit of
+# its own); it does nothing while the daemon isn't running.
+#
+# Pinned at 27fd5c9, the t2bce-stack-dkms pin, so the daemon matches the
+# installed t2bce_ave/t2bce_sidecar exactly (later KaiT2en commits rename them
+# t2-ave/t2-sidecar on the apple-t2-bridge stack; the daemon differs by a few
+# lines). The T2 link: t2-touchid's udev rule brings it up.
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  t2-services/t2-ave
+# (+ t2-services/shared/protocols/t2-bridgexpc). Authors: André Eikmeyer and
+# contributors. GPL-3.0-or-later with a section 7(b) attribution term
+# (LICENSING.md, in /usr/share/licenses). Changes: the units are ours, with
+# neutral names (KaiT2en's trademark terms): t2-ave.service for
+# kait2en-t2-remote.service, t2-ave-suspend.service for the sleep.d hook.
+
+pkgname=t2-ave
+_ver=0.1.0
+pkgver=0.1.0.r11.27fd5c9
+pkgrel=1
+pkgdesc="Apple T2 hardware video encoders (HEVC, H.264) through V4L2 (KaiT2en's t2-ave)"
+arch=('x86_64')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('gcc-libs' 'systemd' 'kmod' 't2bce-stack-dkms' 't2-touchid')
+optdepends=('ffmpeg: encoding with hevc_v4l2m2m and h264_v4l2m2m'
+            'v4l-utils: v4l2-ctl --list-devices')
+makedepends=('git' 'cargo')
+options=('!debug')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- t2-services/t2-ave)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en/t2-services/t2-ave
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd kait2en/t2-services/t2-ave
+  export CARGO_TARGET_DIR=target
+  cargo build --release --frozen
+}
+
+check() {
+  cd kait2en/t2-services/t2-ave
+  export CARGO_TARGET_DIR=target
+  cargo test --release --frozen
+}
+
+package() {
+  cd kait2en
+  local app=t2-services/t2-ave
+  install -Dm755 "$app/target/release/t2remote" "$pkgdir/usr/bin/t2remote"
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/t2-ave.service" <<'EOF2'
+[Unit]
+Description=T2 video encoders (AVE, Sidecar)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/modprobe t2bce_ave
+ExecStartPre=-/usr/bin/modprobe t2bce_sidecar
+ExecStart=/usr/bin/t2remote daemon
+Restart=on-failure
+RestartSec=2
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target
+EOF2
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/t2-ave-suspend.service" <<'EOF2'
+[Unit]
+Description=Close the T2 video encoder sessions around sleep
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=30
+TimeoutStopSec=150
+# Only while the daemon runs; never fail or delay sleep over it.
+ExecStart=-/bin/sh -c '[ -S /run/t2remote.sock ] || exit 0; exec timeout --kill-after=2 15 /usr/bin/t2remote pre-suspend'
+ExecStop=-/bin/sh -c '[ -S /run/t2remote.sock ] || exit 0; exec timeout --kill-after=2 120 /usr/bin/t2remote post-resume'
+
+[Install]
+WantedBy=sleep.target
+EOF2
+
+  install -Dm644 LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}
