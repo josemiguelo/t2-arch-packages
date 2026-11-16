@@ -1,0 +1,165 @@
+Subject: [PATCH] drm/i915/dp: power cycle the eDP panel after a failed resume on dual GPU T2 MacBook Pros
+
+In hybrid mode (the iGPU driving the panel through the gmux) the panel stays
+dark after S3, backlight on, until the next modeset. The panel comes out of
+S3 in a state where it doesn't answer AUX: i915's resume modeset fails the
+link training ("Set power to D0 failed", "Sink disconnected: Failed to
+enable link training"), hundreds of AUX timeouts follow for as long as one
+waits, and the link check queued after the failure can't even read the link
+status, so it gives up. A longer panel power up delay (the firmware leaves
+12.5 ms) changes nothing. What brings it back is a modeset that powers the
+panel down and up again: a forced retrain passes (MacBookPro16,1,
+2026-11-16).
+
+On the Macs of the gmux brightness quirk, after a failed link training:
+force a retrain 500 ms later, up to 3 times while trainings keep failing,
+and don't let those failures lower the link rate. And no Apple TCON PSR
+there (0002): with PSR on, intel_dp_needs_link_retrain() skips the link, so
+the retrain never happens, and i915 marks the sink unreliable at the first
+wake anyway.
+
+Not from KaiT2en: t2-arch-packages.
+---
+diff --git i/drivers/gpu/drm/i915/display/intel_display_types.h w/drivers/gpu/drm/i915/display/intel_display_types.h
+index 18e6b01..280e367 100644
+--- i/drivers/gpu/drm/i915/display/intel_display_types.h
++++ w/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -1860,6 +1860,8 @@ struct intel_dp {
+ 		int seq_train_failures;
+ 		int force_train_failure;
+ 		bool force_retrain;
++		/* Forced retrains left after a failed training (gmux quirk) */
++		int stuck_sink_retrains;
+ 	} link;
+ 	bool reset_link_params;
+ 	int mso_link_count;
+diff --git i/drivers/gpu/drm/i915/display/intel_dp.c w/drivers/gpu/drm/i915/display/intel_dp.c
+index ba0b19d..edc6fde 100644
+--- i/drivers/gpu/drm/i915/display/intel_dp.c
++++ w/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -6075,11 +6075,26 @@ static int intel_dp_retrain_link(struct intel_encoder *encoder,
+ 
+ void intel_dp_link_check(struct intel_encoder *encoder)
+ {
++	struct intel_dp *intel_dp = enc_to_intel_dp(encoder);
+ 	struct drm_modeset_acquire_ctx ctx;
+ 	int ret;
+ 
++	/*
++	 * A forced retrain for a panel stuck after resume (gmux quirk). Set
++	 * here: intel_dp_retrain_link() clears force_retrain after its commit,
++	 * which is where a failed training would have set it again.
++	 */
++	if (intel_dp->link.stuck_sink_retrains > 0) {
++		intel_dp->link.stuck_sink_retrains--;
++		intel_dp->link.force_retrain = true;
++	}
++
+ 	intel_modeset_lock_ctx_retry(&ctx, NULL, 0, ret)
+ 		ret = intel_dp_retrain_link(encoder, &ctx);
++
++	/* A passed training cleared seq_train_failures: stop retraining. */
++	if (!intel_dp->link.seq_train_failures)
++		intel_dp->link.stuck_sink_retrains = 0;
+ }
+ 
+ void intel_dp_check_link_state(struct intel_dp *intel_dp)
+diff --git i/drivers/gpu/drm/i915/display/intel_dp_link_training.c w/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index e566f2b..44a2dfd 100644
+--- i/drivers/gpu/drm/i915/display/intel_dp_link_training.c
++++ w/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -38,6 +38,7 @@
+ #include "intel_hotplug.h"
+ #include "intel_panel.h"
+ #include "intel_psr.h"
++#include "intel_quirks.h"
+ 
+ #define LT_MSG_PREFIX			"[CONNECTOR:%d:%s][ENCODER:%d:%s][%s] "
+ #define LT_MSG_ARGS(_intel_dp, _dp_phy)	(_intel_dp)->attached_connector->base.base.id, \
+@@ -1285,7 +1286,21 @@ void intel_dp_stop_link_train(struct intel_dp *intel_dp,
+ 
+ 	intel_hpd_unblock(encoder);
+ 
+-	if (!display->hotplug.ignore_long_hpd &&
++	/*
++	 * On dual GPU T2 MacBook Pros the panel behind the gmux comes out of
++	 * S3 in a state where it doesn't answer AUX (the first link training
++	 * fails, then hundreds of AUX timeouts) until it's powered down and up
++	 * again; even reading the link status fails, so the usual link check
++	 * gives up. Force a retrain instead, which is a modeset that power
++	 * cycles the panel: 500 ms after the failure, up to 3 times
++	 * (intel_dp_link_check() repeats it while trainings keep failing).
++	 */
++	if (intel_dp->link.seq_train_failures &&
++	    intel_has_quirk(display, QUIRK_GMUX_EDP_STUCK_AFTER_RESUME)) {
++		if (!intel_dp->link.stuck_sink_retrains)
++			intel_dp->link.stuck_sink_retrains = 3;
++		intel_encoder_link_check_queue_work(encoder, 500);
++	} else if (!display->hotplug.ignore_long_hpd &&
+ 	    intel_dp->link.seq_train_failures < MAX_SEQ_TRAIN_FAILURES) {
+ 		int delay_ms = intel_dp->link.seq_train_failures ? 0 : 2000;
+ 
+@@ -1813,6 +1828,17 @@ void intel_dp_start_link_train(struct intel_atomic_state *state,
+ 
+ 	intel_dp->link.seq_train_failures++;
+ 
++	/*
++	 * A panel stuck after resume (the gmux quirk) gets forced retrains from
++	 * intel_dp_stop_link_train(); its failures don't lower the link rate.
++	 */
++	if (intel_has_quirk(display, QUIRK_GMUX_EDP_STUCK_AFTER_RESUME) &&
++	    intel_dp->link.stuck_sink_retrains > 0) {
++		lt_dbg(intel_dp, DP_PHY_DPRX, "gmux quirk: retraining, %d forced retrains left\n",
++		       intel_dp->link.stuck_sink_retrains);
++		return;
++	}
++
+ 	/*
+ 	 * Ignore the link failure in CI
+ 	 *
+diff --git i/drivers/gpu/drm/i915/display/intel_psr.c w/drivers/gpu/drm/i915/display/intel_psr.c
+index 5ce240c..91f36f2 100644
+--- i/drivers/gpu/drm/i915/display/intel_psr.c
++++ w/drivers/gpu/drm/i915/display/intel_psr.c
+@@ -252,6 +252,15 @@ static bool intel_psr_is_apple_tcon(struct intel_dp *intel_dp)
+ {
+ 	static const u8 apple_oui[] = { 0x00, 0x10, 0xfa };
+ 
++	/*
++	 * Not on dual GPU T2 MacBook Pros: there PSR blocks the forced retrain
++	 * their panel needs after resume (intel_dp_needs_link_retrain() skips a
++	 * link with PSR on), and the sink is marked unreliable at the first wake
++	 * anyway.
++	 */
++	if (intel_has_quirk(to_intel_display(intel_dp), QUIRK_GMUX_EDP_STUCK_AFTER_RESUME))
++		return false;
++
+ 	return t2_apple_psr &&
+ 	       memcmp(intel_dp->desc.ident.oui, apple_oui, sizeof(apple_oui)) == 0;
+ }
+diff --git i/drivers/gpu/drm/i915/display/intel_quirks.c w/drivers/gpu/drm/i915/display/intel_quirks.c
+index e5874a8..aae44c9 100644
+--- i/drivers/gpu/drm/i915/display/intel_quirks.c
++++ w/drivers/gpu/drm/i915/display/intel_quirks.c
+@@ -105,6 +105,9 @@ static void quirk_gmux_resets_brightness(struct intel_display *display)
+ {
+ 	intel_set_quirk(display, QUIRK_GMUX_RESETS_BRIGHTNESS);
+ 	drm_info(display->drm, "Applying gmux brightness restore quirk\n");
++	/* The same Macs: their panel needs a power cycle after resume. */
++	intel_set_quirk(display, QUIRK_GMUX_EDP_STUCK_AFTER_RESUME);
++	drm_info(display->drm, "Applying gmux eDP resume retrain quirk\n");
+ }
+ 
+ struct intel_quirk {
+diff --git i/drivers/gpu/drm/i915/display/intel_quirks.h w/drivers/gpu/drm/i915/display/intel_quirks.h
+index 20af60c..be6b048 100644
+--- i/drivers/gpu/drm/i915/display/intel_quirks.h
++++ w/drivers/gpu/drm/i915/display/intel_quirks.h
+@@ -24,6 +24,7 @@ enum intel_quirk_id {
+ 	QUIRK_DISABLE_EDP_PANEL_REPLAY,
+ 	QUIRK_DISABLE_PSR2,
+ 	QUIRK_GMUX_RESETS_BRIGHTNESS,
++	QUIRK_GMUX_EDP_STUCK_AFTER_RESUME,
+ };
+ 
+ void intel_init_quirks(struct intel_display *display);

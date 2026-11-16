@@ -1,0 +1,37 @@
+# t2-boot-gpu: which GPU a dual-GPU T2 MacBook Pro (15,1/15,3/16,1/16,4)
+# boots on, and keeping it. Apple's EFI variable gpu-power-prefs decides it
+# ("integrated": hybrid mode, the Intel iGPU drives the panel and the Radeon
+# powers off until an app asks for it, with t2gmux-dkms, t2-amdgpu-dkms and
+# t2-i915-dkms; "discrete": the Radeon drives everything, external displays
+# included). macOS writes the dGPU there at every macOS boot; KaiT2en answers
+# that with a UEFI program first in the boot order (t2-gpu-preboot), here a
+# service sets it back at each boot and shutdown instead, so the first Linux
+# boot after macOS runs on the dGPU and the next one is hybrid again. No UEFI
+# binary in the boot chain.
+#
+#   t2-boot-gpu [integrated|discrete|apply]   (root to change; see the script)
+#   /etc/t2-boot-gpu.conf  BOOT_GPU=integrated|discrete, written by the script;
+#                          the service does nothing without it
+# Undo: `t2-boot-gpu discrete`, or one macOS boot, or an NVRAM reset.
+#
+# Ours (t2-arch-packages); the variable and its values follow KaiT2en's
+# t2-hybrid-gpu-control helper.
+
+pkgname=t2-boot-gpu
+pkgver=0.1
+pkgrel=1
+pkgdesc="Keep the boot GPU (hybrid or discrete) of dual-GPU T2 MacBook Pros across macOS boots"
+arch=('any')
+url="https://github.com/josemiguelo/t2-arch-packages"
+license=('GPL-3.0-or-later')
+depends=('bash' 'e2fsprogs' 'systemd')
+optdepends=('t2gmux-dkms: the gmux driver hybrid mode needs'
+            't2-amdgpu-dkms: the dGPU powered off in hybrid mode'
+            't2-i915-dkms: the panel on the iGPU, waking with it')
+source=('t2-boot-gpu' 't2-boot-gpu.service')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm755 t2-boot-gpu "$pkgdir/usr/bin/t2-boot-gpu"
+  install -Dm644 t2-boot-gpu.service "$pkgdir/usr/lib/systemd/system/t2-boot-gpu.service"
+}

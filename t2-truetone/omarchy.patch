@@ -1215,7 +1215,7 @@ index 9670040..0000000
 -    fs::remove_file(saved).with_context(|| format!("removing {}", saved.display()))
 -}
 diff --git c/apps/t2-truetone/src/autobright/mod.rs i/apps/t2-truetone/src/autobright/mod.rs
-index 3e815de..c33d768 100644
+index 3e815de..4ff702e 100644
 --- c/apps/t2-truetone/src/autobright/mod.rs
 +++ i/apps/t2-truetone/src/autobright/mod.rs
 @@ -9,28 +9,26 @@
@@ -1254,16 +1254,28 @@ index 3e815de..c33d768 100644
  use zbus::blocking::Connection;
  
  use backlight::Backlight;
-@@ -41,30 +39,27 @@ const MIN_STEP: Duration = Duration::from_millis(10);
+@@ -41,30 +39,39 @@ const MIN_STEP: Duration = Duration::from_millis(10);
  const WAKE: Duration = Duration::from_millis(50);
  const DEAD_BAND: f32 = 0.2;
  const STEPS_PER_UNIT: f32 = 1024.0;
 -pub const EXTENSION: &str = "kait2en-autobrightness@kait2en";
-+/// After start, changes are other startup writers (a login restoring the
-+/// last level): followed, not learned.
++/// After start or a wake, changes are other writers (a login restoring the
++/// last level; after a wake the gmux reset, i915 restoring the level, the
++/// dotfiles' resend): followed, not learned.
 +const SETTLE: Duration = Duration::from_secs(5);
  
 -/// The built-in panel: written through mutter, read back from the kernel.
++/// Time spent suspended since boot: CLOCK_BOOTTIME counts it, CLOCK_MONOTONIC
++/// (what Instant uses) doesn't, so a jump in the difference is a wake.
++fn slept() -> Duration {
++    let read = |clock| {
++        let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
++        unsafe { libc::clock_gettime(clock, &mut ts) };
++        Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
++    };
++    read(libc::CLOCK_BOOTTIME).saturating_sub(read(libc::CLOCK_MONOTONIC))
++}
++
 +/// The built-in panel: written through logind, read back from sysfs.
  /// Brightness inside the service is linear, `raw / max`.
  struct Panel<'a> {
@@ -1296,7 +1308,7 @@ index 3e815de..c33d768 100644
      }
  
      fn min_linear(&self) -> f32 {
-@@ -75,15 +70,22 @@ impl<'a> Panel<'a> {
+@@ -75,15 +82,22 @@ impl<'a> Panel<'a> {
          ((linear * self.backlight.max as f32).round() as i32).clamp(self.backlight.min, self.backlight.max)
      }
  
@@ -1324,7 +1336,7 @@ index 3e815de..c33d768 100644
      }
  }
  
-@@ -144,36 +146,23 @@ pub struct Live {
+@@ -144,36 +158,23 @@ pub struct Live {
  pub fn run(lux: Receiver<f32>, stop: Arc<AtomicBool>, live: Arc<Mutex<Live>>) -> Result<()> {
      let state = state_dir()?;
      fs::create_dir_all(&state).with_context(|| format!("creating {}", state.display()))?;
@@ -1366,18 +1378,19 @@ index 3e815de..c33d768 100644
      *live.lock().unwrap() = Live::default();
      result
  }
-@@ -186,9 +175,7 @@ fn run_loop(
+@@ -186,9 +187,8 @@ fn run_loop(
      mut curve: Curve,
      curve_path: &Path,
  ) -> Result<()> {
 -    let (manual_sender, manual) = mpsc::channel();
 -    shell::watch(manual_sender);
 -
-+    let started = Instant::now();
++    let mut started = Instant::now();
++    let mut asleep = slept();
      let mut ramp: Option<Ramp> = None;
      let mut commit_at: Option<Instant> = None;
      let mut lux: Option<f32> = None;
-@@ -198,13 +185,16 @@ fn run_loop(
+@@ -198,13 +198,30 @@ fn run_loop(
      while !stop.load(Ordering::SeqCst) {
          let now = Instant::now();
  
@@ -1385,10 +1398,23 @@ index 3e815de..c33d768 100644
 -        if changes > 0 {
 -            if commit_at.is_none() {
 -                log(&format!("manual brightness change ({changes} signals), automatics paused"));
--            }
-+        if panel.changed()? {
++        // A wake: the lid was closed, so a pending manual change and the
++        // last lux are stale. Settle again, and retarget on fresh light.
++        let s = slept();
++        if s > asleep + Duration::from_secs(1) {
++            if commit_at.take().is_some() {
++                log("woke up, dropping the pending manual change");
+             }
              ramp = None;
 -            commit_at = Some(now + COMMIT_DELAY);
++            lux = None;
++            started = now;
++            force = true;
++        }
++        asleep = s;
++
++        if panel.changed()? {
++            ramp = None;
 +            if now.duration_since(started) < SETTLE {
 +                force = true;
 +            } else {
@@ -1400,7 +1426,7 @@ index 3e815de..c33d768 100644
          }
  
          let fresh = readings.try_iter().last().map(f32::floor);
-@@ -225,7 +215,7 @@ fn run_loop(
+@@ -225,7 +242,7 @@ fn run_loop(
          }
  
          if commit_at.is_none()
@@ -1409,7 +1435,7 @@ index 3e815de..c33d768 100644
          {
              let target = curve.linear_for_lux(at, panel.min_linear(), 1.0);
              let current = panel.linear()?;
-@@ -283,33 +273,6 @@ fn state_dir() -> Result<PathBuf> {
+@@ -283,33 +300,6 @@ fn state_dir() -> Result<PathBuf> {
      Ok(state_base()?.join("t2-truetone").join("brightness"))
  }
  

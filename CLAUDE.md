@@ -275,7 +275,43 @@ it back, so re-check with `git log -- <path>` before starting.
    initramfs too). DKMS builds amdgpu in about 5-9 min (988 objects, a ~3 GB build tree, 8.9 MB
    installed), on every kernel update; the package carries only `drivers/gpu/drm/amd` (536 MB in
    /usr/src). `Fence fallback timer expired on ring sdma0` twice at boot, as on 2026-11-12 with the
-   stock driver: watch. **Stage 2** (below) not done yet.
+   stock driver: watch. `t2gmux-dkms` 2 carried an ordering patch of ours (gmux as a
+   device-link supplier of the iGPU, so it resumes first): correct but no help with the black
+   panel, dropped in 3.
+   **Stage 2 done 2026-11-16**: the boot GPU on the iGPU (`t2-boot-gpu integrated`), with
+   `t2-i915-dkms` (7.2.15's i915 + drm_display_helper, KaiT2en's 0001-0003, and our 0004).
+   Hyprland on `card1` (i915; the dotfiles' `t2-render-gpu` follows the panel), the dGPU in
+   D3cold (`runtime_status` suspended) and woken for `DRI_PRIME=1` (Chromium) and back, the
+   gmux brightness restored after a lock (0003), suspend fine. Battery draw idle: 32 W on the
+   dGPU (2026-11-12) -> about 13 W hybrid (screen ~15 %).
+   - **The panel after S3 in hybrid mode** stayed dark (backlight on) until the next modeset:
+     it comes out of S3 not answering AUX ("Set power to D0 failed", "Sink disconnected:
+     Failed to enable link training" at drm debug level, then hundreds of AUX timeouts for as
+     long as one waits). Not the mux order, not PSR, not the panel power up delay (the firmware
+     leaves 12.5 ms, `PP_ON 0x7d0001`, and there's no VBT; 210 ms made no difference). Only a
+     modeset that power cycles the panel brings it back, so **0004** forces a retrain 500 ms
+     after a failed training, up to 3 times, without lowering the link rate, on the Macs of
+     0003's DMI list (`Applying gmux eDP resume retrain quirk`). Wakes now show the lock screen
+     by themselves (Omarchy's lock still blanks ~5 s after a wake, as on the dGPU).
+   - **No Apple PSR on these Macs** (0004 again): with PSR on, `intel_dp_needs_link_retrain()`
+     skips the link, so the retrain never happens, and i915 marks the sink "not reliable" at
+     the first wake anyway (two `PSR aux error` at resume). PSR off caps the package around
+     PC8.
+   - **`t2-boot-gpu`** (ours): `t2-boot-gpu [integrated|discrete|apply]` writes Apple's
+     `gpu-power-prefs` (`07 00 00 00 01 00 00 00` iGPU, `… 00 …` dGPU; immutable, chattr'd) and
+     keeps the choice in `/etc/t2-boot-gpu.conf`; `t2-boot-gpu.service` re-applies it at boot and
+     shutdown, so after a macOS boot (which writes the dGPU) the first Linux boot is on the dGPU
+     and the next is hybrid. External displays on the Thunderbolt ports need `discrete`. The
+     dotfiles' `t2-hybrid-boot` sets `integrated` and enables the service. Not in the fork yet.
+   - **Idle power, what's left** (2026-11-16, on battery, hybrid): the package never goes below
+     PC3 (PC2 ~20 %, PC3 ~52 %, PC6-PC10 0; PkgWatt ~2.7 W of the ~13 W). No change from
+     runtime PM `auto` on every PCI device but the T2's, ASPM L1 on the Wi-Fi link, or ignoring
+     the Wi-Fi's LTR (`SOUTHPORT_A` 61 us in `pmc_core/ltr_show`; KaiT2en's 0027 targets it).
+     ACPI's FADT disables ASPM ("doesn't support PCIe ASPM"). KaiT2en's own 15,1 baseline is PC3
+     too ("Thunderbolterella", 2026-08-15): the deep states come back only with Thunderbolt
+     killed (which doesn't come back); their Titan Ridge runtime-PM work
+     (`patches/currently-testing/titan-ridge-runtime-pm`, needs `pcie_ports=compat` gone) is the
+     next lead, with its resume-time cost to measure.
    - **Why it matters:** the panel (eDP) is wired to the AMD dGPU at boot, so it never sleeps
      (`power/control` = `on`, D0): **32 W on battery** measured 2026-11-12 (~1.8 h). In hybrid mode
      the Intel iGPU drives the panel and Hyprland, and the dGPU sits in D3cold until an app asks
@@ -382,7 +418,8 @@ it back, so re-check with `git log -- <path>` before starting.
    the one-month rule** (pin `c9e24f7`). Tested on this Mac by hand first: sudo, polkit and the lock
    screen, before and after suspend. How it works: the T2's Secure Enclave matches the finger
    (fingers enrolled in macOS only; it reports none until macOS has been logged into once since
-   the T2 last lost power); the daemon reaches its BiometricKit over BridgeXPC on the T2 link
+   the T2 last lost power: seen 2026-11-16 after a forced power-off, "no macOS user on this Mac
+   has a finger enrolled, or the SEP is still locked", every boot and wake until a macOS login); the daemon reaches its BiometricKit over BridgeXPC on the T2 link
    (`enp4s0f1u1`, the T2 at `fe80::aede:48ff:fe33:4455`, discovery port 59602) and hands verdicts to
    stock fprintd through libfprint's virtual storage driver (`FP_VIRTUAL_DEVICE_STORAGE`), which
    Omarchy's `libfprint-git` builds (`-D drivers=all`). With `--bind-user` it binds the macOS

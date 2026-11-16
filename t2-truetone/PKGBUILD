@@ -26,14 +26,16 @@
 # service didn't write is a manual change (gnome-shell's BrightnessChanged
 # signal did that); the backlight is the kernel's first choice (firmware,
 # platform, raw) other than the Touch Bar's, or T2_TRUETONE_BACKLIGHT; level
-# changes in the first 5 s are followed, not learned (a login restoring the
-# last level); the GTK app, the gnome-shell extension, GNOME's settings
+# changes in the first 5 s, and in the 5 s after a wake (seen as a jump of
+# CLOCK_BOOTTIME over CLOCK_MONOTONIC: the gmux reset, i915 restoring the
+# level), are followed, not learned (pkgrel 2: it learned a level at every
+# wake, 20 % at 7 lux from the closed lid once); the GTK app, the gnome-shell extension, GNOME's settings
 # take-over and the old t2-autobrightness migration are gone; /usr paths.
 
 pkgname=t2-truetone
 _ver=0.1.0
 pkgver=0.1.0.r2.c9e24f7
-pkgrel=1
+pkgrel=2
 pkgdesc="True Tone and automatic brightness from the ambient light sensor for Apple T2 MacBooks on Hyprland (KaiT2en's t2-truetone)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"

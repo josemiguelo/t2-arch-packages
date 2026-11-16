@@ -1,0 +1,60 @@
+#!/bin/bash
+# t2-boot-gpu: the GPU a dual-GPU T2 MacBook Pro boots on, in Apple's EFI
+# variable gpu-power-prefs (the one macOS writes): "integrated" is hybrid
+# mode (the Intel iGPU drives the panel, the Radeon dGPU powers off until an
+# app asks for it; needs t2gmux-dkms and t2-amdgpu-dkms), "discrete" the
+# Radeon for everything (external displays on the Thunderbolt ports need it).
+# A change applies at the next boot.
+#
+#   t2-boot-gpu                 print the current boot GPU
+#   t2-boot-gpu integrated|discrete
+#                               set it, and keep it (BOOT_GPU in /etc/t2-boot-gpu.conf)
+#   t2-boot-gpu apply           set it to BOOT_GPU from the config, if that's set
+#                               (t2-boot-gpu.service, at boot and shutdown: macOS
+#                               sets the dGPU again at every macOS boot)
+set -euo pipefail
+
+VAR=/sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
+CONF=/etc/t2-boot-gpu.conf
+
+current() {
+  [[ -r $VAR ]] || { echo unset; return; }
+  case $(od -An -tx1 -j4 -N1 "$VAR" | tr -d ' ') in
+    01) echo integrated ;;
+    00) echo discrete ;;
+    *) echo unknown ;;
+  esac
+}
+
+write() { # integrated|discrete
+  local byte
+  case $1 in integrated) byte='\x01' ;; discrete) byte='\x00' ;; *) exit 2 ;; esac
+  [[ $(current) == "$1" ]] && return 0
+  [[ -w /sys/firmware/efi/efivars ]] || { echo "t2-boot-gpu: EFI variables aren't writable" >&2; exit 1; }
+  [[ -e $VAR ]] && chattr -i "$VAR"
+  # attributes NV+BS+RT (07 00 00 00), then the mode as a 32-bit value
+  printf "\x07\x00\x00\x00${byte}\x00\x00\x00" > "$VAR"
+  chattr +i "$VAR"
+  [[ $(current) == "$1" ]] || { echo "t2-boot-gpu: the variable didn't take $1" >&2; exit 1; }
+  echo "t2-boot-gpu: next boot on the $1 GPU"
+}
+
+case ${1:-} in
+  "") current ;;
+  integrated|discrete)
+    [[ $EUID -eq 0 ]] || { echo "t2-boot-gpu: run it as root" >&2; exit 1; }
+    write "$1"
+    printf '# Managed by t2-boot-gpu: the boot GPU kept by t2-boot-gpu.service.\nBOOT_GPU=%s\n' "$1" > "$CONF"
+    ;;
+  apply)
+    BOOT_GPU=
+    # shellcheck source=/dev/null
+    [[ -r $CONF ]] && . "$CONF"
+    case $BOOT_GPU in
+      integrated|discrete) write "$BOOT_GPU" ;;
+      "") ;;
+      *) echo "t2-boot-gpu: BOOT_GPU=$BOOT_GPU in $CONF isn't integrated or discrete" >&2; exit 1 ;;
+    esac
+    ;;
+  *) sed -n '2,/^set -euo/p' "$0" | sed '$d;s/^# \{0,1\}//' >&2; exit 2 ;;
+esac

@@ -1,0 +1,119 @@
+# The kernel's i915 and drm_display_helper from Linux 7.2.15 with KaiT2en's
+# Apple patches, DKMS, for T2 MacBook Pros whose Intel iGPU drives the panel
+# (the 13" ones always; MacBookPro15,1/16,1 once they boot on the iGPU, hybrid
+# mode, with t2gmux-dkms and t2-amdgpu-dkms):
+#   0001  drm_display_helper: Apple eDP panels no longer get the blanket NO_PSR
+#         quirk (from 2018, "i915 doesn't support PSR on them yet")
+#   0002  i915: the Apple TCON's PSR handshake (three vendor registers and a
+#         capture trigger at 0x4d4, traced under macOS on a MacBookPro16,2),
+#         PSR enabled although Apple's VBT leaves it off; parameter
+#         i915.t2_apple_psr (default 1; 0 turns it off)
+#   0003  i915: the gmux brightness written back after the panel powers on
+#         (the gmux resets it to 80 % on every lock, login and resume while
+#         i915 drives the panel); MacBookPro15,1/16,1 by DMI, tested there
+#   0004  (ours) i915: on those Macs, after a failed eDP link training, a
+#         forced retrain (a modeset that power cycles the panel) 500 ms later,
+#         up to 3 times, without lowering the link rate: the panel came out of
+#         every S3 in hybrid mode not answering AUX, dark until the next
+#         modeset (MacBookPro16,1, 2026-11-16); and no Apple PSR (0002) on
+#         those Macs: PSR blocks that retrain, and dies at the first wake
+# Replaces the in-tree modules from updates/. drm_display_helper is shared with
+# amdgpu: 0001 only changes a quirk table, no symbol, so amdgpu keeps loading.
+#
+# The sources must match the kernel the modules load into: linux-omarchy 7.2.x
+# builds plain kernel.org 7.2.15. BUILD_EXCLUSIVE_KERNEL keeps it to 7.2.x
+# -omarchy kernels. KaiT2en's out-of-tree build fix: the trace headers'
+# include paths made relative (and the KUnit tests left out where listed).
+#
+# Patches: https://github.com/kaiT2en/KaiT2en-Fedora  patches/runtime/i915
+
+pkgname=t2-i915-dkms
+_kver=7.2.15
+_modname=t2-i915
+pkgver=7.2.15.r2.c9e24f7
+pkgrel=5
+pkgdesc="i915 with KaiT2en's Apple panel PSR and gmux brightness restore for T2 MacBook Pros, DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only' 'MIT')
+depends=('dkms')
+makedepends=('git')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+_ours=(0004-drm-i915-dp-power-cycle-the-edp-panel-after-a-failed-resume-on-gmux-macs.patch)
+source=("https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${_kver}.tar.xz"
+        "kait2en::git+${_repo}#commit=${_commit}"
+        "${_ours[@]}")
+noextract=("linux-${_kver}.tar.xz")
+sha256sums=('d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab'
+            'SKIP'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_kver" \
+    "$(git rev-list --count HEAD -- patches/runtime/i915)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+_trace() { # header upstream-path local-path
+  grep -q "^#define TRACE_INCLUDE_PATH $2\$" "$1"
+  sed -i "s|^#define TRACE_INCLUDE_PATH $2\$|#define TRACE_INCLUDE_PATH $3|" "$1"
+}
+
+prepare() {
+  rm -rf src
+  mkdir src
+  bsdtar -xf "linux-${_kver}.tar.xz" -C src --strip-components=1 \
+    "linux-${_kver}/drivers/gpu/drm/i915" \
+    "linux-${_kver}/drivers/gpu/drm/display" \
+    "linux-${_kver}/drivers/platform/x86/intel_ips.h"
+  cd src
+  local p out
+  while read -r p; do
+    [[ -n $p ]] || continue
+    out=$(patch -p1 --forward --no-backup-if-mismatch < "$srcdir/kait2en/patches/runtime/i915/$p") || { echo "$out" >&2; return 1; }
+    if grep -qi fuzz <<<"$out"; then
+      echo "$p applied with fuzz:" >&2; echo "$out" >&2; return 1
+    fi
+  done < "$srcdir/kait2en/patches/runtime/i915/series"
+  for p in "${_ours[@]}"; do
+    out=$(patch -p1 --forward --no-backup-if-mismatch < "$srcdir/$p") || { echo "$out" >&2; return 1; }
+    if grep -qi fuzz <<<"$out"; then
+      echo "$p applied with fuzz:" >&2; echo "$out" >&2; return 1
+    fi
+  done
+
+  local i915=drivers/gpu/drm/i915
+  # Newer kernels list i915's KUnit tests in its Makefile (7.2.15 doesn't).
+  sed -i 's|^obj-\$(CONFIG_DRM_I915_KUNIT_TEST) += display/tests/$|obj-n += display/tests/|' "$i915/Makefile"
+  _trace "$i915/i915_trace.h" ../../drivers/gpu/drm/i915 .
+  _trace "$i915/intel_uncore_trace.h" ../../drivers/gpu/drm/i915 .
+  _trace "$i915/display/intel_display_trace.h" ../../drivers/gpu/drm/i915/display display
+  _trace "$i915/gvt/trace.h" ../../drivers/gpu/drm/i915/gvt gvt
+}
+
+package() {
+  local dst="$pkgdir/usr/src/$_modname-$_kver"
+  install -dm755 "$dst"
+  # The kernel's layout: i915's gt/intel_rps.c includes ../../../platform/x86/intel_ips.h.
+  cp -a --no-preserve=ownership src/drivers "$dst/"
+  find "$dst" -name '*.orig' -delete
+  cat > "$dst/dkms.conf" <<EOF2
+PACKAGE_NAME="$_modname"
+PACKAGE_VERSION="$_kver"
+# drm_display_helper first: the Apple panel quirk; then i915.
+MAKE[0]="make -C \${kernel_source_dir} M=\${dkms_tree}/\${PACKAGE_NAME}/\${PACKAGE_VERSION}/build/drivers/gpu/drm/display modules && make -C \${kernel_source_dir} M=\${dkms_tree}/\${PACKAGE_NAME}/\${PACKAGE_VERSION}/build/drivers/gpu/drm/i915 modules"
+CLEAN="make -C \${kernel_source_dir} M=\${dkms_tree}/\${PACKAGE_NAME}/\${PACKAGE_VERSION}/build/drivers/gpu/drm/display clean; make -C \${kernel_source_dir} M=\${dkms_tree}/\${PACKAGE_NAME}/\${PACKAGE_VERSION}/build/drivers/gpu/drm/i915 clean"
+BUILT_MODULE_NAME[0]="drm_display_helper"
+BUILT_MODULE_LOCATION[0]="drivers/gpu/drm/display/"
+DEST_MODULE_LOCATION[0]="/updates/dkms"
+BUILT_MODULE_NAME[1]="i915"
+BUILT_MODULE_LOCATION[1]="drivers/gpu/drm/i915/"
+DEST_MODULE_LOCATION[1]="/updates/dkms"
+AUTOINSTALL="yes"
+# t2-arch-packages: Linux 7.2 sources, for stock Omarchy 7.2.x kernels only
+BUILD_EXCLUSIVE_KERNEL="^7\.2\.[0-9]+-[0-9]+-omarchy\$"
+EOF2
+}
