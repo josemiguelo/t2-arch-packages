@@ -457,7 +457,8 @@ it back, so re-check with `git log -- <path>` before starting.
    - **Omarchy side** (dotfiles): the user service enabled (`t2-truetone-daemon`) and a bar widget,
      "Ambient Light" (`josemiguelo.truetone`): the service switch, True Tone with its strength,
      automatic brightness, the live reading, forgetting the learned curve. Its evening mode is
-     left off (night light does it). Not in the fork's `fix-t2.sh` yet.
+     left off (night light does it). The fork's `fix-t2.sh` installs it and enables the user
+     service globally (`aaa3b48d9`); not in an ISO yet.
 13. **The rest, each with its own clock**: `t2-services` (`t2-ave`, `t2-journal`; 2026-12-08; they use the T2
    bridge link, which the udev rule keeps NetworkManager off but leaves up),
    `t2-sidecar` (2026-11-23), i915 PSR (`patches/runtime/i915`, 2026-12-08; the
