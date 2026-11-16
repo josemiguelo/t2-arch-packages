@@ -35,7 +35,7 @@ whose `--stable` produces stable ISOs.
    - **Packages:** the keyring first (with `--noscriptlet` during an ISO install, because the
      installer is still building the target's keyring), then `linux-omarchy-headers`, the 7 DKMS
      packages, `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp`, `t2-dkms-guard`,
-     `linux-apfs-rw-dkms` and `apple-bcm-firmware-fetcher` (from `[arch-mact2]`). DKMS compiles
+     `linux-apfs-rw-dkms` and `apple-bcm-firmware-fetcher` (from `[t2-arch-packages]`, taken over from `[arch-mact2]` on 2026-11-15). DKMS compiles
      the modules for the installed kernel.
    - **Boot setup:**
      - `/etc/mkinitcpio.conf.d/apple-t2.conf`: the initramfs modules.
@@ -224,5 +224,3 @@ AI-written contributions anyway).
 
 ## 6. Possible follow-ups (not set up)
 
-- Packaging the firmware fetcher in t2-arch-packages, to drop the unsigned `[arch-mact2]` repo
-  (`SigLevel = Never`) from installed systems.

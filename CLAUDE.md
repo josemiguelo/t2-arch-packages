@@ -231,8 +231,15 @@ it back, so re-check with `git log -- <path>` before starting.
    on it matches `snd_apple_t2`. PipeWire filter chain; needs `lsp-plugins-lv2` (`[extra]`) and
    bankstown (`bankstown-lv2`, packaged here: AUR only). Userspace only: removing the package
    and rebooting undoes it.
-4. **Packaging the firmware fetcher here**, to drop `[arch-mact2]` (`SigLevel = Never`): ours,
-   no wait.
+4. **Packaging the firmware fetcher here**, to drop `[arch-mact2]` (`SigLevel = Never`): **done
+   2026-11-15.** `apple-bcm-firmware-fetcher` 1-2 is arch-mact2's 1-1 (NoaHimesaka1873/
+   arch-mact2-PKGBUILDs at 019d2f25) with only the optdepends changed: same name, script,
+   scriptlet and state path, so the upgrade runs neither `pre_remove` (which deletes every
+   firmware file it listed; the ~148 `brcm/*apple*` files are unowned) nor `post_install`. A new
+   name with `replaces` would have removed the old package and the firmware with it. The fork's
+   `install/hardware/pacman.sh` no longer adds `[arch-mact2]`; the ISO builder still uses it at
+   build time (the live ISO's `linux-t2`), and its `ship-sync-databases.sh` stops shipping
+   `arch-mact2.db` since the fork no longer names it.
 5. **dGPU power, hybrid graphics** (`modules/t2gmux`, `patches/runtime/gpu-runtime-pm`,
    `apps/t2-hybrid-gpu-control`): **deferred by the owner to linux-omarchy 7.3** (2026-11-12), to go
    with moving `t2-wireless-dkms` to 7.3 sources, when KaiT2en's patches (rebased onto 7.3 on
@@ -379,7 +386,7 @@ it back, so re-check with `git log -- <path>` before starting.
    - **Names**: unit, config and drop-in are neutral (`t2-touchid.*`, KaiT2en's trademark); the
      D-Bus name `org.kait2en.TouchId` is in the code, for the Touch Bar's animation: rename it with
      the Touch Bar port. sudo's prompt says "Swipe": the virtual driver's scan type, cosmetic.
-   - **`[arch-mact2]` has a `t2-touchid` too** (KaiT2en's names, a network-setup service and a
+   - **`[arch-mact2]` has a `t2-touchid` too** (gone with that repo, 2026-11-15) (KaiT2en's names, a network-setup service and a
      NetworkManager connection; version `0.1.0.r949…`, above ours). Ours wins because
      `[t2-arch-packages]` comes first in `pacman.conf` (`-S` and `-Syu` take the first repo that has
      it), but an install right after a publish got theirs (the CDN served the old database):

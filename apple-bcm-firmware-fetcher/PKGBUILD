@@ -1,0 +1,41 @@
+# The Wi-Fi and Bluetooth firmware for T2 Macs, which only macOS ships: this
+# copies it off the on-disk macOS volume. t2linux's firmware.sh trimmed to its
+# "method 4": load apfs (linux-apfs-rw-dkms on linux-omarchy), mount the first
+# APFS partition on nvme0n1 read-only, take /usr/share/firmware/{wifi,bluetooth}
+# under the names the drivers look for (brcmfmac*-pcie.apple,*, brcmbt*), put
+# them in /lib/firmware/brcm, list them in
+# /var/lib/apple-bcm-firmware-fetcher/installed-files and reload the drivers.
+# post_install runs it (best-effort; skipped on a non-Apple DMI vendor);
+# pre_remove deletes the listed files, so removing the package drops the
+# firmware: never `pacman -R` it on a Mac whose macOS volume is gone.
+#
+# Taken over from [arch-mact2] (NoaHimesaka1873/arch-mact2-PKGBUILDs,
+# apple-bcm-firmware-fetcher at 019d2f25, 2026-09-16) so that repo, unsigned
+# (SigLevel = Never), can go. Same name, script, scriptlet and state path:
+# arch-mact2's 1-1 upgrades to this 1-2 in place, which runs neither its
+# pre_remove nor post_install, so the firmware stays where it is. Changes: the
+# optdepends name the APFS driver linux-omarchy needs instead of linux-t2.
+#
+# Authors: Aditya Garg, Orlando Chamberlain, Sharpened Blade (t2linux); the
+# Python part is based on the Asahi Linux contributors' work. MIT.
+
+pkgname=apple-bcm-firmware-fetcher
+pkgver=1
+pkgrel=2
+pkgdesc="Fetches Wi-Fi and Bluetooth firmware for T2 Macs from the on-disk macOS volume (t2linux firmware.sh, method 4 only)"
+url="https://wiki.t2linux.org/guides/wifi-bluetooth/"
+arch=('any')
+license=('MIT')
+depends=('bash' 'python' 'kmod' 'util-linux' 'tar' 'coreutils' 'gawk')
+optdepends=('linux-apfs-rw-dkms: the APFS driver to read the macOS volume, for kernels without one built in (linux-omarchy)')
+conflicts=('apple-bcm-firmware')
+install="$pkgname.install"
+source=("$pkgname.sh"
+        'LICENSE')
+sha256sums=('873f78849627293781c6eb7c7a36d9a621a340ce8aaba292023eefa6aa481ba6'
+            '6c903cc39c8e90a40258d8ade6ebad7d8fe92c42affd9ce6d479db9fc55be860')
+
+package() {
+  install -Dm755 "$srcdir/$pkgname.sh" "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
