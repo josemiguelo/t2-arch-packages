@@ -651,6 +651,15 @@ it back, so re-check with `git log -- <path>` before starting.
      Moonlight pairing stuck ("a pairing session with this uniqueid already exists") while it listed
      the Mac twice: delete the entries, pair once. Web UI: `https://127.0.0.1:47990` (it listens on
      IPv4 only; `localhost` may resolve to ::1).
+   - **The Omarchy bar plugin** `josemiguelo.sidecar` (`t2-sidecar` 0.2, 2026-11-16, in
+     `/usr/share/t2-sidecar/omarchy-plugin`): the switch, Extended/Mirror, the size (1280×800,
+     1920×1080, 2560×1600), "Streaming"/"Waiting for Moonlight" (Sunshine's `CLIENT
+     CONNECTED`/`DISCONNECTED` in the unit's journal since it started), Sunshine's PIN page.
+     Omarchy loads third-party plugins only from `~/.config/omarchy/plugins` (the scan follows a
+     symlinked folder): `t2-sidecar setup-plugin` links it there and `omarchy-bar put`s it before
+     Bluetooth; the fork's first login runs it (`install/user/first-run/t2-sidecar.sh`). The shell's
+     "Module path … is outside of the config folder" warning shows for every third-party plugin.
+     `t2-sidecar start` resumes the mode used last.
    - The fork installs both and opens ufw from 10/8, 172.16/12, 192.168/16 (Omarchy's ports from
      `omarchy-install-service-sunshine`: TCP 47984 47989 48010, UDP 5353 47998-48000 48002 48010,
      comment `t2-sidecar`), beside AirShare's rules; the dotfiles carry none of it.

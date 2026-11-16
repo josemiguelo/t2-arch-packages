@@ -10,16 +10,23 @@
 # Ours, for KaiT2en's apps/t2-sidecar (d5bddb4), which drives GNOME's mutter
 # (a ScreenCast virtual monitor); here it's Hyprland's headless outputs.
 # Needs sunshine-t2 (the V4L2 encoder) and t2-ave (the encoder's link). The
-# firewall for Moonlight is the setup's (dotfiles). Off until `t2-sidecar on`.
+# firewall for Moonlight is the Omarchy fork's installer's. Off until
+# `t2-sidecar on`.
+#
+# The Omarchy bar plugin josemiguelo.sidecar (/usr/share/t2-sidecar/
+# omarchy-plugin): the switch, extended or mirrored, the size, whether a device
+# is watching, Sunshine's PIN page. Omarchy loads third-party plugins only from
+# ~/.config/omarchy/plugins, so `t2-sidecar setup-plugin` links it there (the
+# fork's first login runs it): package updates then reach it.
 
 pkgname=t2-sidecar
-pkgver=0.1
+pkgver=0.2
 pkgrel=1
 pkgdesc="Second screen for Apple T2 Macs on Hyprland: Sunshine on a virtual monitor, encoded by the T2"
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"
 license=('GPL-3.0-or-later')
-depends=('bash' 'jq' 'hyprland' 'systemd' 'sunshine-t2' 't2-ave')
+depends=('bash' 'jq' 'python' 'hyprland' 'systemd' 'sunshine-t2' 't2-ave')
 source=('t2-sidecar' 't2-sidecar-run' 't2-sidecar.service')
 sha256sums=('SKIP' 'SKIP' 'SKIP')
 
@@ -27,4 +34,8 @@ package() {
   install -Dm755 t2-sidecar "$pkgdir/usr/bin/t2-sidecar"
   install -Dm755 t2-sidecar-run "$pkgdir/usr/lib/t2-sidecar/t2-sidecar-run"
   install -Dm644 t2-sidecar.service "$pkgdir/usr/lib/systemd/user/t2-sidecar.service"
+  # The plugin keeps its own folder here (makepkg's sources can't be in one).
+  local plugin="$startdir/omarchy-plugin"
+  install -Dm644 "$plugin/manifest.json" "$plugin/Panel.qml" -t "$pkgdir/usr/share/t2-sidecar/omarchy-plugin/"
+  install -Dm755 "$plugin/sidecar" "$pkgdir/usr/share/t2-sidecar/omarchy-plugin/sidecar"
 }

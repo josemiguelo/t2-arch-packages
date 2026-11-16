@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "josemiguelo.sidecar",
+  "name": "Sidecar",
+  "version": "1.0.0",
+  "author": "josemiguelo",
+  "license": "GPL-3.0-or-later",
+  "description": "T2 Sidecar in the bar: a phone or tablet as a second screen (or a view of this one) through Moonlight, encoded by the T2",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Sidecar",
+    "description": "A phone or tablet as a second screen through Moonlight (t2-sidecar): on/off, extended or mirrored, size, pairing",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
