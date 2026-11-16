@@ -3,8 +3,13 @@
 # the force click threshold and switch, and one action bound to a force click
 # (alternating copy/paste, a recorded key combo through a virtual keyboard, or
 # a shell command run as the desktop user). The daemon
-# (t2-force-click.service) applies the saved settings at boot; the GUI talks to
-# it over /run/t2-force-click/daemon.sock.
+# (t2-force-click.service) applies the saved settings at boot and takes
+# changes over /run/t2-force-click/daemon.sock (from root or the active
+# session's user only).
+#
+# No GTK window: its launcher entry and icon aren't installed; the binary stays,
+# since it is the daemon (`--daemon`). The settings are the Trackpad tab of the
+# T2 panel on Omarchy's bar (ours, below; the panel is t2-omarchy-plugins').
 #
 # Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  apps/t2-force-click
 # Authors: André Eikmeyer and 4f1sh3r. GPL-3.0-or-later with a section 7(b)
@@ -18,12 +23,12 @@
 pkgname=t2-force-click
 _ver=0.1.0
 pkgver=0.1.0.r8.27fd5c9
-pkgrel=1
+pkgrel=2
 pkgdesc="Force Touch settings app and daemon for Apple T2 Mac trackpads (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')
-depends=('gtk4' 'libadwaita' 't2-precision-trackpad-dkms' 't2-trackpad-actuator-dkms')
+depends=('gtk4' 'libadwaita' 't2-precision-trackpad-dkms' 't2-trackpad-actuator-dkms' 'python' 't2-omarchy-plugins')
 makedepends=('git' 'cargo')
 options=('!debug')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
@@ -65,9 +70,9 @@ package() {
   cd kait2en
   local app=apps/t2-force-click
   install -Dm755 "$app/target/release/t2-force-click" "$pkgdir/usr/bin/t2-force-click"
-  install -Dm644 "$app/org.t2forceclick.gtk.desktop" "$pkgdir/usr/share/applications/org.t2forceclick.gtk.desktop"
-  install -Dm644 "$app/assets/icons/hicolor/scalable/apps/org.t2forceclick.gtk.svg" \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.t2forceclick.gtk.svg"
+  local tab="$startdir/omarchy-tab" dest="$pkgdir/usr/share/t2-omarchy/tabs/trackpad"
+  install -Dm644 "$tab/Tab.qml" "$tab/tab.json" -t "$dest/"
+  install -Dm755 "$tab/trackpad" "$dest/trackpad"
   install -Dm644 "$app/systemd/t2-force-click.service" "$pkgdir/usr/lib/systemd/system/t2-force-click.service"
 
   install -Dm644 "$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

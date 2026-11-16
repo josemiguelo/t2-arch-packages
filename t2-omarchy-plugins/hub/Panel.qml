@@ -16,8 +16,9 @@ import qs.Ui
 // beside this file lists the tabs and the active indicators.
 //
 // A tab is an Item that takes bar, foreground, urgent, dim and fontFamily, sets
-// its implicitHeight, and may offer moveCursor(dy), moveSideways(dx) (true when
-// it used the keys), activateCursor() and textKey(t) (true when used).
+// its implicitHeight, and may offer refresh() (called whenever the panel opens),
+// moveCursor(dy), moveSideways(dx) (true when it used the keys),
+// activateCursor() and textKey(t) (true when used).
 Panel {
   id: root
   moduleName: "t2.panel"
@@ -149,6 +150,12 @@ Panel {
       onTextKey: function(t) {
         if (/^[1-9]$/.test(t)) root.selectIndex(parseInt(t) - 1)
         else if (tab && tab.textKey) tab.textKey(t)
+      }
+
+      // The panel keeps the tab loaded while closed: fresh values on opening.
+      Connections {
+        target: root
+        function onOpenedChanged() { if (root.opened && tabLoader.item && tabLoader.item.refresh) tabLoader.item.refresh() }
       }
 
       Column {

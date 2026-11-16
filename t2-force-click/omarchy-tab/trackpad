@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""The T2 panel's Trackpad tab helper: t2-force-click's daemon (its socket,
+/run/t2-force-click/daemon.sock, which takes requests from root or the active
+session's user only), as the session user.
+
+  status                        JSON: driver, device, click, threshold, force click,
+                                action, key combo, command
+  set click 0|1|2               click pressure: light, medium, firm
+  set threshold <120-300>       force click pressure, % of the click's
+  set force on|off              force click (the plain click stays)
+  set action none|copy_paste|key_combo|command
+  set combo <keys>              e.g. leftctrl+leftalt+t (evdev key names)
+  set command <shell command>   run as the desktop user on a force click
+
+Each set sends the whole configuration (SET_CONFIG), with the one value changed.
+"""
+
+import json
+import socket
+import sys
+from urllib.parse import quote
+
+SOCKET = "/run/t2-force-click/daemon.sock"
+ACTIONS = ("none", "copy_paste", "key_combo", "command")
+
+
+def request(line):
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(3)
+            s.connect(SOCKET)
+            s.sendall((line + "\n").encode())
+            data = b""
+            while not data.endswith(b"\n\n"):
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+    except OSError:
+        return None
+    out = {}
+    for row in data.decode(errors="replace").split("\n"):
+        if "=" in row:
+            k, v = row.split("=", 1)
+            out[k] = v
+    return out
+
+
+def state():
+    st = request("GET_STATE")
+    if not st or st.get("ok") != "1":
+        return None, (st or {}).get("error", "t2-force-click's daemon isn't answering")
+    return {
+        "driver": st.get("driver_loaded") == "1",
+        "device": st.get("device_found") == "1",
+        "click": int(st.get("click_strength", "1") or 1),
+        "threshold": int(st.get("force_click_threshold_percent", "200") or 200),
+        "force": st.get("force_click_disabled") != "1",
+        "action": st.get("action_kind", "none"),
+        "combo": st.get("key_combo", ""),
+        "command": st.get("command", ""),
+    }, ""
+
+
+def enc(value):
+    # The daemon's own encoding: unreserved bytes as they are, the rest %XX, and
+    # %00EMPTY for nothing (its fields are space-separated).
+    return quote(value, safe="-_.~") or "%00EMPTY"
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "status":
+        st, err = state()
+        print(json.dumps({"available": st is not None, "error": err, **(st or {})}))
+        return
+    if cmd != "set" or len(argv) < 3:
+        sys.exit(__doc__)
+    st, err = state()
+    if st is None:
+        sys.exit(err)
+    key, value = argv[1], " ".join(argv[2:])
+    if key == "click" and value in ("0", "1", "2"):
+        st["click"] = int(value)
+    elif key == "threshold" and value.isdigit():
+        st["threshold"] = max(120, min(300, int(value)))
+    elif key == "force" and value in ("on", "off"):
+        st["force"] = value == "on"
+    elif key == "action" and value in ACTIONS:
+        st["action"] = value
+    elif key == "combo":
+        st["combo"] = value.strip()
+    elif key == "command":
+        st["command"] = value.strip()
+    else:
+        sys.exit(__doc__)
+    r = request(
+        f"SET_CONFIG {st['click']} {st['threshold']} {'false' if st['force'] else 'true'} "
+        f"{st['action']} {enc(st['combo'])} {enc(st['command'])}"
+    )
+    sys.exit(0 if r and r.get("ok") == "1" else (r or {}).get("error", "t2-force-click's daemon isn't answering"))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

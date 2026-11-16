@@ -116,7 +116,8 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   (`Tab.qml`, `tab.json`: title, icon, order, indicator unit; a helper beside it) and its menu
   entries under `/usr/share/t2-omarchy/menu/<name>.jsonc`, and depends on `t2-omarchy-plugins`.
   Tabs: `battery` (t2-smc-control: battery, power, charge limit, SMC clock), `fans`
-  (t2-fan-control: the curve or the SMC, the target, both fans, temperatures), `light` (t2-truetone), `airshare` (t2-airshare, with its Share-menu entries;
+  (t2-fan-control: the curve or the SMC, the target, both fans, temperatures), `trackpad`
+  (t2-force-click: click pressure, force click, its pressure and action), `light` (t2-truetone), `airshare` (t2-airshare, with its Share-menu entries;
   indicator t2-airshare.service), `sidecar` (t2-sidecar; indicator t2-sidecar.service). A tab is
   an Item taking bar, foreground, urgent, dim, fontFamily, with optional moveCursor,
   moveSideways (true when used; else ←/→ switch tabs), activateCursor, textKey and a
