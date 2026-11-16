@@ -127,6 +127,18 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   as one, so read sweep lines. `apply` hasn't had a real run yet. Until 2026-11-12 `check` saw no
   package at all (a failing `grep` on the keyring's PKGBUILD ended the list under `pipefail`), so
   every "no upstream changes" before then meant nothing.
+- **linux-omarchy's own patches** (`bin/omarchy-patch-check`, `omarchy-patches.json`; since
+  2026-11-16): linux-omarchy is kernel.org plus ~188 patches of its own, some on drivers our DKMS
+  packages rebuild. Each such package vendors the ones it needs as `omarchy-NNNN-*.patch` (only the
+  part under its paths), applied before KaiT2en's, and the JSON lists per package its paths, the
+  carried ones and the ignored ones with the reason (reviewed at omarchy-pkgs `bbe598b4`). The
+  checker compares that with omarchy-pkgs' `pkgbuilds/linux-omarchy/PKGBUILD` and flags a new or
+  changed patch on those paths, a new patch touching `include/`, a pkgver change; `kait2en-sync
+  notify` (the daily timer) runs it with `--fetch` and notifies. After acting on it, update the
+  JSON. Carried now: Thunderbolt 0601/0602/0605/0606/0608 (required: they change
+  `include/linux/thunderbolt.h`), amdgpu 0460/0461/0476/0478 (DSC, YCbCr 4:2:0-only and FreeSync
+  over adapters), brcmfmac 0681; brcmfmac 0680 is KaiT2en's 0015; none of the i915 ones apply
+  here. KaiT2en's own modules (t2smc, t2sbs, t2hid, ...) need none.
 - **Release by hand** (README, "Build and release"): sign with the key; `repo-add --sign`;
   release assets can't be symlinks (copy `.db`/`.files` and their `.sig` as real files); GitHub's
   CDN serves the old database for about a minute after `--clobber`. The local work dir is

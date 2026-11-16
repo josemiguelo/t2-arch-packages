@@ -7,8 +7,10 @@
 #   kait2en-sync kernel    build every published DKMS package against the newest
 #                          linux-omarchy-headers of this machine's [omarchy] channel (exit 0:
 #                          all build, 1: some don't — fix before Omarchy ships it)
-#   kait2en-sync notify    for a timer: check, and kernel when [omarchy] has headers
-#                          it hasn't tested yet; desktop notifications to act on
+#   kait2en-sync notify    for a timer: check, bin/omarchy-patch-check (linux-omarchy's
+#                          own patches vs the DKMS packages), and kernel when
+#                          [omarchy] has headers it hasn't tested yet; desktop
+#                          notifications to act on
 #   kait2en-sync apply [--yes]
 #                          for each package with an eligible update: pin its
 #                          eligible commit, build and sign it, build its DKMS
@@ -315,8 +317,8 @@ cmd_apply() {
   say "published: ${pins[*]}"
 }
 
-# For a timer: check, and kernel when [omarchy] has headers not tested yet;
-# a desktop notification for anything to act on.
+# For a timer: check, omarchy-patch-check, and kernel when [omarchy] has
+# headers not tested yet; a desktop notification for anything to act on.
 cmd_notify() {
   local out rc stamp=$WORK/kernel-tested headers
   rc=0; out=$(cmd_check 2>&1) || rc=$?
@@ -325,6 +327,14 @@ cmd_notify() {
       "$(sed 's/\x1b\[[0-9;]*m//g' <<<"$out" | sed -n 's/^==> eligible updates: //p')"
   elif (( rc != 0 )); then
     notify-send -a kait2en-sync -u critical "kait2en-sync check failed" "$(tail -3 <<<"$out")"
+  fi
+  # linux-omarchy's own patches on the drivers the DKMS packages rebuild.
+  rc=0; out=$("$(dirname "$0")/omarchy-patch-check" --fetch 2>&1) || rc=$?
+  if (( rc == 1 )); then
+    notify-send -a kait2en-sync "linux-omarchy changed drivers the T2 DKMS packages rebuild" \
+      "$(grep '^  - ' <<<"$out" | head -4) — bin/omarchy-patch-check"
+  elif (( rc != 0 )); then
+    notify-send -a kait2en-sync -u critical "omarchy-patch-check failed" "$(tail -3 <<<"$out")"
   fi
   headers=$(latest_headers 2>/dev/null) || return 0
   [[ $(cat "$stamp" 2>/dev/null) == "${headers##*/}" ]] && return 0

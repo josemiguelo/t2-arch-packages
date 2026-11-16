@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Check this repo's DKMS packages against linux-omarchy's own kernel patches.
+
+Each DKMS package rebuilds part of the kernel tree; linux-omarchy (Omarchy's
+kernel: kernel.org plus its own patches) may patch those same files, and a
+package built without them drops those fixes (or, if a shared header changed,
+doesn't build: thunderbolt in 2026-11). omarchy-patches.json records, per
+package, its paths and which of linux-omarchy's patches it carries (vendored as
+<package>/omarchy-<patch>.patch, only the part under its paths) or leaves out on
+purpose. This compares that with omarchy-pkgs' pkgbuilds/linux-omarchy/PKGBUILD
+and reports:
+  - a patch touching a package's paths that is neither carried nor ignored
+  - a carried patch whose part under the paths differs from upstream's now
+  - a carried or ignored patch upstream no longer has
+  - a patch not seen at review time that touches include/ (shared headers)
+  - linux-omarchy's pkgver changing (the DKMS sources are pinned to it)
+
+  bin/omarchy-patch-check [--fetch] [--repo PATH] [--ref REF]
+Exit 0 when nothing changed, 1 with findings, 2 on errors. After acting on the
+findings, update omarchy-patches.json (carried/ignored, omarchy_pkgs_reviewed,
+reviewed_patches, linux_omarchy_pkgver).
+"""
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PKGDIR = "pkgbuilds/linux-omarchy"
+
+
+def git(repo, *args):
+    return subprocess.run(["git", "-C", repo, *args], check=True, text=True,
+                          capture_output=True).stdout
+
+
+def file_diffs(text):
+    """{path: diff section} for each 'diff --git a/path' section of a patch."""
+    out = {}
+    for part in re.split(r"(?m)^(?=diff --git )", text)[1:]:
+        m = re.match(r"diff --git a/(\S+)", part)
+        if m:
+            out[m.group(1)] = part
+    return out
+
+
+def under(path, prefixes):
+    return any(path.startswith(p) for p in prefixes)
+
+
+def body(sections):
+    """The diff hunks, without index lines that differ between git versions."""
+    return "".join(re.sub(r"(?m)^index [0-9a-f.]+.*\n", "", s) for s in sections)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--fetch", action="store_true", help="git fetch omarchy-pkgs first")
+    ap.add_argument("--repo", default=os.environ.get(
+        "OMARCHY_PKGS", os.path.expanduser("~/Repos/gh/omacom/omarchy-pkgs")))
+    ap.add_argument("--ref", default="origin/HEAD")
+    args = ap.parse_args()
+
+    manifest = json.load(open(os.path.join(HERE, "omarchy-patches.json")))
+    try:
+        if args.fetch:
+            git(args.repo, "fetch", "-q", "origin")
+        commit = git(args.repo, "rev-parse", "--short=8", args.ref).strip()
+        pkgbuild = git(args.repo, "show", f"{args.ref}:{PKGDIR}/PKGBUILD")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"omarchy-patch-check: can't read omarchy-pkgs at {args.repo}: {e}", file=sys.stderr)
+        return 2
+
+    pkgver = re.search(r"(?m)^pkgver=(\S+)", pkgbuild).group(1)
+    names = sorted(set(m[:-len(".patch")] for m in
+                       re.findall(r"\b[0-9]{4}-[A-Za-z0-9._+-]+\.patch\b", pkgbuild)))
+    patches = {n: file_diffs(git(args.repo, "show", f"{args.ref}:{PKGDIR}/{n}.patch")) for n in names}
+    reviewed = set(manifest["reviewed_patches"])
+    findings = []
+
+    if pkgver != manifest["linux_omarchy_pkgver"]:
+        findings.append(f"linux-omarchy is {pkgver} now (reviewed: {manifest['linux_omarchy_pkgver']}): "
+                        "every DKMS package's kernel sources and patches need moving")
+
+    for n in names:
+        if n not in reviewed:
+            hdrs = [p for p in patches[n] if p.startswith("include/")]
+            if hdrs:
+                findings.append(f"new patch {n} changes shared headers: {', '.join(hdrs)}")
+
+    for pkg, conf in manifest["packages"].items():
+        prefixes, carried, ignored = conf["paths"], conf["carried"], conf["ignored"]
+        for n in names:
+            touched = [p for p in patches[n] if under(p, prefixes)]
+            if not touched:
+                continue
+            if n in carried:
+                vendored_path = os.path.join(HERE, pkg, f"omarchy-{n}.patch")
+                if not os.path.exists(vendored_path):
+                    findings.append(f"{pkg}: carried {n} isn't vendored as omarchy-{n}.patch")
+                    continue
+                vendored = file_diffs(open(vendored_path).read())
+                ours = body(s for p, s in sorted(vendored.items()) if under(p, prefixes))
+                theirs = body(s for p, s in sorted(patches[n].items()) if under(p, prefixes))
+                if ours != theirs:
+                    findings.append(f"{pkg}: carried {n} changed upstream (its part under {', '.join(prefixes)})")
+            elif n not in ignored:
+                findings.append(f"{pkg}: {n} touches {', '.join(touched)}: carry it or list it as ignored")
+        for n in list(carried) + list(ignored):
+            if n not in patches:
+                findings.append(f"{pkg}: {n} is gone from linux-omarchy (carried/ignored here)")
+
+    if findings:
+        print(f"omarchy-patch-check: omarchy-pkgs {commit} vs the review at {manifest['omarchy_pkgs_reviewed']}:")
+        for f in findings:
+            print(f"  - {f}")
+        return 1
+    print(f"omarchy-patch-check: omarchy-pkgs {commit}, linux-omarchy {pkgver}: nothing new for the DKMS packages")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

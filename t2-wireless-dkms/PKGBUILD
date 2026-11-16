@@ -44,8 +44,12 @@
 # 2026-11-12 as an exception to the one-month rule (CLAUDE.md).
 #
 # The sources must match the kernel the modules load into: linux-omarchy 7.2.x
-# builds plain kernel.org 7.2.15 (no stable-review patch), and its own patches
-# touch neither brcm80211 nor the Bluetooth drivers replaced here.
+# is kernel.org 7.2.15 (no stable-review patch) plus patches of its own. Its
+# Bluetooth ones touch only btusb/btintel*, not replaced here; of its two
+# brcmfmac ones, 0680 (missing D3 ack without WoWL) is KaiT2en's 0015, and 0681
+# (port authorized after a firmware 4-way handshake offload; the BCM4364
+# doesn't offload it) is carried as omarchy-0681-*.patch, applied first (from
+# omarchy-pkgs bbe598b4). bin/omarchy-patch-check flags new ones.
 # BUILD_EXCLUSIVE_KERNEL keeps it to 7.2.x -omarchy kernels: a 7.3 kernel keeps
 # its stock drivers (without these fixes, Bluetooth LE devices included) until
 # this package moves to 7.3 sources.
@@ -56,7 +60,7 @@ pkgname=t2-wireless-dkms
 _kver=7.2.15
 _modname=t2-wireless
 pkgver=7.2.15.r25.7e9903c
-pkgrel=1
+pkgrel=2
 pkgdesc="Broadcom Wi-Fi and Bluetooth drivers with KaiT2en's Apple fixes (resume, LE devices, AWDL), DKMS"
 arch=('any')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -72,11 +76,13 @@ _commit=7e9903ceb8df8c638fbfe9d3cc64c4f510bd855b
 _patches=(0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012
           0013 0014 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024
           0025 0026 0027)
+_omarchy=(omarchy-0681-wifi-brcmfmac-report-port-authorized-for-4-way-hs-offload.patch)
 source=("https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${_kver}.tar.xz"
-        "kait2en::git+${_repo}#commit=${_commit}")
+        "kait2en::git+${_repo}#commit=${_commit}"
+        "${_omarchy[@]}")
 noextract=("linux-${_kver}.tar.xz")
 sha256sums=('d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab'
-            'SKIP')
+            'SKIP' 'SKIP')
 
 pkgver() {
   cd kait2en
@@ -93,6 +99,9 @@ prepare() {
     "linux-${_kver}/drivers/net/wireless/broadcom/brcm80211"
   cd src
   local p f
+  for p in "${_omarchy[@]}"; do
+    patch -p1 --forward --no-backup-if-mismatch < "$srcdir/$p"
+  done
   for p in "${_patches[@]}"; do
     f=$(ls "$srcdir"/kait2en/patches/runtime/wireless/"$p"-*.patch)
     patch -p1 --forward --no-backup-if-mismatch < "$f"
