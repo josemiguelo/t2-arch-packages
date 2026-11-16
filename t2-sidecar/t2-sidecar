@@ -11,9 +11,8 @@
 #   t2-sidecar start          the mode used last (extended the first time)
 #   t2-sidecar off            stop streaming; windows on SIDECAR-1 move back
 #   t2-sidecar status
-#   t2-sidecar setup-plugin   put the Sidecar panel on the Omarchy bar (links
-#                             ~/.config/omarchy/plugins/josemiguelo.sidecar to
-#                             this package's copy, so updates reach it)
+#   t2-sidecar setup-plugin   put the Sidecar panel on the Omarchy bar (runs
+#                             t2-omarchy-setup, which does every T2 plugin)
 #
 # Sunshine runs in the user unit t2-sidecar.service, with its own settings
 # (~/.config/sunshine: user, pairing, web UI at https://127.0.0.1:47990) plus
@@ -27,8 +26,6 @@ set -euo pipefail
 
 state=${XDG_STATE_HOME:-$HOME/.local/state}/t2-sidecar
 run=${XDG_RUNTIME_DIR:?}/t2-sidecar
-PLUGIN_ID=josemiguelo.sidecar
-PLUGIN_SRC=/usr/share/t2-sidecar/omarchy-plugin
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d;s/^# \{0,1\}//' >&2; exit 2; }
 
@@ -47,21 +44,6 @@ start() { # mode [size]
   echo "t2-sidecar: ${1/extend/extended display} on; in Moonlight, pick Desktop"
 }
 
-setup_plugin() {
-  local plugins=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins
-  mkdir -p "$plugins"
-  if [[ -e $plugins/$PLUGIN_ID && ! -L $plugins/$PLUGIN_ID ]]; then
-    echo "t2-sidecar: $plugins/$PLUGIN_ID is a folder of its own; leaving it" >&2
-  else
-    ln -sfn "$PLUGIN_SRC" "$plugins/$PLUGIN_ID"
-  fi
-  # Needs the shell running (a login session); put leaves a placed widget alone.
-  omarchy-shell -q shell rescanPlugins || true
-  omarchy-bar put "$PLUGIN_ID" --before omarchy.bluetooth ||
-    omarchy-bar put "$PLUGIN_ID" --section right
-  echo "t2-sidecar: the Sidecar panel is on the bar"
-}
-
 case ${1:-} in
   on) start extend "${2:-}" ;;
   mirror) start mirror ;;
@@ -73,6 +55,6 @@ case ${1:-} in
     else
       echo "off"
     fi ;;
-  setup-plugin) setup_plugin ;;
+  setup-plugin) exec t2-omarchy-setup ;;
   *) usage ;;
 esac

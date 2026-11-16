@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "josemiguelo.airshare",
+  "name": "AirShare",
+  "version": "1.0.0",
+  "author": "josemiguelo",
+  "license": "MIT",
+  "description": "T2 AirShare in the bar: visibility, sending files, the clipboard or the last screenshot to phones and Macs nearby, received files and trusted devices",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "AirShare",
+    "description": "Quick Share with Android and AirDrop with Apple devices (T2 AirShare): visibility, sending, received files",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

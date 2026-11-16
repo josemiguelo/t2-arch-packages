@@ -1,0 +1,28 @@
+# t2-omarchy-plugins: t2-omarchy-setup, which gives the user the T2 packages'
+# Omarchy bar plugins and menu entries. Omarchy loads third-party plugins and
+# menu extensions only from ~/.config/omarchy, which a package can't write to,
+# so each T2 package ships its plugin under /usr/share/t2-omarchy/plugins/<id>
+# (and its menu entries under /usr/share/t2-omarchy/menu/<name>.jsonc), and
+# t2-omarchy-setup links them into ~/.config/omarchy/plugins (package updates
+# then reach them), places them on the bar in this package's order, and keeps
+# the menu entries as marked blocks. The Omarchy fork's first login runs it; on
+# a Mac installed before, run it once (and after a package adds a plugin).
+#
+# Ours (t2-arch-packages).
+
+pkgname=t2-omarchy-plugins
+pkgver=0.1
+pkgrel=1
+pkgdesc="Puts the Apple T2 packages' Omarchy bar plugins and menu entries in place for the user"
+arch=('any')
+url="https://github.com/josemiguelo/t2-arch-packages"
+license=('GPL-3.0-or-later')
+depends=('bash' 'jq' 'python')
+source=('t2-omarchy-setup' 'order')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm755 t2-omarchy-setup "$pkgdir/usr/bin/t2-omarchy-setup"
+  install -Dm644 order "$pkgdir/usr/share/t2-omarchy/order"
+  install -dm755 "$pkgdir/usr/share/t2-omarchy/plugins" "$pkgdir/usr/share/t2-omarchy/menu"
+}

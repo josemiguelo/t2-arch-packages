@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""The True Tone panel's helper (josemiguelo.truetone): t2-truetone's state and
+settings for the Omarchy bar, where the panel has no TOML of its own.
+
+  status                         JSON: installed, running, enabled, settings, live state
+  service on|off                 the daemon (t2-truetone.service: enabled and started, or not)
+  set true_tone|auto_brightness on|off
+  set strength <0..0.3>          how far the white point follows the room
+  forget-brightness              drop the learned brightness curve (back to macOS's)
+
+The daemon reloads ~/.config/t2-truetone/config.toml when it changes and
+writes its live state to $XDG_RUNTIME_DIR/t2-truetone/status.json every second.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+import tomllib
+from pathlib import Path
+
+UNIT = "t2-truetone.service"
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "t2-truetone" / "config.toml"
+STATUS = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "t2-truetone" / "status.json"
+CURVE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state")) / "t2-truetone" / "brightness" / "curve"
+# The daemon's defaults (src/config.rs), for a missing file or key.
+DEFAULTS = {
+    "true_tone": True,
+    "strength": 0.2,
+    "fade_s": 5.0,
+    "night": False,
+    "night_from": "21:00",
+    "night_to": "07:00",
+    "night_kelvin": 3400.0,
+    "night_ramp_min": 10.0,
+    "auto_brightness": True,
+}
+
+
+def systemctl(*args):
+    return subprocess.run(["systemctl", "--user", *args], text=True, capture_output=True)
+
+
+def config():
+    conf = dict(DEFAULTS)
+    try:
+        conf.update(tomllib.loads(CONFIG.read_text()))
+    except (FileNotFoundError, tomllib.TOMLDecodeError):
+        pass
+    return conf
+
+
+def toml_value(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return repr(float(v))
+    return json.dumps(str(v), ensure_ascii=False)
+
+
+def write_config(conf):
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CONFIG.with_suffix(".toml.tmp")
+    tmp.write_text("".join(f"{k} = {toml_value(conf[k])}\n" for k in DEFAULTS if k in conf))
+    tmp.replace(CONFIG)
+
+
+def live():
+    try:
+        s = json.loads(STATUS.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    s["fresh"] = time.time() - s.get("unix_time", 0) < 5
+    return s
+
+
+def status():
+    installed = shutil.which("t2truetone") is not None
+    conf = config()
+    print(json.dumps({
+        "installed": installed,
+        "running": installed and systemctl("is-active", "--quiet", UNIT).returncode == 0,
+        "enabled": installed and systemctl("is-enabled", "--quiet", UNIT).returncode == 0,
+        "trueTone": bool(conf["true_tone"]),
+        "autoBrightness": bool(conf["auto_brightness"]),
+        "strength": float(conf["strength"]),
+        "learned": CURVE.exists(),
+        "live": live(),
+    }))
+
+
+def onoff(v):
+    if v not in ("on", "off"):
+        sys.exit(f"on or off, not {v!r}")
+    return v == "on"
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "status":
+        status()
+    elif cmd == "service" and len(argv) == 2:
+        r = systemctl("enable" if onoff(argv[1]) else "disable", "--now", UNIT)
+        sys.exit(r.returncode)
+    elif cmd == "set" and len(argv) == 3:
+        key, value = argv[1], argv[2]
+        conf = config()
+        if key in ("true_tone", "auto_brightness"):
+            conf[key] = onoff(value)
+        elif key == "strength":
+            conf[key] = min(0.3, max(0.0, round(float(value), 3)))
+        else:
+            sys.exit(f"unknown setting {key!r}")
+        write_config(conf)
+    elif cmd == "forget-brightness":
+        CURVE.unlink(missing_ok=True)
+        if systemctl("is-active", "--quiet", UNIT).returncode == 0:
+            systemctl("restart", UNIT)
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

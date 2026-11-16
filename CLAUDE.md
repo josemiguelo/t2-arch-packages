@@ -105,6 +105,17 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Procedures
 
+- **Omarchy bar plugins and menu entries ship with their packages** (2026-11-16): a package puts
+  its plugin under `/usr/share/t2-omarchy/plugins/<id>/` and its menu entries under
+  `/usr/share/t2-omarchy/menu/<name>.jsonc`, and depends on `t2-omarchy-plugins`, whose
+  `t2-omarchy-setup` links the plugins into `~/.config/omarchy/plugins` (Omarchy loads third-party
+  plugins and menu extensions only from there; the scan follows links), puts them on the bar
+  before Bluetooth in the order of its `order` file, and keeps each menu file as a marked block in
+  `~/.config/omarchy/extensions/omarchy-menu.jsonc`. The fork's first login runs it; an installed
+  Mac runs it once after a package adds a plugin. KaiT2en's GNOME apps become plugins like these
+  and their GTK apps are dropped (the owner, 2026-11-16); the dotfiles keep only where a widget
+  sits. Plugins: `josemiguelo.truetone` (t2-truetone), `josemiguelo.airshare` and its Share-menu
+  entries (t2-airshare), `josemiguelo.sidecar` (t2-sidecar).
 - **Every package a T2 Mac should have is a dependency of `t2-mac`** (or `t2-mac-hybrid`, for
   the dual-GPU models' hybrid graphics), 2026-11-16: the fork's `fix-t2.sh` installs only those
   two, and the owner's dotfiles list no T2 packages (loadouts carry configuration and setup only).

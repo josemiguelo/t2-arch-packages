@@ -36,12 +36,12 @@
 pkgname=t2-airshare
 _ver=0.1.0
 pkgver=0.1.0.r8.c9e24f7
-pkgrel=2
+pkgrel=3
 pkgdesc="Quick Share with Android and AirDrop with Apple devices for Apple T2 Macs (KaiT2en's t2-airshare)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later' 'Apache-2.0' 'BSD-3-Clause')
-depends=('gtk4' 'libadwaita' 'bluez' 'networkmanager' 'iw' 'dnsmasq' 'wpa_supplicant' 'dbus' 'systemd')
+depends=('gtk4' 'libadwaita' 'bluez' 'networkmanager' 'iw' 'dnsmasq' 'wpa_supplicant' 'dbus' 'systemd' 'python' 't2-omarchy-plugins')
 optdepends=('t2-drop: AirDrop with Apple devices'
             'nautilus-python: the "Send with T2 AirShare" entry in Nautilus')
 makedepends=('git' 'cargo')
@@ -103,4 +103,11 @@ package() {
   install -Dm644 "$app/integration/t2-airshare-send.py" "$pkgdir/usr/share/nautilus-python/extensions/t2-airshare-send.py"
   install -Dm644 "$app/LICENSE" "$app/THIRD-PARTY-NOTICES.md" "$app/proto/LICENSE-Apache-2.0" \
     "$app/proto/LICENSE-Chromium" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+  # The Omarchy bar plugin and Share-menu entries (ours), kept in their own
+  # files here: t2-omarchy-setup links the plugin into ~/.config/omarchy/plugins
+  # and writes the entries into the menu's extensions.
+  local plugin="$startdir/omarchy-plugin" dest="$pkgdir/usr/share/t2-omarchy/plugins/josemiguelo.airshare"
+  install -Dm644 "$plugin/manifest.json" "$plugin/Panel.qml" -t "$dest/"
+  install -Dm755 "$plugin/airshare" "$dest/airshare"
+  install -Dm644 "$startdir/omarchy-menu.jsonc" "$pkgdir/usr/share/t2-omarchy/menu/t2-airshare.jsonc"
 }

@@ -14,7 +14,7 @@
 
 pkgbase=t2-mac
 pkgname=('t2-mac' 't2-mac-hybrid')
-pkgver=1
+pkgver=2
 pkgrel=1
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"
@@ -37,6 +37,8 @@ package_t2-mac() {
     't2-fan-control' 't2-smc-control' 't2bce-audio-ucm' 't2-dsp' 't2-force-click'
     't2-touchid' 't2-touchbar' 't2-kbd-backlight' 't2-truetone'
     't2-drop' 't2-airshare' 't2-journal' 't2-ave' 'sunshine-t2' 't2-sidecar'
+    # their Omarchy bar plugins and menu entries, for each user (t2-omarchy-setup)
+    't2-omarchy-plugins'
   )
 }
 
