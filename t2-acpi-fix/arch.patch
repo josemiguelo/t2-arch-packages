@@ -1,0 +1,258 @@
+diff --git c/scripts/fedora/acpi-autofix.py w/scripts/fedora/acpi-autofix.py
+index 562a284..fa6eab7 100755
+--- c/scripts/fedora/acpi-autofix.py
++++ w/scripts/fedora/acpi-autofix.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Detect, validate, and stage T2 Mac ACPI fixes for KaiT2en on Fedora.
++"""Detect, validate, and stage T2 Mac ACPI fixes (Arch: mkinitcpio).
+ 
+ The script reads the running machine's ACPI tables and current-boot kernel
+ log. It only builds overrides for the documented CpuSSDT sub-table loading
+@@ -10,10 +10,11 @@ and independently re-disassembled with iasl before it can be deployed. A full
+ DSDT recompilation is deliberately avoided because unrelated constructs in
+ real Apple firmware tables do not reliably round-trip through iasl.
+ 
+-Validated tables are installed below /usr/local/lib/firmware/acpi and enabled
+-through a dracut configuration file. KaiT2en rebuilds the initramfs in the
+-following installer step; this script never rebuilds it itself. Every file
+-changed here is backed up first and restored if deployment fails.
++Validated tables are installed in /etc/initcpio/acpi_override and enabled
++through a mkinitcpio drop-in that adds the acpi_override hook (it puts them in
++the early, uncompressed initramfs). Rebuild the initramfs afterwards; this
++script never rebuilds it itself. Every file changed here is backed up first
++and restored if deployment fails.
+ """
+ 
+ from __future__ import annotations
+@@ -36,8 +37,9 @@ from pathlib import Path
+ from typing import Iterable, Sequence
+ 
+ ACPI_TABLE_DIR = Path("/sys/firmware/acpi/tables")
+-DEPLOY_DIR = Path("/usr/local/lib/firmware/acpi")
+-DRACUT_CONF = Path("/etc/dracut.conf.d/t2-acpi-fix.conf")
++DEPLOY_DIR = Path("/etc/initcpio/acpi_override")
++# Sorts after Omarchy's 00-omarchy-hooks.conf, which sets HOOKS from scratch.
++HOOK_CONF = Path("/etc/mkinitcpio.conf.d/zz-t2-acpi-fix.conf")
+ BACKUP_ROOT = Path("/var/backups/t2-acpi-fix")
+ 
+ CPU_JOURNAL_GREP = "Marking method"
+@@ -49,9 +51,9 @@ CPU_EXPECTED_RE = re.compile(
+ UUID_SB_OSC = "0811b06e-4a27-44f9-8d60-3cbbc22e7b48"
+ UUID_PCI0_OSC = "33db4d5b-1ff7-401c-9657-7441c03dd766"
+ 
+-DRACUT_REQUIRED_LINES = (
+-    'acpi_override="yes"',
+-    'acpi_table_dir="/usr/local/lib/firmware/acpi"',
++HOOK_REQUIRED_LINES = (
++    "# Managed by t2-acpi-fix: ACPI table overrides in /etc/initcpio/acpi_override.",
++    "HOOKS+=(acpi_override)",
+ )
+ 
+ 
+@@ -60,7 +62,7 @@ class FixError(RuntimeError):
+ 
+ 
+ class FixSkip(FixError):
+-    """Benign condition: an existing non-KAIT2EN override is left untouched."""
++    """Benign condition: an existing override not made by t2-acpi-fix is left untouched."""
+ 
+ 
+ @dataclass(frozen=True)
+@@ -103,7 +105,7 @@ class AmlMethod:
+ 
+ 
+ def info(message: str) -> None:
+-    print(f"[kait2en] {message}", flush=True)
++    print(f"[t2-acpi-fix] {message}", flush=True)
+ 
+ 
+ def output_summary(output: str) -> str:
+@@ -137,24 +139,7 @@ def run(
+ 
+ def require_root() -> None:
+     if os.geteuid() != 0:
+-        raise FixError("run the KaiT2en installer with sudo")
+-
+-
+-def require_fedora() -> None:
+-    path = Path("/etc/os-release")
+-    if not path.is_file():
+-        raise FixError("/etc/os-release is missing")
+-    values: dict[str, str] = {}
+-    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+-        line = raw_line.strip()
+-        if not line or line.startswith("#") or "=" not in line:
+-            continue
+-        key, value = line.split("=", 1)
+-        values[key] = value.strip().strip('"').strip("'")
+-    distro_id = values.get("ID", "").lower()
+-    id_like = values.get("ID_LIKE", "").lower().split()
+-    if distro_id != "fedora" and "fedora" not in id_like:
+-        raise FixError("ACPI autofix is Fedora-only")
++        raise FixError("run t2-acpi-fix with sudo")
+ 
+ 
+ def require_apple_intel_supported() -> str:
+@@ -180,7 +165,7 @@ def require_apple_intel_supported() -> str:
+ def require_commands(commands: Iterable[str]) -> None:
+     missing = [command for command in commands if shutil.which(command) is None]
+     if missing:
+-        suffix = " (install acpica-tools)" if "iasl" in missing else ""
++        suffix = " (install acpica)" if "iasl" in missing else ""
+         raise FixError(f"missing required command(s): {', '.join(missing)}{suffix}")
+ 
+ 
+@@ -1411,7 +1396,7 @@ def atomic_copy(source: Path, destination: Path, mode: int = 0o644) -> None:
+ 
+ 
+ def ownership_marker(target: Path) -> Path:
+-    return target.with_name(f".kait2en-{target.stem}.sha256")
++    return target.with_name(f".t2-acpi-fix-{target.stem}.sha256")
+ 
+ 
+ def sha256_file(path: Path) -> str:
+@@ -1446,12 +1431,12 @@ def verify_managed_or_absent(target: Path) -> None:
+         )
+     if not marker_exists:
+         raise FixSkip(
+-            f"Existing ACPI override is not owned by KAIT2EN: {target}. "
+-            "It was left unchanged; move or remove it manually to let KAIT2EN manage it."
++            f"Existing ACPI override is not owned by t2-acpi-fix: {target}. "
++            "It was left unchanged; move or remove it manually to let t2-acpi-fix manage it."
+         )
+     if target.is_symlink() or marker.is_symlink() or not target.is_file() or not marker.is_file():
+         raise FixError(
+-            f"KAIT2EN refuses to manage a non-regular ACPI table or ownership marker: "
++            f"t2-acpi-fix refuses to manage a non-regular ACPI table or ownership marker: "
+             f"{target}, {marker}"
+         )
+ 
+@@ -1459,7 +1444,7 @@ def verify_managed_or_absent(target: Path) -> None:
+     actual = sha256_file(target)
+     if actual != expected:
+         raise FixError(
+-            f"KAIT2EN-owned ACPI override was modified after installation: {target}. "
++            f"t2-acpi-fix-owned ACPI override was modified after installation: {target}. "
+             "It was left unchanged; restore it or remove it and its ownership marker manually."
+         )
+ 
+@@ -1468,19 +1453,10 @@ def write_ownership_marker(target: Path) -> None:
+     write_atomic_text(ownership_marker(target), sha256_file(target) + "\n")
+ 
+ 
+-def updated_dracut_conf(existing: str, enable: bool) -> str:
+-    retained: list[str] = []
+-    setting_re = re.compile(r"^\s*(acpi_override|acpi_table_dir)\s*=")
+-    for line in existing.splitlines():
+-        if not setting_re.match(line):
+-            retained.append(line)
+-    while retained and not retained[-1].strip():
+-        retained.pop()
+-    if enable and retained:
+-        retained.append("")
+-    if enable:
+-        retained.extend(DRACUT_REQUIRED_LINES)
+-    return "\n".join(retained) + ("\n" if retained else "")
++def updated_hook_conf(existing: str, enable: bool) -> str:
++    """The drop-in is ours alone: the hook lines while there are tables, else nothing
++    (the acpi_override hook fails the build when it finds no table)."""
++    return "\n".join(HOOK_REQUIRED_LINES) + "\n" if enable else ""
+ 
+ 
+ def write_atomic_text(path: Path, text: str, mode: int = 0o644) -> None:
+@@ -1595,14 +1571,14 @@ def deploy_tables(
+     DEPLOY_DIR.chmod(0o755)
+ 
+     markers = {ownership_marker(target) for target in affected_targets}
+-    tracked = sorted(affected_targets | markers) + [DRACUT_CONF]
++    tracked = sorted(affected_targets | markers) + [HOOK_CONF]
+     existed_before = {path: path.exists() or path.is_symlink() for path in tracked}
+     for path in tracked:
+         backup_path(path, backup_dir)
+ 
+     manifest = backup_dir / "MANIFEST.txt"
+     manifest.write_text(
+-        "KaiT2en ACPI backup created before deployment.\n"
++        "t2-acpi-fix backup created before deployment.\n"
+         + "\n".join(f"{path}: existed={existed_before[path]}" for path in tracked)
+         + "\n",
+         encoding="utf-8",
+@@ -1618,15 +1594,15 @@ def deploy_tables(
+             ownership_marker(target).unlink(missing_ok=True)
+ 
+         existing = (
+-            DRACUT_CONF.read_text(encoding="utf-8", errors="replace")
+-            if DRACUT_CONF.exists()
++            HOOK_CONF.read_text(encoding="utf-8", errors="replace")
++            if HOOK_CONF.exists()
+             else ""
+         )
+-        updated_conf = updated_dracut_conf(existing, bool(tables))
++        updated_conf = updated_hook_conf(existing, bool(tables))
+         if updated_conf:
+-            write_atomic_text(DRACUT_CONF, updated_conf)
++            write_atomic_text(HOOK_CONF, updated_conf)
+         else:
+-            DRACUT_CONF.unlink(missing_ok=True)
++            HOOK_CONF.unlink(missing_ok=True)
+     except Exception as original_error:
+         rollback_errors: list[str] = []
+         for path in reversed(tracked):
+@@ -1646,11 +1622,11 @@ def deploy_tables(
+ 
+ 
+ def main() -> int:
+-    if len(sys.argv) != 1:
+-        raise FixError("this installer component does not accept command-line arguments")
++    if sys.argv[1:] not in ([], ["--build-only"]):
++        raise FixError("usage: t2-acpi-fix [--build-only]")
++    build_only = sys.argv[1:] == ["--build-only"]
+ 
+     require_root()
+-    require_fedora()
+     product_name = require_apple_intel_supported()
+ 
+     info("checking whether ACPI firmware fixes are needed")
+@@ -1665,6 +1641,13 @@ def main() -> int:
+         if detection.dsdt_problem:
+             tables.append(build_dsdt(workdir))
+ 
++    if build_only:
++        if not tables:
++            info("no ACPI firmware fix is needed in this boot; nothing built")
++        for table in tables:
++            info(f"built {table.kind}: {table.aml} (details: {table.details}); nothing installed")
++        return 0
++
+     active = overrides_loaded_this_boot(product_name)
+     if not tables and active:
+         names = ", ".join(sorted(path.name for path in active))
+@@ -1673,15 +1656,16 @@ def main() -> int:
+ 
+     deploy_tables(tables, timestamp, product_name, active)
+     if not tables:
+-        info("ACPI firmware fixes are not needed; removed obsolete KaiT2en overrides")
++        info("ACPI firmware fixes are not needed; removed obsolete t2-acpi-fix overrides")
+     else:
+         kinds = ", ".join(table.kind for table in tables)
+         info(f"ACPI firmware fixes prepared for initramfs rebuild: {kinds}")
++        info("rebuild the initramfs (Omarchy: limine-mkinitcpio) and reboot to load them")
+     return 0
+ 
+ 
+ def print_failure(message: str) -> None:
+-    print(f"[kait2en] ACPI autofix could not be applied: {message}", file=sys.stderr)
++    print(f"[t2-acpi-fix] ACPI autofix could not be applied: {message}", file=sys.stderr)
+ 
+ 
+ if __name__ == "__main__":
+@@ -1690,7 +1674,7 @@ if __name__ == "__main__":
+     except KeyboardInterrupt:
+         raise SystemExit(130)
+     except FixSkip as exc:
+-        print(f"[kait2en] ACPI autofix skipped: {exc}")
++        print(f"[t2-acpi-fix] ACPI autofix skipped: {exc}")
+         raise SystemExit(0)
+     except FixError as exc:
+         print_failure(str(exc))

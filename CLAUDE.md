@@ -213,17 +213,25 @@ In order of value for the MacBookPro16,1. "Eligible" is the earliest date under 
 rule (30 days after the path's last real change as seen on 2026-11-12); any later change pushes
 it back, so re-check with `git log -- <path>` before starting.
 
-1. **ACPI fixes** (`scripts/fedora/acpi-autofix.py`, `install-acpi-fixes.sh`): **skipped
-   2026-11-15, log noise only on this Mac.** Every boot logs 18 `AE_ALREADY_EXISTS` lines: the
-   `CpuSsdt`'s `GCAP` re-loads sub-tables the kernel already loaded, aborting `\_PR.CPU0._OSC`,
-   CPU1's `APPT`/`APCT` and CPU0-2's `_PDC`; the firmware then loads `ApPsd` itself. Cost: none
-   found. `intel_pstate` active with HWP (no `_PSS`), turbo to 5.0 GHz, `intel_idle`'s own table
-   (no `_CST`), C10 reached constantly. The DSDT `_OSC` buffer overflow the script also fixes
-   doesn't happen here (platform and PCIe `_OSC` succeed), so only the low-risk CpuSSDT half would
-   apply. The script generates the override from the machine's own tables (`Name (\SDTL, Zero)`
-   set to a mask of the already-loaded sub-tables); on Omarchy it would go through mkinitcpio's
-   `acpi_override` hook (needs `iasl` from `acpica`, and a drop-in after `00-omarchy-hooks.conf`,
-   which resets HOOKS). Not measured: idle battery draw (on AC at the time).
+1. **ACPI fixes** (`scripts/fedora/acpi-autofix.py`): **done 2026-11-15 as `t2-acpi-fix`**, the
+   owner's choice although the gain is mostly correctness (eligible: last change eebd9b1,
+   2026-10-07). Every boot logged 18 `AE_ALREADY_EXISTS` lines: the `CpuSsdt`'s `GCAP` re-loads
+   sub-tables the kernel already loaded, aborting `\_PR.CPU0._OSC`, CPU1's `APPT`/`APCT` and
+   CPU0-2's `_PDC`. The override sets `Name (\SDTL, Zero)` to the mask of those sub-tables
+   (`0x3A` here: CPU0IST, CPU0CST, APIST, APCST) and bumps the revision (`0x3001`; the kernel
+   only upgrades to a higher one). After it: no ACPI errors, `_OSC`/`_PDC` complete on every
+   CPU, and the firmware also loads `Cpu0Psd` (never loaded before). No measurable change:
+   `intel_pstate` with HWP (no `_PSS`/`_PSD` use), turbo to 5.0 GHz, `intel_idle`'s own table, C10
+   as before; deep sleep and wake fine. The DSDT `_OSC` buffer overflow the script also fixes
+   doesn't happen on this Mac.
+   - **How it lands**: `sudo t2-acpi-fix` (machine-specific: built from the running Mac's tables
+     and this boot's log; `--build-only` shows the result first) writes
+     `/etc/initcpio/acpi_override/161CpuSSDT.aml` and `/etc/mkinitcpio.conf.d/zz-t2-acpi-fix.conf`
+     (`HOOKS+=(acpi_override)`, after `00-omarchy-hooks.conf`, which resets HOOKS; mkinitcpio's
+     hook fails the build with no `.aml`), then `limine-mkinitcpio` and a reboot. Proof it's
+     active: `ACPI table found in initrd [kernel/firmware/acpi/161CpuSSDT.aml]` and
+     `Table Upgrade: override [SSDT-CpuRef- CpuSsdt]` in the kernel log. Undo: remove both files,
+     rebuild, reboot (or boot a snapshot from Limine). Rerun after a firmware update.
 2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`): **done 2026-11-12, as an exception to
    the one-month rule**, at the existing pin `27fd5c9` (patches 0001-0024): `t2-bluetooth-dkms`
    became `t2-wireless-dkms`. Not taken: 0025 (iMac antenna), 0026 (BCM4377 ASPM) and 0027

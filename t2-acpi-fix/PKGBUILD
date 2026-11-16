@@ -1,0 +1,69 @@
+# T2 ACPI fix: KaiT2en's ACPI autofix, for mkinitcpio. It reads the running
+# Mac's own ACPI tables and this boot's kernel log, and builds an override only
+# for a problem the log shows:
+#   CpuSSDT  the CPU table's GCAP Load()s sub-tables the kernel already loaded
+#            (AE_ALREADY_EXISTS, `_OSC`/`_PDC` aborted on the first CPUs): the
+#            table is disassembled, `Name (\SDTL, Zero)` set to the mask of the
+#            already-loaded sub-tables (matched by OEM Table ID), and it must
+#            recompile with iasl without errors or warnings
+#   DSDT     the `_OSC` buffer overflow (AE_AML_BUFFER_LIMIT): patched in AML
+#            bytes and re-checked with iasl (not seen on MacBookPro16,1)
+# Run once as root: `t2-acpi-fix` puts the tables in /etc/initcpio/acpi_override
+# and adds the acpi_override hook (/etc/mkinitcpio.conf.d/zz-t2-acpi-fix.conf,
+# after Omarchy's hooks file); then rebuild the initramfs (`limine-mkinitcpio`)
+# and reboot. `--build-only` builds and shows the result without installing.
+# Run again after a firmware update; with no problem left and no override
+# active it removes its files. Backups in /var/backups/t2-acpi-fix. Undo: delete
+# the .aml and the drop-in, rebuild, reboot (or boot a snapshot from Limine).
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  scripts/fedora/acpi-autofix.py
+# (last change eebd9b1, 2026-10-07). Author: Alexander Fischer; KaiT2en's
+# GPL-3.0-or-later with a section 7(b) attribution term (LICENSING.md).
+# Changes (arch.patch, ours): mkinitcpio instead of dracut (the table directory,
+# the hook drop-in, no Fedora check), --build-only, no KaiT2en name in messages
+# or its marker files (its trademark terms).
+
+pkgname=t2-acpi-fix
+_ver=0
+pkgver=0.r5.c9e24f7
+pkgrel=1
+pkgdesc="Builds ACPI table overrides for Apple T2 Macs' firmware bugs from their own tables, for mkinitcpio (KaiT2en's ACPI autofix)"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('python' 'acpica' 'mkinitcpio' 'systemd')
+makedepends=('git')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+source=("kait2en::git+${_repo}#commit=${_commit}"
+        'arch.patch')
+sha256sums=('SKIP'
+            'SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- scripts/fedora/acpi-autofix.py)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd kait2en
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/arch.patch"
+  if grep -ni -e kait2en -e dracut -e /usr/local scripts/fedora/acpi-autofix.py; then
+    echo "a KaiT2en/dracut name or /usr/local path is left" >&2
+    return 1
+  fi
+}
+
+check() {
+  cd kait2en
+  python -m py_compile scripts/fedora/acpi-autofix.py
+}
+
+package() {
+  cd kait2en
+  install -Dm755 scripts/fedora/acpi-autofix.py "$pkgdir/usr/bin/t2-acpi-fix"
+  install -Dm644 LICENSE LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}
