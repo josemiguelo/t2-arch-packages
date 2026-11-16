@@ -105,6 +105,15 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Procedures
 
+- **Every package a T2 Mac should have is a dependency of `t2-mac`** (or `t2-mac-hybrid`, for
+  the dual-GPU models' hybrid graphics), 2026-11-16: the fork's `fix-t2.sh` installs only those
+  two, and the owner's dotfiles list no T2 packages (loadouts carry configuration and setup only).
+  A new package: add it to `t2-mac/PKGBUILD` and bump its `pkgver`; publish the package first,
+  then the meta-packages, and the next `pacman -Syu` installs it everywhere. A retired one: drop it
+  there and give its successor `conflicts`/`replaces`. Settings, enabled services and firewall
+  rules go in `fix-t2.sh` (fresh installs) and, where an existing Mac needs them too, the
+  dotfiles' `t2-*` scripts. `fix-t2.sh` only runs at install: installed Macs follow upstream
+  Omarchy's stable channel, where the fork's migrations never run.
 - **KaiT2en updates wait a month** (the owner's rule, 2026-11-12): KaiT2en ships dangerous
   changes often, so nothing is ported, re-pinned or added until the KaiT2en commit that brings it
   is **at least 30 days old**, and the paths it touches have had **no further real change for 30

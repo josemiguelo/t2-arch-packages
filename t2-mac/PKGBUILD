@@ -1,0 +1,51 @@
+# t2-mac, t2-mac-hybrid: meta-packages, everything this repo gives a T2 Mac on
+# linux-omarchy. The Omarchy fork's installer (fix-t2.sh) installs t2-mac, and
+# t2-mac-hybrid on the dual-GPU models; after that, a new T2 package reaches
+# every installed Mac with the next `pacman -Syu` (omarchy update) as a new
+# dependency here, and a retired one leaves through its successor's
+# conflicts/replaces. Settings and setup stay outside: the fork's installer
+# and the owner's dotfiles (which no longer list these packages).
+#
+#   t2-mac          drivers (DKMS), the T2's services and apps, every T2 Mac
+#   t2-mac-hybrid   hybrid graphics (gmux, patched amdgpu/i915, boot-GPU
+#                   keeper), MacBookPro15,1/15,3/16,1/16,4 only; it pulls t2-mac
+#
+# Bump pkgver whenever a dependency is added or removed.
+
+pkgbase=t2-mac
+pkgname=('t2-mac' 't2-mac-hybrid')
+pkgver=1
+pkgrel=1
+arch=('any')
+url="https://github.com/josemiguelo/t2-arch-packages"
+license=('GPL-3.0-or-later')
+
+package_t2-mac() {
+  pkgdesc="Apple T2 Mac support on linux-omarchy: drivers, services and apps (meta-package)"
+  depends=(
+    # the repo's key, kept current
+    't2-arch-packages-keyring'
+    # DKMS needs the headers of the kernel it builds for
+    'linux-omarchy-headers'
+    # drivers
+    't2bce-stack-dkms' 't2smc-dkms' 't2sbs-dkms' 't2smp-dkms' 't2-thunderbolt-dkms'
+    't2-precision-trackpad-dkms' 't2-trackpad-actuator-dkms' 't2-wireless-dkms'
+    't2-touchbar-dkms' 'linux-apfs-rw-dkms' 't2-dkms-guard'
+    # firmware, boot
+    'apple-bcm-firmware-fetcher' 't2-acpi-fix' 't2-kernel-args'
+    # services and apps
+    't2-fan-control' 't2-smc-control' 't2bce-audio-ucm' 't2-dsp' 't2-force-click'
+    't2-touchid' 't2-touchbar' 't2-kbd-backlight' 't2-truetone'
+    't2-drop' 't2-airshare' 't2-journal' 't2-ave' 'sunshine-t2' 't2-sidecar'
+  )
+}
+
+package_t2-mac-hybrid() {
+  pkgdesc="Hybrid graphics for dual-GPU Apple T2 MacBook Pros on linux-omarchy (meta-package)"
+  depends=(
+    't2-mac'
+    't2gmux-dkms' 't2-amdgpu-dkms' 't2-i915-dkms' 't2-boot-gpu'
+    # package C-states and watts, to check what the iGPU-only mode saves
+    'turbostat'
+  )
+}
