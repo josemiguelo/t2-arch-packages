@@ -1,0 +1,4 @@
+# t2-gmux-backlight: save and restore the gmux backlight across reboots.
+# 99-systemd.rules' backlight rule imports path_id, which fails for this
+# PNP-bus device and cancels the rule, so tag it here instead.
+SUBSYSTEM=="backlight", KERNEL=="gmux_backlight", ENV{ID_PATH}="acpi-APP000B", TAG+="systemd", ENV{SYSTEMD_WANTS}+="systemd-backlight@backlight:$name.service"

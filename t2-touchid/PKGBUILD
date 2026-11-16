@@ -49,7 +49,7 @@
 pkgname=t2-touchid
 _ver=0.1.0
 pkgver=0.1.0.r14.c9e24f7
-pkgrel=4
+pkgrel=5
 pkgdesc="Touch ID on Apple T2 Macs through fprintd (KaiT2en's t2-touchid)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -186,8 +186,11 @@ EOF
 # t2-touchid reaches the Touch ID sensor over: NetworkManager leaves it alone
 # (no DHCP server on the T2), and it comes up with an IPv6 link-local address
 # as it appears. The T2 signals carrier once, when the link is set up, so a
-# link opened later stays NO-CARRIER.
-ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="05ac", ATTRS{idProduct}=="8233", ENV{NM_UNMANAGED}="1", RUN+="/usr/bin/ip link set dev $name addrgenmode eui64", RUN+="/usr/bin/ip link set dev $name up"
+# link opened later stays NO-CARRIER. NM_UNMANAGED on every event, not only
+# "add": a later "change" (a udevadm trigger) would otherwise drop it, and
+# NetworkManager would retry DHCP on the link every 45 s.
+SUBSYSTEM=="net", ATTRS{idVendor}=="05ac", ATTRS{idProduct}=="8233", ENV{NM_UNMANAGED}="1"
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="05ac", ATTRS{idProduct}=="8233", RUN+="/usr/bin/ip link set dev $name addrgenmode eui64", RUN+="/usr/bin/ip link set dev $name up"
 EOF
 
   install -Dm644 /dev/stdin "$pkgdir/usr/share/omarchy-platform/fingerprint-readers" <<'EOF'

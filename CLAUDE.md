@@ -116,6 +116,18 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   and their GTK apps are dropped (the owner, 2026-11-16); the dotfiles keep only where a widget
   sits. Plugins: `josemiguelo.truetone` (t2-truetone), `josemiguelo.airshare` and its Share-menu
   entries (t2-airshare), `josemiguelo.sidecar` (t2-sidecar).
+- **Software goes in packages, never in the dotfiles' scripts** (the owner, 2026-11-16): sleep
+  hooks, udev rules, units, watchers, uwsm env snippets ship with a package (`/usr/lib/...`,
+  `/usr/share/uwsm/env-hyprland.d/`); the dotfiles only set options (e.g. `/etc/t2-charge-limit.conf`)
+  and enable things. Moved that day: `t2-gmux-backlight` (new; the sleep hook, the udev rule, a
+  root watcher that resends the level when the panel's DPMS goes Off -> On and records it, a
+  login unit that restores it; replaced a wrapper around `omarchy-brightness-display` and a
+  Hyprland start hook), `t2-kbd-backlight-sync` (in t2-kbd-backlight: tells UPower about LED
+  changes it didn't announce, so `BrightnessChanged` reaches the fade and the Touch Bar; replaced
+  a wrapper around `omarchy-brightness-keyboard`), the render-GPU snippet (t2-boot-gpu 0.2), the
+  T2 link's `NM_UNMANAGED` on every udev event (t2-touchid), `t2-charge-limit.service`
+  (t2-smc-control). Packages can't wrap Omarchy commands (`/usr/local/bin` is the only dir ahead
+  of `/usr/bin`, and packages don't install there): watch the effect instead.
 - **Every package a T2 Mac should have is a dependency of `t2-mac`** (or `t2-mac-hybrid`, for
   the dual-GPU models' hybrid graphics), 2026-11-16: the fork's `fix-t2.sh` installs only those
   two, and the owner's dotfiles list no T2 packages (loadouts carry configuration and setup only).

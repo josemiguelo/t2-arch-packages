@@ -1,0 +1,86 @@
+#!/bin/bash
+# t2-gmux-backlight: keep the screen at the brightness it was left at, on the
+# dual-GPU MacBook Pros whose panel backlight is the Apple gmux's
+# (gmux_backlight). The gmux wakes at its own bright default whenever the panel
+# powers up, after suspend, after a blank (DPMS) and at the login's first
+# modeset, while the kernel still reports the old level; sending the kernel's
+# level back to it fixes the screen.
+#
+#   t2-gmux-backlight watch     t2-gmux-backlight.service (root): every 0.5 s,
+#                               resend for 2 s after the panel comes back on
+#                               (DPMS Off -> On), and record the level as it
+#                               changes (for `restore` after a crash, which
+#                               skips systemd-backlight's save at shutdown)
+#   t2-gmux-backlight restore   t2-gmux-backlight-login.service (the user's
+#                               session): the recorded level, every 0.1 s for
+#                               3 s, to catch the login modeset's reset
+#   t2-gmux-backlight resend    once (the system-sleep hook, after resume)
+set -uo pipefail
+
+DEV=/sys/class/backlight/gmux_backlight
+STATE=/var/lib/t2-gmux-backlight/level
+
+# Reads with bash's own read, so the watcher's loop forks nothing.
+readf() { local v=""; read -r v < "$1" 2>/dev/null; printf '%s' "$v"; }
+level() { readf "$DEV/brightness"; }
+# Sleep without forking: a read that times out on a pipe nobody writes to.
+exec {never}<> <(:)
+pause() { read -rt "$1" -u "$never" || true; }
+
+# Root writes the attribute; the session user goes through logind.
+set_level() {
+  if [[ -w $DEV/brightness ]]; then
+    echo "$1" > "$DEV/brightness"
+  else
+    brightnessctl -q -d gmux_backlight set "$1"
+  fi
+}
+
+# The connected panel's DPMS state into the variable dpms (On without one).
+read_dpms() {
+  local c st
+  dpms=On
+  for c in /sys/class/drm/card*-eDP-*; do
+    st=""; read -r st < "$c/status" 2>/dev/null
+    [[ $st == connected ]] || continue
+    read -r dpms < "$c/dpms" 2>/dev/null || dpms=On
+    return
+  done
+}
+# The backlight's level into the variable now.
+read_level() { now=""; read -r now < "$DEV/brightness" 2>/dev/null; }
+
+burst() { # level count
+  local i
+  for ((i = 0; i < $2; i++)); do set_level "$1"; pause 0.1; done
+}
+
+[[ -e $DEV ]] || exit 0
+
+case ${1:-} in
+  watch)
+    mkdir -p "${STATE%/*}"
+    read_dpms; read_level
+    last_dpms=$dpms last_level=$now
+    while :; do
+      pause 0.5
+      read_dpms; read_level
+      if [[ $last_dpms == Off && $dpms == On && -n $now ]]; then
+        burst "$now" 20
+      fi
+      if [[ -n $now && $now != "$last_level" && $now -gt 0 ]]; then
+        printf '%s\n' "$now" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+      fi
+      last_dpms=$dpms last_level=$now
+    done
+    ;;
+  restore)
+    l=$(readf "$STATE"); [[ -n $l ]] || l=$(level)
+    [[ -n $l ]] && burst "$l" 30
+    ;;
+  resend)
+    l=$(level)
+    [[ -n $l ]] && set_level "$l"
+    ;;
+  *) sed -n '2,/^set -uo/p' "$0" | sed '$d;s/^# \{0,1\}//' >&2; exit 2 ;;
+esac

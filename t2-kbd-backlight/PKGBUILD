@@ -19,12 +19,12 @@
 pkgname=t2-kbd-backlight
 _ver=0.1.0
 pkgver=0.1.0.r2.c9e24f7
-pkgrel=1
+pkgrel=2
 pkgdesc="Keyboard backlight idle fade for Apple T2 MacBooks (KaiT2en's t2-kbd-backlight)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')
-depends=('libinput' 'upower' 'systemd-libs')
+depends=('libinput' 'upower' 'systemd-libs' 'bash' 'glib2' 'systemd')
 optdepends=('t2-touchbar: Touch Bar touches count as input, and its glyphs dim with the keyboard')
 makedepends=('git' 'cargo')
 backup=('etc/t2-kbd-backlight/kbd-backlight.toml')
@@ -66,4 +66,13 @@ package() {
   install -Dm644 "$app/systemd/t2-kbd-backlight.service" "$pkgdir/usr/lib/systemd/system/t2-kbd-backlight.service"
   install -Dm644 "$app/config/kbd-backlight.toml" "$pkgdir/etc/t2-kbd-backlight/kbd-backlight.toml"
   install -Dm644 LICENSING.md AUTHORS LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+
+  # Ours: t2-kbd-backlight-sync tells UPower about changes made behind its back
+  # (Omarchy's keys write the LED with brightnessctl), so the fade and the
+  # Touch Bar follow them. On from install. Was the owner's dotfiles' wrapper
+  # around omarchy-brightness-keyboard.
+  install -Dm755 "$startdir/t2-kbd-backlight-sync" "$pkgdir/usr/lib/t2-kbd-backlight/t2-kbd-backlight-sync"
+  install -Dm644 "$startdir/t2-kbd-backlight-sync.service" "$pkgdir/usr/lib/systemd/system/t2-kbd-backlight-sync.service"
+  install -dm755 "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../t2-kbd-backlight-sync.service "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/t2-kbd-backlight-sync.service"
 }

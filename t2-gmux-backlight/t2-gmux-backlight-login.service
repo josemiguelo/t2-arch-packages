@@ -1,0 +1,12 @@
+[Unit]
+Description=Put the gmux panel backlight back at its level after the login's modeset
+ConditionPathExists=/sys/class/backlight/gmux_backlight
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/t2-gmux-backlight restore
+
+[Install]
+WantedBy=graphical-session.target

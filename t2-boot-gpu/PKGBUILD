@@ -18,7 +18,7 @@
 # t2-hybrid-gpu-control helper.
 
 pkgname=t2-boot-gpu
-pkgver=0.1
+pkgver=0.2
 pkgrel=1
 pkgdesc="Keep the boot GPU (hybrid or discrete) of dual-GPU T2 MacBook Pros across macOS boots"
 arch=('any')
@@ -28,10 +28,13 @@ depends=('bash' 'e2fsprogs' 'systemd')
 optdepends=('t2gmux-dkms: the gmux driver hybrid mode needs'
             't2-amdgpu-dkms: the dGPU powered off in hybrid mode'
             't2-i915-dkms: the panel on the iGPU, waking with it')
-source=('t2-boot-gpu' 't2-boot-gpu.service')
-sha256sums=('SKIP' 'SKIP')
+source=('t2-boot-gpu' 't2-boot-gpu.service' 't2-render-gpu.env')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 t2-boot-gpu "$pkgdir/usr/bin/t2-boot-gpu"
   install -Dm644 t2-boot-gpu.service "$pkgdir/usr/lib/systemd/system/t2-boot-gpu.service"
+  # Hyprland on the panel's GPU, through uwsm's system env.d (read from
+  # XDG_DATA_DIRS); was the owner's dotfiles' t2-render-gpu script.
+  install -Dm644 t2-render-gpu.env "$pkgdir/usr/share/uwsm/env-hyprland.d/50-t2-render-gpu"
 }

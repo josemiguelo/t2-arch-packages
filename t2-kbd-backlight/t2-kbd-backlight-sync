@@ -1,0 +1,43 @@
+#!/bin/bash
+# t2-kbd-backlight-sync (t2-kbd-backlight-sync.service, root): tells UPower when
+# the keyboard backlight changed behind its back, so it sends BrightnessChanged.
+#
+# Omarchy's keyboard-backlight keys (omarchy-brightness-keyboard) write the LED
+# through brightnessctl, and t2hid's :white:kbd_backlight has no
+# brightness_hw_changed, so UPower never signals those changes. Two things go
+# by that signal: t2-kbd-backlight's idle fade (it fades back to the level
+# UPower last announced) and the Touch Bar's glyphs. Every change made through
+# UPower (the fade's included) is announced; one the LED shows that UPower
+# didn't announce within a moment came from elsewhere, and is handed to UPower
+# (SetBrightness, the same value: nothing changes on the keyboard, but UPower
+# announces it).
+set -uo pipefail
+
+LED=""
+for c in /sys/class/leds/*kbd_backlight*; do [[ -r $c/brightness ]] && { LED=$c/brightness; break; }; done
+[[ -n $LED ]] || { echo "t2-kbd-backlight-sync: no keyboard backlight LED" >&2; exit 0; }
+
+UP=(org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight)
+
+# UPower's announcements, read as they come; the read's timeout is the poll.
+coproc MON { exec gdbus monitor --system --dest org.freedesktop.UPower --object-path /org/freedesktop/UPower/KbdBacklight; }
+
+read -r led < "$LED"
+announced=$led last=$led pending=0
+while :; do
+  if read -rt 0.4 -u "${MON[0]}" line; then
+    [[ $line =~ \.BrightnessChanged(WithSource)?\ \(([0-9]+), ]] && announced=${BASH_REMATCH[2]}
+    continue
+  fi
+  [[ -n ${MON_PID:-} ]] || exit 1  # the monitor died: systemd restarts us
+  read -r led < "$LED" || continue
+  if [[ $led == "$announced" ]]; then
+    pending=0
+  elif [[ $led != "$last" ]]; then
+    pending=1  # just changed: give UPower's own announcement a moment
+  elif (( pending )); then
+    busctl call --quiet "${UP[@]}" SetBrightness i "$led" && announced=$led
+    pending=0
+  fi
+  last=$led
+done

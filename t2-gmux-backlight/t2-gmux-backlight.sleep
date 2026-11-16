@@ -1,0 +1,5 @@
+#!/bin/sh
+# t2-gmux-backlight: after suspend/hibernate, send the kernel's brightness back
+# to the gmux, which wakes at its own bright default without it.
+[ "$1" = post ] || exit 0
+exec /usr/bin/t2-gmux-backlight resend

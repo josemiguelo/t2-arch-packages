@@ -1,0 +1,12 @@
+[Unit]
+Description=Tell UPower about keyboard backlight changes made behind its back (T2)
+After=upower.service
+Wants=upower.service
+
+[Service]
+ExecStart=/usr/lib/t2-kbd-backlight/t2-kbd-backlight-sync
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

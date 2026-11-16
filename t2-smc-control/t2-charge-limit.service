@@ -1,0 +1,16 @@
+[Unit]
+Description=T2 battery charge limit (from /etc/t2-charge-limit.conf)
+# The T2 SMC keeps the limit (CHLS) across reboots and operating systems, but
+# macOS's battery management may change it: written again at every boot.
+# t2-smc-gaugingd's calibration charges lift it separately (suspended).
+After=systemd-modules-load.service
+ConditionPathExists=/etc/t2-charge-limit.conf
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/t2-charge-limit.conf
+# t2smc's attribute appears when it binds, after early boot: wait up to 60 s.
+ExecStart=/bin/sh -c 'f=/sys/class/power_supply/BAT0/charge_control_end_threshold; for i in $$(seq 60); do [ -w $$f ] && break; sleep 1; done; echo "$${LIMIT:?}" > $$f'
+
+[Install]
+WantedBy=multi-user.target

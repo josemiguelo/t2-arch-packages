@@ -1,0 +1,42 @@
+# t2-gmux-backlight: the screen stays at the brightness it was left at, on the
+# dual-GPU MacBook Pros (15,1, 15,3, 16,1, 16,4) whose panel backlight is the
+# Apple gmux's. The gmux wakes at its own bright default whenever the panel
+# powers up, while the kernel keeps reporting the old level:
+#   after suspend   a system-sleep hook sends the level back
+#   after a blank   t2-gmux-backlight.service (root) sees the panel's DPMS go
+#                   Off -> On and sends it back for 2 s
+#   at login        t2-gmux-backlight-login.service (user) sends the recorded
+#                   level for 3 s, past the first modeset's reset; the watcher
+#                   records the level as it changes, since a crash skips
+#                   systemd-backlight's save at shutdown
+#   across reboots  a udev rule tags gmux_backlight for systemd-backlight, whose
+#                   own rule fails on this PNP-bus device
+# Both units are on from install (their .wants links ship here) and skip
+# machines without gmux_backlight.
+#
+# Ours (t2-arch-packages); was the owner's dotfiles' t2-gmux-backlight script,
+# whose wrapper around omarchy-brightness-display and Hyprland start hook the
+# watcher and the login unit replace.
+
+pkgname=t2-gmux-backlight
+pkgver=0.1
+pkgrel=1
+pkgdesc="Keeps the Apple gmux panel backlight at its level across suspend, blanks and logins (dual-GPU T2 MacBook Pros)"
+arch=('any')
+url="https://github.com/josemiguelo/t2-arch-packages"
+license=('GPL-3.0-or-later')
+depends=('bash' 'brightnessctl' 'systemd')
+source=('t2-gmux-backlight' 't2-gmux-backlight.service' 't2-gmux-backlight-login.service'
+        't2-gmux-backlight.sleep' '99-t2-gmux-backlight.rules')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 t2-gmux-backlight "$pkgdir/usr/bin/t2-gmux-backlight"
+  install -Dm644 t2-gmux-backlight.service "$pkgdir/usr/lib/systemd/system/t2-gmux-backlight.service"
+  install -Dm644 t2-gmux-backlight-login.service "$pkgdir/usr/lib/systemd/user/t2-gmux-backlight-login.service"
+  install -Dm755 t2-gmux-backlight.sleep "$pkgdir/usr/lib/systemd/system-sleep/t2-gmux-backlight"
+  install -Dm644 99-t2-gmux-backlight.rules "$pkgdir/usr/lib/udev/rules.d/99-t2-gmux-backlight.rules"
+  install -dm755 "$pkgdir/usr/lib/systemd/system/multi-user.target.wants" "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
+  ln -s ../t2-gmux-backlight.service "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/t2-gmux-backlight.service"
+  ln -s ../t2-gmux-backlight-login.service "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/t2-gmux-backlight-login.service"
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep the gmux panel backlight at its level after the panel powers up
+ConditionPathExists=/sys/class/backlight/gmux_backlight
+
+[Service]
+ExecStart=/usr/bin/t2-gmux-backlight watch
+Restart=on-failure
+StateDirectory=t2-gmux-backlight
+
+[Install]
+WantedBy=multi-user.target
