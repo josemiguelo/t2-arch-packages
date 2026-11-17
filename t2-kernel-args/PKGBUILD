@@ -24,7 +24,7 @@
 
 pkgname=t2-kernel-args
 pkgver=0.1
-pkgrel=1
+pkgrel=2
 pkgdesc="Keep the Apple T2 Mac's kernel arguments (wake, ASPM) in Limine's entries and boot image"
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"

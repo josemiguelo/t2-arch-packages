@@ -13,9 +13,14 @@
 # announces it).
 set -uo pipefail
 
+# t2hid registers the LED a moment into boot: wait for it (2 min), then fail
+# so systemd tries again.
 LED=""
-for c in /sys/class/leds/*kbd_backlight*; do [[ -r $c/brightness ]] && { LED=$c/brightness; break; }; done
-[[ -n $LED ]] || { echo "t2-kbd-backlight-sync: no keyboard backlight LED" >&2; exit 0; }
+for _ in $(seq 120); do
+  for c in /sys/class/leds/*kbd_backlight*; do [[ -r $c/brightness ]] && { LED=$c/brightness; break 2; }; done
+  sleep 1
+done
+[[ -n $LED ]] || { echo "t2-kbd-backlight-sync: no keyboard backlight LED yet" >&2; exit 1; }
 
 UP=(org.freedesktop.UPower /org/freedesktop/UPower/KbdBacklight org.freedesktop.UPower.KbdBacklight)
 

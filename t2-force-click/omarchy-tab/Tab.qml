@@ -20,6 +20,7 @@ Item {
   property color urgent: Commons.Color.urgent
   property color dim: Qt.darker(foreground, 1.55)
   property string fontFamily: Style.font.family
+  property bool opened: true   // the panel is open (set by it)
   signal closeRequested()
   implicitHeight: column.implicitHeight
 
@@ -38,6 +39,8 @@ Item {
   readonly property bool force: ok && s.force
   readonly property string action: ok ? s.action : "none"
   readonly property bool hasText: action === "key_combo" || action === "command"
+  // The panel hands every key to the text field while it has the keyboard.
+  readonly property bool editing: textField.activeFocus
   readonly property var rows: [1, 2].concat(force ? [3, 4] : []).concat(force && hasText ? [5] : [])
   readonly property var clicks: [{ value: "0", label: "Light" }, { value: "1", label: "Medium" }, { value: "2", label: "Firm" }]
   readonly property var actions: [
@@ -91,7 +94,7 @@ Item {
 
   Timer {
     interval: 5000
-    running: true
+    running: root.opened
     repeat: true
     onTriggered: if (!textField.activeFocus) root.refresh()
   }
@@ -105,7 +108,7 @@ Item {
         try {
           var st = JSON.parse(text)
           root.s = st
-          if (!st.available) root.error = st.error
+          root.error = st.available ? "" : st.error
           if (st.available && !root.busy && !root.thresholdDragging) root.threshold = st.threshold
           if (st.available && !textField.activeFocus)
             textField.text = st.action === "command" ? st.command : st.combo

@@ -55,12 +55,14 @@ def versioned(folder):
 
 
 def active(ts):
-    units = {t["id"]: t["indicator"] for t in ts if isinstance(t.get("indicator"), dict)}
+    # A malformed indicator (no unit) is ignored, not fatal to the panel.
+    units = {t["id"]: t["indicator"] for t in ts
+             if isinstance(t.get("indicator"), dict) and t["indicator"].get("unit")}
     if not units:
         return []
     names = [u["unit"] for u in units.values()]
     states = subprocess.run(["systemctl", "--user", "is-active", *names], text=True, capture_output=True).stdout.split()
-    return [{"id": tid, "text": u["text"]} for (tid, u), st in zip(units.items(), states) if st == "active"]
+    return [{"id": tid, "text": u.get("text", tid)} for (tid, u), st in zip(units.items(), states) if st == "active"]
 
 
 def main(argv):

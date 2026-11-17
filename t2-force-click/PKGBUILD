@@ -23,8 +23,8 @@
 pkgname=t2-force-click
 _ver=0.1.0
 pkgver=0.1.0.r8.27fd5c9
-pkgrel=2
-pkgdesc="Force Touch settings app and daemon for Apple T2 Mac trackpads (KaiT2en)"
+pkgrel=3
+pkgdesc="Force Touch daemon for Apple T2 Mac trackpads, with the T2 panel's Trackpad tab (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')

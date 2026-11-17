@@ -17,7 +17,8 @@
 # any local process could change the fans or the daemon's own enablement,
 # carried out as root. peer-check.patch keeps reading open and takes changes
 # only from root or the active local session's user (SO_PEERCRED + logind,
-# as t2-force-click does).
+# as t2-force-click does), each request line within 3 s (a silent client held
+# the single-threaded loop).
 #
 # No GTK window: its launcher entry and icon aren't installed. The fans are the
 # Fans tab of the T2 panel on Omarchy's bar (ours, below; the panel is
@@ -27,8 +28,8 @@
 pkgname=t2-fan-control
 _ver=0.1.0
 pkgver=0.1.0.r27.8c7f725
-pkgrel=2
-pkgdesc="Fan control daemon and GTK app for Apple T2 Macs (KaiT2en)"
+pkgrel=3
+pkgdesc="Fan control daemon for Apple T2 Macs, with the T2 panel's Fans tab (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')

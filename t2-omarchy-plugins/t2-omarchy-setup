@@ -49,7 +49,8 @@ want = {}
 for f in (sorted(src.glob("*.jsonc")) if src.is_dir() else []):
     body = f.read_text().rstrip("\n").split("\n")
     want[f.stem] = [BEGIN.format(f.stem), f"  // {f.stem}'s entries, from {f} (rewritten by t2-omarchy-setup).", *body, END.format(f.stem)]
-lines = menu.read_text().rstrip("\n").split("\n") if menu.exists() else ["{", "}"]
+text = menu.read_text().strip() if menu.exists() else ""
+lines = text.split("\n") if text else ["{", "}"]
 blocks, rest, cur, end = {}, [], None, None
 for line in lines:
     if cur is None:
@@ -66,12 +67,18 @@ for line in lines:
     blocks.setdefault(cur, []).append(line)
     if line == end:
         cur = None
+if cur is not None:
+    # An opening marker without its closing one: rewriting would swallow the
+    # rest of the file. Leave it for a person.
+    sys.exit(f"t2-omarchy-setup: {menu} has a block ({cur}) with no closing marker; not touching it")
 ok = set(blocks) == set(want) and all(blocks[k] == want[k] for k in want)
 if mode == "check":
     sys.exit(0 if ok else 1)
 if ok:
     sys.exit(0)
-brace = next(i for i, l in enumerate(rest) if l.lstrip().startswith("{"))
+brace = next((i for i, l in enumerate(rest) if l.lstrip().startswith("{")), None)
+if brace is None:
+    sys.exit(f"t2-omarchy-setup: {menu} has no opening brace to put the entries after")
 new = rest[: brace + 1] + [l for k in want for l in want[k]] + rest[brace + 1 :]
 menu.parent.mkdir(parents=True, exist_ok=True)
 tmp = menu.with_suffix(".jsonc.tmp")
@@ -99,7 +106,7 @@ for id in "${ids[@]}"; do
   fi
   [[ $(readlink "$link" 2>/dev/null) == "$SHARE/plugins/$id" ]] || ln -sfn "$SHARE/plugins/$id" "$link"
 done
-# Links to plugins whose package is gone (or to where t2-sidecar 0.2 kept its).
+# Links to plugins whose package is gone.
 for link in "$PLUGINS"/*; do
   [[ -L $link ]] || continue
   target=$(readlink "$link")
@@ -114,9 +121,12 @@ done
 menu write
 
 omarchy-shell -q shell rescanPlugins || true
+failed=0
 for id in "${ids[@]}"; do
   omarchy-bar put "$id" --before omarchy.bluetooth >/dev/null 2>&1 ||
     omarchy-bar put "$id" --section right >/dev/null 2>&1 ||
-    echo "t2-omarchy-setup: couldn't put $id on the bar (is the shell running?)" >&2
+    { echo "t2-omarchy-setup: couldn't put $id on the bar (is the shell running?)" >&2; failed=1; }
 done
+# A failure is reported, so Omarchy's first run tries again next login.
+((failed == 0)) || exit 1
 echo "t2-omarchy-setup: ${ids[*]:-no plugins} in place"

@@ -62,11 +62,13 @@ write() {
 rebuild() {
   # Don't race another build: a pacman transaction (its hooks rebuild the
   # image) or a build already running, e.g. the Omarchy migration that rewrote
-  # the file and rebuilds right after. Wait up to 5 min for both, then rebuild
-  # with the file in place.
+  # the file and rebuilds right after (give it a moment to start). By command
+  # line: `pgrep -x` sees only 15 characters of a name, "limine-mkinitcp".
+  # Up to 5 min for both, then rebuild with the file in place.
   local i
+  sleep 3
   for i in $(seq 300); do
-    [[ -e $LOCK ]] || pgrep -x 'limine-mkinitcpio|mkinitcpio' >/dev/null || break
+    [[ -e $LOCK ]] || pgrep -f '(^|/)(limine-)?mkinitcpio( |$)' >/dev/null || break
     sleep 1
   done
   limine-mkinitcpio

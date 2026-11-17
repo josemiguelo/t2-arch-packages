@@ -1,6 +1,7 @@
 [Unit]
 Description=Keep the gmux panel backlight at its level after the panel powers up
-ConditionPathExists=/sys/class/backlight/gmux_backlight
+# No ConditionPathExists: the device can register after this starts; the
+# watcher waits for it.
 
 [Service]
 ExecStart=/usr/bin/t2-gmux-backlight watch

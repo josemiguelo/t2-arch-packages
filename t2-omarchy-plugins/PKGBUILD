@@ -15,9 +15,9 @@
 # Ours (t2-arch-packages).
 
 pkgname=t2-omarchy-plugins
-pkgver=0.2
+pkgver=0.3
 pkgrel=1
-pkgdesc="Puts the Apple T2 packages' Omarchy bar plugins and menu entries in place for the user"
+pkgdesc="The T2 panel on Omarchy's bar (a tab per T2 feature) and its per-user setup"
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"
 license=('GPL-3.0-or-later')

@@ -20,6 +20,7 @@ Item {
   property color urgent: Commons.Color.urgent
   property color dim: Qt.darker(foreground, 1.55)
   property string fontFamily: Style.font.family
+  property bool opened: true   // the panel is open (set by it)
   signal closeRequested()
   implicitHeight: column.implicitHeight
 
@@ -77,7 +78,7 @@ Item {
 
   Timer {
     interval: 2000
-    running: true
+    running: root.opened
     repeat: true
     onTriggered: root.refresh()
   }
@@ -91,6 +92,7 @@ Item {
         try {
           var st = JSON.parse(text)
           root.s = st
+          if (st.installed) root.error = ""
         } catch (e) {
           root.error = "Couldn't read the T2 SMC"
         }

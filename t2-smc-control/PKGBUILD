@@ -20,8 +20,8 @@
 pkgname=t2-smc-control
 _ver=0.1.0
 pkgver=0.1.0.r34.27fd5c9
-pkgrel=3
-pkgdesc="SMC control app and battery gauging daemon for Apple T2 Macs (KaiT2en)"
+pkgrel=4
+pkgdesc="Battery gauging daemon and charge limit for Apple T2 Macs, with the T2 panel's Battery tab (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')

@@ -1,6 +1,6 @@
 diff -ruN a/apps/t2-fan-control/Cargo.lock b/apps/t2-fan-control/Cargo.lock
---- a/apps/t2-fan-control/Cargo.lock	2026-11-14 07:24:01.000000000 -0500
-+++ b/apps/t2-fan-control/Cargo.lock	2026-11-16 17:33:46.655436509 -0500
+--- a/apps/t2-fan-control/Cargo.lock	2026-11-12 15:11:08.000000000 -0500
++++ b/apps/t2-fan-control/Cargo.lock	2026-11-16 20:16:44.043428505 -0500
 @@ -645,6 +645,7 @@
   "glob",
   "gtk4",
@@ -10,8 +10,8 @@ diff -ruN a/apps/t2-fan-control/Cargo.lock b/apps/t2-fan-control/Cargo.lock
   "thiserror",
  ]
 diff -ruN a/apps/t2-fan-control/Cargo.toml b/apps/t2-fan-control/Cargo.toml
---- a/apps/t2-fan-control/Cargo.toml	2026-11-14 07:24:01.000000000 -0500
-+++ b/apps/t2-fan-control/Cargo.toml	2026-11-16 17:33:46.655248492 -0500
+--- a/apps/t2-fan-control/Cargo.toml	2026-11-12 15:11:08.000000000 -0500
++++ b/apps/t2-fan-control/Cargo.toml	2026-11-16 20:16:44.043532228 -0500
 @@ -11,6 +11,7 @@
  [dependencies]
  glib = "0.20"
@@ -21,8 +21,8 @@ diff -ruN a/apps/t2-fan-control/Cargo.toml b/apps/t2-fan-control/Cargo.toml
  signal-hook = "0.3"
  thiserror = "2"
 diff -ruN a/apps/t2-fan-control/src/ipc.rs b/apps/t2-fan-control/src/ipc.rs
---- a/apps/t2-fan-control/src/ipc.rs	2026-11-14 07:24:01.000000000 -0500
-+++ b/apps/t2-fan-control/src/ipc.rs	2026-11-16 17:33:46.655644933 -0500
+--- a/apps/t2-fan-control/src/ipc.rs	2026-11-12 15:11:08.000000000 -0500
++++ b/apps/t2-fan-control/src/ipc.rs	2026-11-16 20:16:44.043650344 -0500
 @@ -1,8 +1,9 @@
  use std::{
      fs,
@@ -93,10 +93,15 @@ diff -ruN a/apps/t2-fan-control/src/ipc.rs b/apps/t2-fan-control/src/ipc.rs
      FanControlError::Protocol(message)
  }
 diff -ruN a/apps/t2-fan-control/src/main.rs b/apps/t2-fan-control/src/main.rs
---- a/apps/t2-fan-control/src/main.rs	2026-11-14 07:24:01.000000000 -0500
-+++ b/apps/t2-fan-control/src/main.rs	2026-11-16 17:33:46.656288663 -0500
-@@ -411,6 +411,9 @@
+--- a/apps/t2-fan-control/src/main.rs	2026-11-12 15:11:08.000000000 -0500
++++ b/apps/t2-fan-control/src/main.rs	2026-11-16 20:16:44.055072063 -0500
+@@ -409,8 +409,14 @@
+         match next {
+             Ok(None) => runtime.reload_config()?,
              Ok(Some(Ok((stream, _addr)))) => {
++                // One request line, within 3 s: a client that connects and
++                // says nothing would otherwise hold the control loop.
++                let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
                  let request = ipc::read_request(&stream);
                  match request {
 +                    Ok(request) if !matches!(request, Request::GetState) && !ipc::may_change(&stream) => {

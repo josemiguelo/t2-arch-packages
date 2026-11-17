@@ -19,7 +19,7 @@
 pkgname=t2-kbd-backlight
 _ver=0.1.0
 pkgver=0.1.0.r2.c9e24f7
-pkgrel=2
+pkgrel=3
 pkgdesc="Keyboard backlight idle fade for Apple T2 MacBooks (KaiT2en's t2-kbd-backlight)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"

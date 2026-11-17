@@ -49,7 +49,7 @@
 pkgname=t2-touchid
 _ver=0.1.0
 pkgver=0.1.0.r14.c9e24f7
-pkgrel=6
+pkgrel=7
 pkgdesc="Touch ID on Apple T2 Macs through fprintd (KaiT2en's t2-touchid)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -63,6 +63,9 @@ optdepends=('fprintd: the fingerprint service PAM asks (Omarchy fingerprint setu
             'libfprint-git: libfprint with its virtual storage driver (Omarchy fingerprint setup installs it)')
 makedepends=('git' 'cargo')
 backup=('etc/t2-touchid.conf')
+# The D-Bus name changed with -6 (t2.TouchId): an older t2-touchbar listens on
+# the old one, and its unlock prompt would never show.
+conflicts=('t2-touchbar<0.1.0.r39.c9e24f7-3')
 options=('!debug')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"

@@ -169,12 +169,16 @@ def nearby(seconds):
     """Both discoveries side by side, their JSON lines passed on as they come."""
     import selectors
     import signal
-    run("bluetoothctl", "power", "on")  # Quick Share finds phones over Bluetooth LE
+    # Quick Share finds phones over Bluetooth LE; bounded, bluetoothd may be down.
+    try:
+        subprocess.run(["bluetoothctl", "power", "on"], capture_output=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     procs = []
     for cmd in (["t2airshare", "list", "--json", "--wait", str(seconds)],
                 ["t2drop", "list", "--json", "--wait", str(seconds)]):
         if shutil.which(cmd[0]):
-            procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True))
+            procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL))
 
     def stop(*_):
         for p in procs:
@@ -183,18 +187,26 @@ def nearby(seconds):
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    # Raw reads, split into lines here: a buffered readline() could keep a
+    # second line waiting until the next one, or the end, arrived.
     sel = selectors.DefaultSelector()
+    pending = {}
     for p in procs:
-        sel.register(p.stdout, selectors.EVENT_READ)
-    open_streams = len(procs)
-    while open_streams:
+        sel.register(p.stdout.fileno(), selectors.EVENT_READ)
+        pending[p.stdout.fileno()] = b""
+    while pending:
         for key, _ in sel.select():
-            line = key.fileobj.readline()
-            if not line:
-                sel.unregister(key.fileobj)
-                open_streams -= 1
-            elif line.startswith("{"):
-                print(line.rstrip("\n"), flush=True)
+            fd = key.fd
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                sel.unregister(fd)
+                del pending[fd]
+                continue
+            buf = pending[fd] + chunk
+            *lines, pending[fd] = buf.split(b"\n")
+            for line in lines:
+                if line.startswith(b"{"):
+                    print(line.decode(errors="replace"), flush=True)
     for p in procs:
         p.wait()
 

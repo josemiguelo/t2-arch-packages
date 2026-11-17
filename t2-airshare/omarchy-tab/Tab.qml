@@ -23,7 +23,7 @@ Item {
   property color urgent: Commons.Color.urgent
   property color dim: Qt.darker(foreground, 1.55)
   property string fontFamily: Style.font.family
-  readonly property bool opened: true
+  property bool opened: true   // the panel is open (set by it)
   signal closeRequested()
   implicitHeight: column.implicitHeight
 
@@ -66,6 +66,11 @@ Item {
   property string resultText: ""
   readonly property bool sendMode: pending.length > 0
   readonly property bool scanning: nearbyProc.running
+  // The panel keeps this tab while a transfer runs: no switching away.
+  readonly property bool locked: phase === "sending"
+
+  // No scanning with the panel closed (a transfer goes on).
+  onOpenedChanged: if (!opened) nearbyProc.running = false
 
   function fileName(path) { return String(path).split("/").pop() }
 
@@ -149,7 +154,7 @@ Item {
     if (sendMode) {
       if (phase === "pick" && cursorIndex < devices.length) sendTo(devices[cursorIndex])
       else if (phase === "pick" && cursorIndex === devices.length) startScan()
-      else finishSend()
+      else if (phase === "done" || cursorIndex === devices.length + 1) finishSend()
       return
     }
     var i = cursorIndex
@@ -167,7 +172,7 @@ Item {
   // The receiver can be switched elsewhere too (the app, systemctl).
   Timer {
     interval: 15000
-    running: true
+    running: root.opened
     repeat: true
     onTriggered: root.refresh()
   }
@@ -191,8 +196,9 @@ Item {
           root.downloadDir = s.downloadDir || ""
           root.trusted = s.trusted || []
           root.recent = s.recent || []
-          root.pending = s.pending || []
-          if (root.sendMode && root.phase === "pick" && root.devices.length === 0) root.startScan()
+          // A transfer keeps its files even if they expire meanwhile.
+          if (root.phase === "pick") root.pending = s.pending || []
+          if (root.opened && root.sendMode && root.phase === "pick" && root.devices.length === 0 && !root.scanning) root.startScan()
           root.error = ""
         } catch (e) {
           root.error = "Couldn't read AirShare's state"
@@ -219,8 +225,12 @@ Item {
         try {
           var d = JSON.parse(line)
           var key = d.proto + ":" + d.id
-          if (!root.devices.some(function(x) { return x.proto + ":" + x.id === key }))
+          if (!root.devices.some(function(x) { return x.proto + ":" + x.id === key })) {
+            // A device added under the cursor would move "Look again" or
+            // Cancel down: keep the cursor on the row it was on.
+            if (root.cursorActive && root.cursorIndex >= root.devices.length) root.cursorIndex += 1
             root.devices = root.devices.concat([d])
+          }
         } catch (e) {}
       }
     }
@@ -533,7 +543,9 @@ Item {
       rowIndex: root.devices.length + 1
       icon: "󰜺"
       label: "Cancel"
-      detail: root.phase === "sending" ? "Stops the transfer" : "Leaves sending"
+      detail: root.phase !== "sending" ? "Leaves sending"
+              : root.target && root.target.proto === "airdrop" ? "Stops waiting here; the transfer may still finish"
+              : "Stops the transfer"
       onActivated: root.finishSend()
     }
   }

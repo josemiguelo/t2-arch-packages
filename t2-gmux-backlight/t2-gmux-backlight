@@ -55,6 +55,11 @@ burst() { # level count
   for ((i = 0; i < $2; i++)); do set_level "$1"; pause 0.1; done
 }
 
+if [[ ${1:-} == watch ]]; then
+  # gmux_backlight registers a moment into boot: wait for it (2 min); no gmux
+  # by then, nothing to do.
+  for _ in $(seq 120); do [[ -e $DEV ]] && break; pause 1; done
+fi
 [[ -e $DEV ]] || exit 0
 
 case ${1:-} in

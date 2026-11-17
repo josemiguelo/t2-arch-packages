@@ -20,6 +20,7 @@ Item {
   property color urgent: Commons.Color.urgent
   property color dim: Qt.darker(foreground, 1.55)
   property string fontFamily: Style.font.family
+  property bool opened: true   // the panel is open (set by it)
   signal closeRequested()
   implicitHeight: column.implicitHeight
 
@@ -76,7 +77,7 @@ Item {
 
   Timer {
     interval: 2000
-    running: true
+    running: root.opened
     repeat: true
     onTriggered: root.refresh()
   }
@@ -90,6 +91,7 @@ Item {
         try {
           var st = JSON.parse(text)
           root.s = st
+          if (st.fans && st.fans.available) root.error = ""
           if (!root.busy && !root.targetDragging && st.fans.available) root.target = st.fans.target
         } catch (e) {
           root.error = "Couldn't read the fans"

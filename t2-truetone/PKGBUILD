@@ -35,7 +35,7 @@
 pkgname=t2-truetone
 _ver=0.1.0
 pkgver=0.1.0.r2.c9e24f7
-pkgrel=4
+pkgrel=5
 pkgdesc="True Tone and automatic brightness from the ambient light sensor for Apple T2 MacBooks on Hyprland (KaiT2en's t2-truetone)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"

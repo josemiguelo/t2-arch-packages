@@ -20,7 +20,7 @@
 
 pkgname=t2-gmux-backlight
 pkgver=0.1
-pkgrel=1
+pkgrel=2
 pkgdesc="Keeps the Apple gmux panel backlight at its level across suspend, blanks and logins (dual-GPU T2 MacBook Pros)"
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"

@@ -128,6 +128,15 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   binaries stay where they are the daemons: t2-fancontrol-gtk, t2-smc-control, t2-force-click).
   No owner's name in plugin ids or code: it all goes to the fork. The dotfiles keep only where
   the panel sits.
+  Review fixes (2026-11-16, a review of the day's work): tabs poll only while the panel is open
+  (it sets `opened`), close requests reach the panel, a tab can lock switching (AirShare while
+  sending) and give its text field every key (`editing`), number keys stop at the last tab; the
+  fan daemon reads a request within 3 s; t2-kernel-args finds running builds by command line
+  (`pgrep -x` sees 15 characters); the two watchers wait for their device at boot;
+  t2-omarchy-setup won't rewrite a menu file with an unclosed block, and a failed bar placement
+  fails (first run retries). A Samsung Galaxy on Quick Share "Everyone" still advertises only an
+  encrypted identity (17-byte endpoint info, hidden bit): no name to read, shown as "Android
+  phone".
 - **Software goes in packages, never in the dotfiles' scripts** (the owner, 2026-11-16): sleep
   hooks, udev rules, units, watchers, uwsm env snippets ship with a package (`/usr/lib/...`,
   `/usr/share/uwsm/env-hyprland.d/`); the dotfiles only set options (e.g. `/etc/t2-charge-limit.conf`)

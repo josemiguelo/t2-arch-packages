@@ -15,10 +15,13 @@ import qs.Ui
 // indicator unit running); right-click opens on that tab. The `t2hub` helper
 // beside this file lists the tabs and the active indicators.
 //
-// A tab is an Item that takes bar, foreground, urgent, dim and fontFamily, sets
-// its implicitHeight, and may offer refresh() (called whenever the panel opens),
+// A tab is an Item that takes bar, foreground, urgent, dim, fontFamily and
+// opened (the panel is open: its timers run only then), sets its
+// implicitHeight, and may offer refresh() (called whenever the panel opens),
 // moveCursor(dy), moveSideways(dx) (true when it used the keys),
-// activateCursor() and textKey(t) (true when used).
+// activateCursor(), textKey(t), a closeRequested() signal, `locked` (true while
+// it mustn't be switched away from, e.g. during a transfer) and `editing`
+// (true while a text field of its has the keyboard).
 Panel {
   id: root
   moduleName: "t2.panel"
@@ -28,6 +31,7 @@ Panel {
   readonly property string helper: String(Qt.resolvedUrl("t2hub")).replace(/^file:\/\//, "")
 
   property var tabs: []
+  property string tabsJson: ""
   property var active: []
   property string currentId: ""
   readonly property int currentIndex: Math.max(0, tabs.findIndex(function(t) { return t.id === currentId }))
@@ -56,6 +60,11 @@ Panel {
     if (tabs.length) select(tabs[(i + tabs.length) % tabs.length].id)
   }
 
+  // Number keys: 1..n, nothing past the last tab.
+  function selectNumber(n) {
+    if (n >= 1 && n <= tabs.length) select(tabs[n - 1].id)
+  }
+
   onOpenedChanged: if (opened) {
     refresh()
     Qt.callLater(function() { if (panel.loadedContent) panel.loadedContent.forceActiveFocus() })
@@ -78,8 +87,10 @@ Panel {
       onStreamFinished: {
         try {
           var s = JSON.parse(text)
-          root.tabs = s.tabs
-          root.active = s.active
+          // Only when they change: a new array rebuilds the tab row.
+          var j = JSON.stringify(s.tabs)
+          if (j !== root.tabsJson) { root.tabsJson = j; root.tabs = s.tabs }
+          if (JSON.stringify(s.active) !== JSON.stringify(root.active)) root.active = s.active
           if (!root.tabs.some(function(t) { return t.id === root.currentId }))
             root.currentId = root.tabs.some(function(t) { return t.id === s.last }) ? s.last : (root.tabs.length ? root.tabs[0].id : "")
         } catch (e) {}
@@ -140,15 +151,18 @@ Panel {
       implicitHeight: column.implicitHeight
       anchors.fill: parent
       readonly property var tab: tabLoader.item
+      readonly property bool locked: !!(tab && tab.locked)
+      // A tab's text field gets every key while it has the keyboard.
+      blocked: !!(tab && tab.editing)
       onMoveRequested: function(dx, dy) {
         if (dy !== 0) { if (tab && tab.moveCursor) tab.moveCursor(dy) }
-        else if (!(tab && tab.moveSideways && tab.moveSideways(dx))) root.selectIndex(root.currentIndex + dx)
+        else if (!(tab && tab.moveSideways && tab.moveSideways(dx)) && !locked) root.selectIndex(root.currentIndex + dx)
       }
       onActivateRequested: if (tab && tab.activateCursor) tab.activateCursor()
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
-        if (/^[1-9]$/.test(t)) root.selectIndex(parseInt(t) - 1)
+        if (/^[1-9]$/.test(t)) { if (!locked) root.selectNumber(parseInt(t)) }
         else if (tab && tab.textKey) tab.textKey(t)
       }
 
@@ -169,6 +183,7 @@ Panel {
           options: root.tabs.map(function(t, i) { return { value: t.id, label: t.title, tooltip: t.title + " (" + (i + 1) + ")" } })
           value: root.currentId
           focusable: false
+          enabled: !locked
           foreground: root.foreground
           fontFamily: root.fontFamily
           fontSize: Style.font.bodySmall
@@ -181,6 +196,8 @@ Panel {
           source: root.currentTab ? "file://" + root.currentTab.dir + "/Tab.qml" : ""
           onLoaded: {
             item.width = Qt.binding(function() { return tabLoader.width })
+            if (item.opened !== undefined) item.opened = Qt.binding(function() { return root.opened })
+            if (item.closeRequested) item.closeRequested.connect(root.close)
             item.bar = Qt.binding(function() { return root.bar })
             item.foreground = Qt.binding(function() { return root.foreground })
             item.urgent = Qt.binding(function() { return root.urgent })
