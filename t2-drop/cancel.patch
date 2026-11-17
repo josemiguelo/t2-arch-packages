@@ -1,0 +1,249 @@
+diff --git i/apps/t2-drop/src/airdrop.rs w/apps/t2-drop/src/airdrop.rs
+index a5b9ae2..a0bc32c 100644
+--- i/apps/t2-drop/src/airdrop.rs
++++ w/apps/t2-drop/src/airdrop.rs
+@@ -14,6 +14,7 @@
+ //! archive in the portable (odc) format.
+ 
+ use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
++use std::sync::atomic::{AtomicBool, Ordering};
+ use std::net::{Ipv6Addr, SocketAddrV6, TcpStream};
+ use std::os::fd::AsRawFd;
+ use std::sync::Arc;
+@@ -177,12 +178,14 @@ impl Receiver {
+ 
+     /// Asks the receiver and uploads `files`. Waits up to `wait` for the
+     /// user on the receiver. `progress` hears when the user accepted and how
+-    /// much of the upload went out.
++    /// much of the upload went out. Setting `cancel` stops the send within a
++    /// second, while the receiver decides or during the upload.
+     pub fn send(
+         &self,
+         sender_name: &str,
+         files: Vec<File>,
+         wait: Duration,
++        cancel: &AtomicBool,
+         progress: &mut dyn FnMut(SendProgress),
+     ) -> Result<()> {
+         let mut entries = Vec::new();
+@@ -218,6 +221,9 @@ impl Receiver {
+         gz.write_all(&cpio_odc(&archive_files))?;
+         let archive = gz.finish()?;
+ 
++        if cancel.load(Ordering::Relaxed) {
++            bail!("cancelled");
++        }
+         let mut tls = self.connect(wait)?;
+         tls.write_all(&self.request("/Ask", &plist_bytes(ask)?, &[]))?;
+         tls.write_all(&self.head(
+@@ -227,7 +233,7 @@ impl Receiver {
+         ))?;
+         // The ask reply comes once the user decided, while the upload waits
+         // on the same connection
+-        let (early, accepted) = upload(&mut tls, &archive, wait, progress)?;
++        let (early, accepted) = upload(&mut tls, &archive, wait, cancel, progress)?;
+         let mut reader = BufReader::new(Cursor::new(early).chain(&mut tls));
+         let ask = read_reply(&mut reader).context("ask")?;
+         match ask.status {
+@@ -254,12 +260,13 @@ fn status_of(data: &[u8]) -> Option<u16> {
+ 
+ /// Writes `data` to `tls` and reads what the receiver answers meanwhile.
+ /// Returns the plaintext received and whether it holds an accepting ask
+-/// reply. Fails early when the receiver declines. Waits at most `wait`
+-/// without any progress.
++/// reply. Fails early when the receiver declines or `cancel` is set. Waits
++/// at most `wait` without any progress.
+ fn upload(
+     tls: &mut Tls,
+     data: &[u8],
+     wait: Duration,
++    cancel: &AtomicBool,
+     progress: &mut dyn FnMut(SendProgress),
+ ) -> Result<(Vec<u8>, bool)> {
+     let total = data.len() as u64;
+@@ -270,6 +277,19 @@ fn upload(
+     tls.sock.set_nonblocking(true)?;
+     let result = (|| -> Result<()> {
+         loop {
++            // Cancelled: close the connection properly (TLS close_notify,
++            // then a shutdown both ways), so the receiver hears the sender
++            // is gone instead of only finding out when it answers.
++            if cancel.load(Ordering::Relaxed) {
++                tls.conn.send_close_notify();
++                while tls.conn.wants_write() {
++                    if tls.conn.write_tls(&mut tls.sock).is_err() {
++                        break;
++                    }
++                }
++                let _ = tls.sock.shutdown(std::net::Shutdown::Both);
++                bail!("cancelled");
++            }
+             let mut moved = false;
+             if off < data.len() && !tls.conn.wants_write() {
+                 let end = (off + UPLOAD_CHUNK).min(data.len());
+diff --git i/apps/t2-drop/src/main.rs w/apps/t2-drop/src/main.rs
+index 9ccccdf..b1958b7 100644
+--- i/apps/t2-drop/src/main.rs
++++ w/apps/t2-drop/src/main.rs
+@@ -63,6 +63,12 @@ enum Cmd {
+         #[arg(long)]
+         name: Option<String>,
+     },
++    /// Stop a running send to a receiver: it sees the transfer fail
++    Cancel {
++        /// The receiver's id (from `list`)
++        #[arg(long)]
++        id: String,
++    },
+     /// Be visible to AirDrop senders and save what they send
+     Receive {
+         /// Folder for the received files, ~/Downloads by default
+@@ -100,6 +106,7 @@ trait Sender1 {
+     fn stop_browse(&self) -> zbus::Result<()>;
+     fn receivers(&self) -> zbus::Result<Vec<(String, String)>>;
+     fn send(&self, id: &str, names: Vec<String>, fds: Vec<OwnedFd>, sender_name: &str) -> zbus::Result<()>;
++    fn cancel(&self, id: &str) -> zbus::Result<bool>;
+     #[zbus(signal)]
+     fn send_progress(&self, id: &str, accepted: bool, sent: u64, total: u64) -> zbus::Result<()>;
+ }
+@@ -155,6 +162,12 @@ async fn main() -> Result<()> {
+     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+     match Cli::parse().command {
+         Cmd::Daemon => service::run().await,
++        Cmd::Cancel { id } => {
++            if !proxy().await?.cancel(&id).await? {
++                bail!("no send to {id} is running");
++            }
++            Ok(())
++        }
+         Cmd::List { wait, json } => {
+             let sender = proxy().await?;
+             let mut shown = std::collections::HashSet::new();
+@@ -214,9 +227,23 @@ async fn main() -> Result<()> {
+                 }
+                 bail!(message);
+             };
++            // Told to stop (Ctrl+C, or SIGTERM from a front end's Cancel): ask
++            // the daemon to cancel the send, then report how it ended.
++            use tokio::signal::unix::{SignalKind, signal};
++            let mut term = signal(SignalKind::terminate())?;
++            let mut int = signal(SignalKind::interrupt())?;
+             if !json {
+                 println!("sending to {receiver}, accept on the receiver");
+-                let r = sender.send(&id, names, fds, &name.unwrap_or_else(hostname)).await;
++                let sender_name = name.unwrap_or_else(hostname);
++                let send = sender.send(&id, names, fds, &sender_name);
++                tokio::pin!(send);
++                let r = loop {
++                    tokio::select! {
++                        r = &mut send => break r,
++                        _ = term.recv() => { let _ = sender.cancel(&id).await; }
++                        _ = int.recv() => { let _ = sender.cancel(&id).await; }
++                    }
++                };
+                 let _ = sender.stop_browse().await;
+                 r.context("send")?;
+                 println!("sent");
+@@ -233,6 +260,8 @@ async fn main() -> Result<()> {
+             let r = loop {
+                 tokio::select! {
+                     r = &mut send => break r,
++                    _ = term.recv() => { let _ = sender.cancel(&id).await; }
++                    _ = int.recv() => { let _ = sender.cancel(&id).await; }
+                     Some(signal) = progress.next() => {
+                         if let Ok(a) = signal.args() {
+                             if a.id == id {
+diff --git i/apps/t2-drop/src/service.rs w/apps/t2-drop/src/service.rs
+index b2e9b22..22e4bea 100644
+--- i/apps/t2-drop/src/service.rs
++++ w/apps/t2-drop/src/service.rs
+@@ -16,7 +16,7 @@
+ //! after a minute without callers and is started again by D-Bus
+ //! activation.
+ 
+-use std::collections::HashSet;
++use std::collections::{HashMap, HashSet};
+ use std::ffi::CString;
+ use std::io::{Read, Seek, Write};
+ use std::os::fd::FromRawFd;
+@@ -110,6 +110,8 @@ struct State {
+     awdl_retry_at: Option<Instant>,
+     /// Whether the last housekeeping wanted AWDL
+     awdl_wanted: bool,
++    /// The running sends' cancel flags, by receiver id
++    cancels: HashMap<String, Arc<AtomicBool>>,
+ }
+ 
+ impl State {
+@@ -531,14 +533,25 @@ impl Sender {
+                 progress_state.lock().unwrap().uploading -= 1;
+             }
+         });
++        let cancel = Arc::new(AtomicBool::new(false));
++        let cancel_id = id.clone();
+         {
+             let mut state = self.state.lock().unwrap();
+             let session = state.session.as_ref().ok_or_else(|| Error::Failed("not browsing".into()))?;
+-            session.send(SendRequest { id, sender: sender_name, files, reply, progress }).map_err(failed)?;
++            session
++                .send(SendRequest { id, sender: sender_name, files, reply, progress, cancel: cancel.clone() })
++                .map_err(failed)?;
+             state.sending += 1;
++            state.cancels.insert(cancel_id.clone(), cancel.clone());
+         }
+         let r = tokio::task::spawn_blocking(move || result.recv()).await;
+-        self.state.lock().unwrap().sending -= 1;
++        {
++            let mut state = self.state.lock().unwrap();
++            state.sending -= 1;
++            if state.cancels.get(&cancel_id).is_some_and(|c| Arc::ptr_eq(c, &cancel)) {
++                state.cancels.remove(&cancel_id);
++            }
++        }
+         match r {
+             Ok(Ok(Ok(()))) => Ok(()),
+             Ok(Ok(Err(err))) => Err(failed(err)),
+@@ -546,6 +559,19 @@ impl Sender {
+         }
+     }
+ 
++    /// Stops the running send to receiver `id`: the receiver sees it fail,
++    /// and the Send call returns "cancelled". False when none is running.
++    async fn cancel(&self, id: String) -> bool {
++        match self.state.lock().unwrap().cancels.get(&id) {
++            Some(flag) => {
++                flag.store(true, Ordering::Relaxed);
++                info!("send to {id} cancelled");
++                true
++            }
++            None => false,
++        }
++    }
++
+     #[zbus(signal)]
+     async fn receivers_changed(emitter: &SignalEmitter<'_>, receivers: Vec<(String, String)>) -> zbus::Result<()>;
+ 
+diff --git i/apps/t2-drop/src/session.rs w/apps/t2-drop/src/session.rs
+index fd68191..dd858c9 100644
+--- i/apps/t2-drop/src/session.rs
++++ w/apps/t2-drop/src/session.rs
+@@ -47,6 +47,8 @@ pub struct SendRequest {
+     pub reply: mpsc::Sender<Result<()>>,
+     /// Hears when the receiver accepted and how much went out
+     pub progress: mpsc::Sender<SendProgress>,
++    /// Set to stop the send (Sender1.Cancel)
++    pub cancel: Arc<AtomicBool>,
+ }
+ 
+ pub struct Session {
+@@ -257,8 +259,8 @@ fn run(
+             match Receiver::new(&link_local(mac), awdl.ifindex, k.port) {
+                 Ok(receiver) => {
+                     std::thread::spawn(move || {
+-                        let SendRequest { sender, files, reply, progress, .. } = request;
+-                        let r = receiver.send(&sender, files, ASK_TIMEOUT, &mut |p| {
++                        let SendRequest { sender, files, reply, progress, cancel, .. } = request;
++                        let r = receiver.send(&sender, files, ASK_TIMEOUT, &cancel, &mut |p| {
+                             let _ = progress.send(p);
+                         });
+                         let _ = reply.send(r);

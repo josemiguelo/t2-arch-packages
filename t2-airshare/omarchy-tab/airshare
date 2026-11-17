@@ -127,18 +127,36 @@ def status():
         "downloadDir": download_dir(conf),
         "trusted": conf.get("trusted_devices", []),
         "recent": recent(),
-        "pending": pending(),
+        "pending": pending_batch()[0],
+        "pendingAt": pending_batch()[1],
     }, ensure_ascii=False))
 
 
-def pending():
+def pending_batch():
+    """The pending files and their batch stamp (when they were picked)."""
     try:
         p = json.loads(PENDING.read_text())
     except (OSError, ValueError):
-        return []
+        return [], 0
     if time.time() - p.get("at", 0) > PENDING_TTL:
-        return []
-    return [f for f in p.get("files", []) if os.path.exists(f)]
+        return [], 0
+    return [f for f in p.get("files", []) if os.path.exists(f)], p.get("at", 0)
+
+
+def pending():
+    return pending_batch()[0]
+
+
+def clear_pending(at=None):
+    """Forgets the pending files; with `at`, only if they're still that batch
+    (files picked meanwhile stay)."""
+    if at is not None:
+        try:
+            if json.loads(PENDING.read_text()).get("at") != at:
+                return
+        except (OSError, ValueError):
+            return
+    PENDING.unlink(missing_ok=True)
 
 
 def set_visible(arg):
@@ -292,8 +310,8 @@ def main(argv):
         send_clipboard()
     elif cmd == "send-screenshot":
         send_screenshot()
-    elif cmd == "pending" and args == ["clear"]:
-        PENDING.unlink(missing_ok=True)
+    elif cmd == "pending" and args[:1] == ["clear"]:
+        clear_pending(float(args[1]) if len(args) > 1 else None)
     elif cmd == "nearby":
         nearby(int(args[0]) if args and args[0].isdigit() else 30)
     elif cmd == "send-to" and len(args) >= 3:

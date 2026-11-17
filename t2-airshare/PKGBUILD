@@ -41,7 +41,7 @@
 pkgname=t2-airshare
 _ver=0.1.0
 pkgver=0.1.0.r8.c9e24f7
-pkgrel=6
+pkgrel=10
 pkgdesc="Quick Share with Android and AirDrop with Apple devices for Apple T2 Macs (KaiT2en's t2-airshare)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"

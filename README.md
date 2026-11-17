@@ -57,7 +57,7 @@ On the tested Mac, a MacBookPro16,1 (16-inch, 2019, Intel + AMD Radeon Pro
 | Thunderbolt docks, eGPUs | ❓ | not tested; can't be hot-plugged (part of the 1 s wake) |
 | Idle power saving (Thunderbolt off, ASPM) | ✅ | |
 | True Tone, auto-brightness | ✅ | |
-| AirDrop (iPhone, Mac) | ✅ | cancel only stops waiting on this side |
+| AirDrop (iPhone, Mac) | ✅ | |
 | Quick Share (Android) | ✅ | Samsung phones show as "Android phone"; the hotspot fallback is untested |
 | Second screen through Moonlight (Sidecar) | ✅ | |
 | The T2 panel on the bar | ✅ | |
@@ -203,8 +203,6 @@ same time.
   screen doesn't come back after sleep.
 - **No native PCIe hotplug on the Thunderbolt ports**, the price of the 1 s
   wake: Thunderbolt docks and eGPUs aren't hot-pluggable. USB-C devices work.
-- **AirDrop's cancel** stops waiting on this side; a transfer the other device
-  already accepted may still finish.
 
 ## Credits and licensing
 

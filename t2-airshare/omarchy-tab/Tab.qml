@@ -57,6 +57,12 @@ Item {
   // Sending: the files the send actions picked (the helper's "pending"), the
   // devices found nearby, and the transfer to the one picked.
   property var pending: []
+  // The pending batch's stamp (when its files were picked), the batch the
+  // user left (Cancel, or closing the panel while picking: a status read
+  // never brings it back) and the batch already scanned for once.
+  property real pendingAt: 0
+  property real dismissedAt: 0
+  property real scannedFor: 0
   property var devices: []
   property string phase: "pick"   // pick, sending, done
   property var target: null
@@ -64,18 +70,46 @@ Item {
   property int percent: -1
   property string result: ""      // sent, declined, error
   property string resultText: ""
+  // Set when the tab stops a send itself: t2drop send still asks the daemon
+  // to cancel and exits a moment later, after the tab has moved on, so that
+  // late exit must not flip the tab to "done".
+  property bool stopping: false
   readonly property bool sendMode: pending.length > 0
   readonly property bool scanning: nearbyProc.running
   // The panel keeps this tab while a transfer runs: no switching away.
   readonly property bool locked: phase === "sending"
 
   // No scanning with the panel closed (a transfer goes on).
-  onOpenedChanged: if (!opened) nearbyProc.running = false
+  // Closing the panel while picking a device leaves sending; a transfer
+  // under way goes on.
+  onOpenedChanged: if (!opened) {
+    nearbyProc.running = false
+    if (phase === "pick" && sendMode) finishSend()
+  }
 
   function fileName(path) { return String(path).split("/").pop() }
 
+  // A send's error as a person reads it: no D-Bus error name, no OS error
+  // code, and a hint for the cases with something to do about them.
+  function readableError(message) {
+    var m = String(message || "")
+      .replace(/^send:\s*/, "")
+      .replace(/^(org\.[A-Za-z0-9_.]+(Error|Failed)[A-Za-z0-9_.]*:\s*)+/, "")
+      .replace(/\s*\(os error \d+\)/g, "")
+    var who = root.target && root.target.name ? root.target.name : "The other device"
+    if (/connection refused/i.test(m))
+      return who + " refused the connection: close any AirDrop prompt on it, then try again"
+    if (/did not answer|timed out/i.test(m)) return who + " didn't answer in time"
+    if (/declined/i.test(m)) return "Declined on " + who
+    if (/^cancelled$/i.test(m)) return "Cancelled"
+    if (/is gone|not browsing|AWDL session ended/i.test(m)) return who + " is no longer nearby"
+    m = m.replace(/connect to \[[^\]]*\]:\d+:?\s*/i, "")
+    return m ? m.charAt(0).toUpperCase() + m.slice(1) : "That didn't work"
+  }
+
   function startScan() {
     if (nearbyProc.running) return
+    scannedFor = pendingAt
     devices = []
     nearbyProc.running = true
   }
@@ -93,9 +127,11 @@ Item {
   }
 
   function finishSend() {
+    if (sendProc.running) stopping = true
     sendProc.running = false
     nearbyProc.running = false
-    Quickshell.execDetached([root.helper, "pending", "clear"])
+    dismissedAt = pendingAt
+    Quickshell.execDetached([root.helper, "pending", "clear", String(pendingAt)])
     pending = []
     devices = []
     phase = "pick"
@@ -197,8 +233,15 @@ Item {
           root.trusted = s.trusted || []
           root.recent = s.recent || []
           // A transfer keeps its files even if they expire meanwhile.
-          if (root.phase === "pick") root.pending = s.pending || []
-          if (root.opened && root.sendMode && root.phase === "pick" && root.devices.length === 0 && !root.scanning) root.startScan()
+          if (root.phase === "pick") {
+            var at = s.pendingAt || 0
+            var fresh = at !== 0 && at !== root.dismissedAt
+            if (at !== root.pendingAt) root.devices = []
+            root.pending = fresh ? (s.pending || []) : []
+            root.pendingAt = fresh ? at : 0
+          }
+          // One scan by itself per batch; then "look again" is the user's.
+          if (root.opened && root.sendMode && root.phase === "pick" && root.scannedFor !== root.pendingAt && !root.scanning) root.startScan()
           root.error = ""
         } catch (e) {
           root.error = "Couldn't read AirShare's state"
@@ -247,11 +290,12 @@ Item {
           else if (e.event === "progress") root.percent = e.percent
           else if (e.event === "sent") { root.result = "sent"; root.resultText = "Sent" }
           else if (e.event === "declined") { root.result = "declined"; root.resultText = "Declined on the other side" }
-          else if (e.event === "error") { root.result = "error"; root.resultText = e.message }
+          else if (e.event === "error") { root.result = "error"; root.resultText = root.readableError(e.message) }
         } catch (err) {}
       }
     }
     onExited: function(exitCode) {
+      if (root.stopping) { root.stopping = false; return }
       if (root.result === "") { root.result = exitCode === 0 ? "sent" : "error"; root.resultText = exitCode === 0 ? "Sent" : "That didn't work" }
       root.phase = "done"
       root.cursorIndex = root.devices.length
@@ -532,8 +576,8 @@ Item {
       width: column.width
       rowIndex: root.devices.length
       icon: root.result === "sent" ? "󰄬" : "󰅖"
-      label: root.resultText
-      detail: "Done"
+      label: root.result === "error" ? "Not sent" : root.resultText
+      detail: root.result === "error" ? root.resultText : "Done"
       onActivated: root.finishSend()
     }
 
@@ -543,9 +587,7 @@ Item {
       rowIndex: root.devices.length + 1
       icon: "󰜺"
       label: "Cancel"
-      detail: root.phase !== "sending" ? "Leaves sending"
-              : root.target && root.target.proto === "airdrop" ? "Stops waiting here; the transfer may still finish"
-              : "Stops the transfer"
+      detail: root.phase !== "sending" ? "Leaves sending" : "Stops the transfer"
       onActivated: root.finishSend()
     }
   }

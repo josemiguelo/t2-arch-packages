@@ -22,12 +22,17 @@
 # against an interface that is gone. connect.patch (ours): a TCP connect to
 # the receiver is tried 4 times (3 s each) before a send or discovery attempt
 # fails: over AWDL beside a 5 GHz station link the first SYNs get lost, and a
-# send used to fail on one.
+# send used to fail on one. cancel.patch (ours): Sender1.Cancel(id) and
+# `t2drop cancel --id`: the running send to that receiver stops within a
+# second, while the receiver decides or during the upload, closing the
+# connection properly (TLS close_notify, shutdown) so the receiver sees it fail (before, a sender could only stop waiting for the result);
+# `t2drop send` asks for it when told to stop (Ctrl+C, or SIGTERM from the
+# T2 panel's AirShare tab).
 
 pkgname=t2-drop
 _ver=0.1.0
 pkgver=0.1.0.r8.c9e24f7
-pkgrel=4
+pkgrel=6
 pkgdesc="AirDrop with Apple devices over AWDL for Apple T2 Macs (KaiT2en's t2-drop)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -42,8 +47,10 @@ _commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
 source=("kait2en::git+${_repo}#commit=${_commit}"
         'discovery.patch'
         'connect.patch'
-        'cli-json.patch')
+        'cli-json.patch'
+        'cancel.patch')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP')
@@ -60,6 +67,7 @@ prepare() {
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/discovery.patch"
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/connect.patch"
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/cli-json.patch"
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/cancel.patch"
   cd apps/t2-drop
   sed -i -e 's|/usr/local/bin/|/usr/bin/|' -e '/^Documentation=/d' systemd/t2-drop.service
   sed -i -e 's/the kait2en brcmfmac patch/the T2 brcmfmac patches/' \
