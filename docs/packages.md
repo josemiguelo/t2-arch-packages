@@ -14,7 +14,7 @@ row says otherwise.
 | `t2bce-audio-ucm` | `modules/t2bce_audio-alsa-ucm-conf/ucm2` | builds; replaces arch-mact2's older `t2bce_audio-alsa-ucm-conf` |
 | `t2smc-dkms` | `modules/t2smc` | **works**: 2 fans, 50 temps, charge control on `BAT0`, rtc2, watchdog. Skips `applesmc` (fails `-EIO` on T2 with a stock kernel) on kernels that have `t2smc` |
 | `t2sbs-dkms` | `modules/t2sbs` | **works**: capacity 98% (correct, `charge_now/charge_full`) vs stock `sbs` 78% (design-relative). Skips `sbs` on kernels that have `t2sbs` |
-| `t2thunderbolt-dkms` | `modules/t2thunderbolt` | **retired** (2026-11-16): replaced by `t2-thunderbolt-dkms` (below), which conflicts with it |
+| `t2thunderbolt-dkms` | `modules/t2thunderbolt` | **removed** (2026-11-17; retired 2026-11-16): replaced by `t2-thunderbolt-dkms` (below), which conflicts with it |
 | `t2-thunderbolt-dkms` | kernel.org 7.2.15 `drivers/thunderbolt` + linux-omarchy's Thunderbolt patches + `patches/runtime/thunderbolt` 0001 (at `4b29a99`, rebased) | **works** (2026-11-16, MacBookPro16,1, `pcie_ports=compat` kept): the idle Titan Ridge controllers powered off (RTD3); the package reaches PC6/PC7. Replaces `t2thunderbolt-dkms` |
 | `t2-kernel-args` | (this repo) | **works** (2026-11-16): keeps the T2 Mac's kernel arguments (`pci=noaer pcie_ports=compat`, forced PCIe ASPM, ...) in `/etc/limine-entry-tool.d/t2-mac.conf`, writing it back and rebuilding the boot image when something rewrites it |
 | `sunshine-t2` | KaiT2en's Sunshine fork (`0737eec`, PR #5717) | **works** (2026-11-16): Sunshine with the V4L2 encoder, for the T2's Sidecar encoder |

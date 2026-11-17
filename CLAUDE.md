@@ -24,8 +24,8 @@ The loadout's `bare-repos` + `kait2en-dev` (machine `t2-macbook-omarchy`) recrea
 a fresh install, plus `omacom/omarchy-pkgs`, `nutanix/libvfio-user` (built), the signing key
 from 1Password (item `kait2en`, Personal vault) and the daily `kait2en-sync.timer`.
 
-Packages (README has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
-`t2smp-dkms`, `t2thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-trackpad-actuator-dkms`, `t2-force-click`, `t2-wireless-dkms`,
+Packages (docs/packages.md has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
+`t2smp-dkms`, `t2-thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-trackpad-actuator-dkms`, `t2-force-click`, `t2-wireless-dkms`,
 `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp` (with `bankstown-lv2`, not KaiT2en's),
 `t2-dkms-guard`, `t2-touchid`, `t2-arch-packages-keyring`. Arch's own
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
