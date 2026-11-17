@@ -1,0 +1,157 @@
+--- a/apps/t2-drop/src/main.rs	2026-11-14 07:24:01.000000000 -0500
++++ b/apps/t2-drop/src/main.rs	2026-11-16 18:30:43.261514293 -0500
+@@ -40,6 +40,9 @@
+         /// Seconds to look for receivers
+         #[arg(long, default_value_t = 15)]
+         wait: u64,
++        /// One JSON object per receiver: proto, id, name
++        #[arg(long)]
++        json: bool,
+     },
+     /// Send files to an AirDrop receiver
+     Send {
+@@ -47,6 +50,12 @@
+         /// Part of the receiver name, the first receiver found otherwise
+         #[arg(long)]
+         to: Option<String>,
++        /// The receiver with this id (from `list`)
++        #[arg(long, conflicts_with = "to")]
++        id: Option<String>,
++        /// Progress as JSON lines: sending, progress (accepted, sent, total), sent, error
++        #[arg(long)]
++        json: bool,
+         /// Seconds to look for the receiver
+         #[arg(long, default_value_t = 30)]
+         wait: u64,
+@@ -91,6 +100,23 @@
+     fn stop_browse(&self) -> zbus::Result<()>;
+     fn receivers(&self) -> zbus::Result<Vec<(String, String)>>;
+     fn send(&self, id: &str, names: Vec<String>, fds: Vec<OwnedFd>, sender_name: &str) -> zbus::Result<()>;
++    #[zbus(signal)]
++    fn send_progress(&self, id: &str, accepted: bool, sent: u64, total: u64) -> zbus::Result<()>;
++}
++
++/// A JSON string literal (the few lines --json prints need no JSON library).
++fn json_str(value: &str) -> String {
++    let mut out = String::from("\"");
++    for c in value.chars() {
++        match c {
++            '"' => out.push_str("\\\""),
++            '\\' => out.push_str("\\\\"),
++            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
++            c => out.push(c),
++        }
++    }
++    out.push('"');
++    out
+ }
+ 
+ fn hostname() -> String {
+@@ -129,25 +155,31 @@
+     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+     match Cli::parse().command {
+         Cmd::Daemon => service::run().await,
+-        Cmd::List { wait } => {
++        Cmd::List { wait, json } => {
+             let sender = proxy().await?;
+             let mut shown = std::collections::HashSet::new();
+             wait_for(&sender, Duration::from_secs(wait), |list| {
+                 for (id, name) in list {
+                     if shown.insert(id.clone()) {
+-                        println!("{name}\t{id}");
++                        if json {
++                            println!("{{\"proto\":\"airdrop\",\"id\":{},\"name\":{}}}", json_str(id), json_str(name));
++                        } else {
++                            println!("{name}\t{id}");
++                        }
++                        use std::io::Write;
++                        let _ = std::io::stdout().flush();
+                     }
+                 }
+                 None
+             })
+             .await?;
+             let _ = sender.stop_browse().await;
+-            if shown.is_empty() {
++            if shown.is_empty() && !json {
+                 bail!("no AirDrop receiver found, the receiver needs AirDrop for everyone");
+             }
+             Ok(())
+         }
+-        Cmd::Send { files, to, wait, name } => {
++        Cmd::Send { files, to, id: wanted, json, wait, name } => {
+             if files.is_empty() {
+                 bail!("no files to send");
+             }
+@@ -166,22 +198,63 @@
+             let sender = proxy().await?;
+             let target = wait_for(&sender, Duration::from_secs(wait), |list| {
+                 list.iter()
+-                    .find(|(_, n)| match &to {
+-                        Some(to) => n.to_lowercase().contains(&to.to_lowercase()),
+-                        None => true,
++                    .find(|(i, n)| match (&wanted, &to) {
++                        (Some(wanted), _) => i == wanted,
++                        (None, Some(to)) => n.to_lowercase().contains(&to.to_lowercase()),
++                        (None, None) => true,
+                     })
+                     .cloned()
+             })
+             .await?;
+             let Some((id, receiver)) = target else {
+                 let _ = sender.stop_browse().await;
+-                bail!("no AirDrop receiver found, the receiver needs AirDrop for everyone");
++                let message = "no AirDrop receiver found, the receiver needs AirDrop for everyone";
++                if json {
++                    println!("{{\"event\":\"error\",\"message\":{}}}", json_str(message));
++                }
++                bail!(message);
++            };
++            if !json {
++                println!("sending to {receiver}, accept on the receiver");
++                let r = sender.send(&id, names, fds, &name.unwrap_or_else(hostname)).await;
++                let _ = sender.stop_browse().await;
++                r.context("send")?;
++                println!("sent");
++                return Ok(());
++            }
++            use futures_util::StreamExt;
++            use std::io::Write;
++            println!("{{\"event\":\"sending\",\"name\":{}}}", json_str(&receiver));
++            let _ = std::io::stdout().flush();
++            let mut progress = sender.receive_send_progress().await?;
++            let sender_name = name.unwrap_or_else(hostname);
++            let send = sender.send(&id, names, fds, &sender_name);
++            tokio::pin!(send);
++            let r = loop {
++                tokio::select! {
++                    r = &mut send => break r,
++                    Some(signal) = progress.next() => {
++                        if let Ok(a) = signal.args() {
++                            if a.id == id {
++                                let percent = a.sent * 100 / a.total.max(1);
++                                println!(
++                                    "{{\"event\":\"progress\",\"accepted\":{},\"sent\":{},\"total\":{},\"percent\":{percent}}}",
++                                    a.accepted, a.sent, a.total
++                                );
++                                let _ = std::io::stdout().flush();
++                            }
++                        }
++                    }
++                }
+             };
+-            println!("sending to {receiver}, accept on the receiver");
+-            let r = sender.send(&id, names, fds, &name.unwrap_or_else(hostname)).await;
+             let _ = sender.stop_browse().await;
+-            r.context("send")?;
+-            println!("sent");
++            match r {
++                Ok(()) => println!("{{\"event\":\"sent\",\"files\":{}}}", files.len()),
++                Err(error) => {
++                    println!("{{\"event\":\"error\",\"message\":{}}}", json_str(&error.to_string()));
++                    return Err(error).context("send");
++                }
++            }
+             Ok(())
+         }
+         Cmd::Receive { dir, name, yes, ble } => {

@@ -1,0 +1,149 @@
+--- a/apps/t2-airshare/src/bin/t2airshare.rs	2026-11-14 07:24:01.000000000 -0500
++++ b/apps/t2-airshare/src/bin/t2airshare.rs	2026-11-16 18:28:16.906493994 -0500
+@@ -3,6 +3,7 @@
+ //! and over Bluetooth, send them in the shared WLAN.
+ 
+ use std::io::{BufRead, Write};
++use std::net::SocketAddr;
+ use std::path::PathBuf;
+ use std::sync::Arc;
+ use std::time::Duration;
+@@ -52,6 +53,16 @@
+         #[arg(long)]
+         name: Option<String>,
+     },
++    /// List the phones nearby (Quick Share visible to everyone), as they're
++    /// found: `name (type) addr` lines, or JSON lines with --json
++    List {
++        /// Seconds to look for phones
++        #[arg(long, default_value_t = 30)]
++        wait: u64,
++        /// One JSON object per phone: proto, id, name, type, addr
++        #[arg(long)]
++        json: bool,
++    },
+     /// Send files to a phone in the shared WLAN. The phone has to be visible
+     /// to everyone in its Quick Share settings.
+     Send {
+@@ -61,6 +72,12 @@
+         /// Send to the first phone whose name contains this text, without asking
+         #[arg(long)]
+         to: Option<String>,
++        /// Send to the phone at this address (from `list`), without looking
++        #[arg(long, conflicts_with = "to")]
++        addr: Option<SocketAddr>,
++        /// Progress as JSON lines: waiting (with the PIN), progress, sent, declined
++        #[arg(long)]
++        json: bool,
+         /// Seconds to look for phones
+         #[arg(long, default_value_t = 10)]
+         wait: u64,
+@@ -76,8 +93,13 @@
+     match Cli::parse().command {
+         Command::Receive { name, dir, yes, port } => receive_loop(name, dir, yes, port).await,
+         Command::Daemon { name } => t2_airshare::service::run(&name.unwrap_or_else(default_name)).await,
+-        Command::Send { files, to, wait, name } => {
+-            send_files(files, to, wait, name.unwrap_or_else(default_name)).await
++        Command::List { wait, json } => list_peers(wait, json).await,
++        Command::Send { files, to, addr, json, wait, name } => {
++            let name = name.unwrap_or_else(default_name);
++            match addr {
++                Some(addr) => send_to(addr, &name, &files, json).await,
++                None => send_files(files, to, wait, name).await,
++            }
+         }
+     }
+ }
+@@ -121,6 +143,92 @@
+     Ok(())
+ }
+ 
++/// A JSON string literal (the few lines --json prints need no JSON library).
++fn json_str(value: &str) -> String {
++    let mut out = String::from("\"");
++    for c in value.chars() {
++        match c {
++            '"' => out.push_str("\\\""),
++            '\\' => out.push_str("\\\\"),
++            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
++            c => out.push(c),
++        }
++    }
++    out.push('"');
++    out
++}
++
++/// Prints each phone as discovery finds it, for `wait` seconds.
++async fn list_peers(wait: u64, json: bool) -> Result<()> {
++    let mut discovery = Discovery::start().await?;
++    let deadline = tokio::time::Instant::now() + Duration::from_secs(wait);
++    loop {
++        tokio::select! {
++            peer = discovery.next() => {
++                let peer = peer?;
++                if json {
++                    println!(
++                        "{{\"proto\":\"quickshare\",\"id\":{},\"name\":{},\"type\":{},\"addr\":{}}}",
++                        json_str(&peer.endpoint_id),
++                        json_str(&peer.label()),
++                        json_str(&format!("{:?}", peer.device_type)),
++                        json_str(&peer.addr.to_string()),
++                    );
++                } else {
++                    println!("{} ({:?}) {}", peer.label(), peer.device_type, peer.addr);
++                }
++                let _ = std::io::stdout().flush();
++            }
++            _ = tokio::time::sleep_until(deadline) => return Ok(()),
++        }
++    }
++}
++
++/// Sends to a phone already found (`list`), by its address.
++async fn send_to(addr: SocketAddr, name: &str, files: &[PathBuf], json: bool) -> Result<()> {
++    if !json {
++        println!("sending to {addr}");
++        let mut progress = CliProgress { last: 0 };
++        match send::send(addr, name, files, &mut progress).await? {
++            SendOutcome::Sent => println!("\rsent {} file(s)          ", files.len()),
++            SendOutcome::Declined(status) => println!("\rdeclined by the phone ({status})"),
++        }
++        return Ok(());
++    }
++    let mut progress = JsonProgress { last: u64::MAX };
++    match send::send(addr, name, files, &mut progress).await {
++        Ok(SendOutcome::Sent) => println!("{{\"event\":\"sent\",\"files\":{}}}", files.len()),
++        Ok(SendOutcome::Declined(status)) => {
++            println!("{{\"event\":\"declined\",\"status\":{}}}", json_str(&status))
++        }
++        Err(error) => {
++            println!("{{\"event\":\"error\",\"message\":{}}}", json_str(&format!("{error:#}")));
++            return Err(error);
++        }
++    }
++    Ok(())
++}
++
++struct JsonProgress {
++    last: u64,
++}
++
++impl Progress for JsonProgress {
++    fn waiting(&mut self, pin: &str) {
++        println!("{{\"event\":\"waiting\",\"pin\":{}}}", json_str(pin));
++        let _ = std::io::stdout().flush();
++    }
++
++    fn sent(&mut self, sent: u64, total: u64) {
++        let percent = sent * 100 / total.max(1);
++        if percent != self.last {
++            self.last = percent;
++            println!("{{\"event\":\"progress\",\"sent\":{sent},\"total\":{total},\"percent\":{percent}}}");
++            let _ = std::io::stdout().flush();
++        }
++    }
++}
++
+ fn pick(peers: Vec<Peer>) -> Result<Peer> {
+     if peers.len() == 1 {
+         return Ok(peers.into_iter().next().expect("one peer"));

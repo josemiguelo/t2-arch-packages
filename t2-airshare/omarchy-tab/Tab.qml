@@ -52,7 +52,66 @@ Item {
     { id: "send-clipboard", icon: "", label: "Send the clipboard", detail: "Text or an image, as a file" },
     { id: "send-screenshot", icon: "", label: "Send the last screenshot", detail: "The newest file in your screenshots" }
   ]
-  readonly property int rowCount: 1 + actions.length + recent.length + trusted.length
+  readonly property int rowCount: sendMode ? devices.length + 2 : 1 + actions.length + recent.length + trusted.length
+
+  // Sending: the files the send actions picked (the helper's "pending"), the
+  // devices found nearby, and the transfer to the one picked.
+  property var pending: []
+  property var devices: []
+  property string phase: "pick"   // pick, sending, done
+  property var target: null
+  property string pin: ""
+  property int percent: -1
+  property string result: ""      // sent, declined, error
+  property string resultText: ""
+  readonly property bool sendMode: pending.length > 0
+  readonly property bool scanning: nearbyProc.running
+
+  function fileName(path) { return String(path).split("/").pop() }
+
+  function startScan() {
+    if (nearbyProc.running) return
+    devices = []
+    nearbyProc.running = true
+  }
+
+  function sendTo(d) {
+    nearbyProc.running = false
+    target = d
+    pin = ""
+    percent = -1
+    result = ""
+    resultText = ""
+    phase = "sending"
+    sendProc.command = [root.helper, "send-to", d.proto, d.proto === "quickshare" ? d.addr : d.id].concat(pending)
+    sendProc.running = true
+  }
+
+  function finishSend() {
+    sendProc.running = false
+    nearbyProc.running = false
+    Quickshell.execDetached([root.helper, "pending", "clear"])
+    pending = []
+    devices = []
+    phase = "pick"
+    result = ""
+    cursorIndex = 0
+  }
+
+  function deviceIcon(d) { return d.proto === "airdrop" ? "" : (d.type === "Tablet" ? "󰓶" : d.type === "Laptop" ? "󰌢" : "󰏲") }
+  // A phone that advertises only an encrypted identity (Samsung's Quick Share
+  // does even on Everyone) has no name to show: t2airshare calls it "Hidden
+  // device <id>"; its type is all there is.
+  function hiddenName(d) { return d.proto === "quickshare" && String(d.name).indexOf("Hidden device ") === 0 }
+  function deviceLabel(d) {
+    if (!hiddenName(d)) return d.name
+    return d.type === "Tablet" ? "Android tablet" : d.type === "Laptop" ? "Android laptop" : "Android phone"
+  }
+  function deviceDetail(d) {
+    if (d.proto === "airdrop") return "Apple device (AirDrop)"
+    if (hiddenName(d)) return "Quick Share · the phone hides its name"
+    return (d.type === "Unknown" ? "Android" : d.type) + " (Quick Share)"
+  }
 
   function refresh() { if (!statusProc.running) statusProc.running = true }
 
@@ -87,6 +146,12 @@ Item {
   }
 
   function activateCursor() {
+    if (sendMode) {
+      if (phase === "pick" && cursorIndex < devices.length) sendTo(devices[cursorIndex])
+      else if (phase === "pick" && cursorIndex === devices.length) startScan()
+      else finishSend()
+      return
+    }
     var i = cursorIndex
     if (i === 0) { setVisible(!visibleToOthers); return }
     i -= 1
@@ -126,6 +191,8 @@ Item {
           root.downloadDir = s.downloadDir || ""
           root.trusted = s.trusted || []
           root.recent = s.recent || []
+          root.pending = s.pending || []
+          if (root.sendMode && root.phase === "pick" && root.devices.length === 0) root.startScan()
           root.error = ""
         } catch (e) {
           root.error = "Couldn't read AirShare's state"
@@ -143,8 +210,44 @@ Item {
     }
   }
 
-  // One clickable row: an icon, a label with a detail line, and an optional
-  // trailing button.
+  // The devices nearby, one JSON line each as the helper's discoveries find them.
+  Process {
+    id: nearbyProc
+    command: [root.helper, "nearby", "30"]
+    stdout: SplitParser {
+      onRead: function(line) {
+        try {
+          var d = JSON.parse(line)
+          var key = d.proto + ":" + d.id
+          if (!root.devices.some(function(x) { return x.proto + ":" + x.id === key }))
+            root.devices = root.devices.concat([d])
+        } catch (e) {}
+      }
+    }
+  }
+
+  // The transfer: waiting (the PIN), sending, progress, then sent, declined or error.
+  Process {
+    id: sendProc
+    stdout: SplitParser {
+      onRead: function(line) {
+        try {
+          var e = JSON.parse(line)
+          if (e.event === "waiting") root.pin = e.pin
+          else if (e.event === "progress") root.percent = e.percent
+          else if (e.event === "sent") { root.result = "sent"; root.resultText = "Sent" }
+          else if (e.event === "declined") { root.result = "declined"; root.resultText = "Declined on the other side" }
+          else if (e.event === "error") { root.result = "error"; root.resultText = e.message }
+        } catch (err) {}
+      }
+    }
+    onExited: function(exitCode) {
+      if (root.result === "") { root.result = exitCode === 0 ? "sent" : "error"; root.resultText = exitCode === 0 ? "Sent" : "That didn't work" }
+      root.phase = "done"
+      root.cursorIndex = root.devices.length
+    }
+  }
+
   Column {
     id: column
     width: parent.width
@@ -203,9 +306,12 @@ Item {
       wrapMode: Text.WordWrap
     }
 
+    SendView { visible: root.sendMode }
+
     Column {
       width: parent.width
       spacing: Style.space(6)
+      visible: !root.sendMode
 
       PanelSectionHeader {
         text: "Send"
@@ -228,11 +334,12 @@ Item {
       }
     }
 
-    PanelSeparator { foreground: root.foreground }
+    PanelSeparator { foreground: root.foreground; visible: !root.sendMode }
 
     Column {
       width: parent.width
       spacing: Style.space(6)
+      visible: !root.sendMode
 
       PanelSectionHeader {
         text: "Received"
@@ -264,19 +371,19 @@ Item {
           detail: root.ago(modelData.when)
           trailingIcon: ""
           trailingTip: "Show in folder"
-          onActivated: { root.act(["open", modelData.path]); root.close() }
-          onTrailing: { root.act(["show", modelData.path]); root.close() }
+          onActivated: { root.act(["open", modelData.path]); root.closeRequested() }
+          onTrailing: { root.act(["show", modelData.path]); root.closeRequested() }
         }
       }
     }
 
     PanelSeparator {
-      visible: root.trusted.length > 0
+      visible: root.trusted.length > 0 && !root.sendMode
       foreground: root.foreground
     }
 
     Column {
-      visible: root.trusted.length > 0
+      visible: root.trusted.length > 0 && !root.sendMode
       width: parent.width
       spacing: Style.space(6)
 
@@ -302,6 +409,132 @@ Item {
           onTrailing: { root.act(["untrust", modelData]); refreshSoon.restart() }
         }
       }
+    }
+  }
+
+  // Sending: the files, then the devices nearby to pick from, then the
+  // transfer's PIN, progress and result.
+  component SendView: Column {
+    width: column.width
+    spacing: Style.space(6)
+
+    PanelSectionHeader {
+      text: root.phase === "pick" ? "Send to" : root.target ? root.deviceLabel(root.target) : "Sending"
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
+
+    Text {
+      width: parent.width
+      leftPadding: Style.space(10)
+      rightPadding: Style.space(10)
+      text: root.pending.length === 1 ? root.fileName(root.pending[0])
+            : root.pending.length + " files: " + root.pending.map(root.fileName).join(", ")
+      textFormat: Text.PlainText
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      elide: Text.ElideRight
+    }
+
+    // Picking: the devices as they're found.
+    Repeater {
+      model: root.phase === "pick" ? root.devices : []
+      Row_ {
+        required property var modelData
+        required property int index
+        width: column.width
+        rowIndex: index
+        icon: root.deviceIcon(modelData)
+        label: root.deviceLabel(modelData)
+        detail: root.deviceDetail(modelData)
+        onActivated: root.sendTo(modelData)
+      }
+    }
+
+    Row_ {
+      visible: root.phase === "pick"
+      width: column.width
+      rowIndex: root.devices.length
+      icon: root.scanning ? "󰑓" : "󰑐"
+      label: root.scanning ? (root.devices.length ? "Looking for more…" : "Looking nearby…") : (root.devices.length ? "Look again" : "Nobody found: look again")
+      detail: "Phones need Quick Share visible to everyone; iPhones and Macs, AirDrop for everyone"
+      onActivated: root.startScan()
+    }
+
+    // Sending: the PIN the phone shows, the progress, the result.
+    Text {
+      visible: root.phase !== "pick" && root.pin !== "" && root.result === ""
+      width: parent.width
+      leftPadding: Style.space(10)
+      text: "Accept on the phone: PIN " + root.pin
+      textFormat: Text.PlainText
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+    }
+
+    Text {
+      visible: root.phase === "sending" && root.pin === "" && root.percent < 0
+      width: parent.width
+      leftPadding: Style.space(10)
+      text: "Accept on the other device…"
+      textFormat: Text.PlainText
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+    }
+
+    Item {
+      visible: root.phase === "sending" && root.percent >= 0
+      width: parent.width
+      implicitHeight: Style.space(18)
+      Rectangle {
+        id: track
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: Style.space(10)
+        anchors.rightMargin: Style.space(50)
+        height: Style.space(6)
+        radius: height / 2
+        color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.15)
+        Rectangle {
+          width: parent.width * Math.max(0, Math.min(100, root.percent)) / 100
+          height: parent.height
+          radius: parent.radius
+          color: root.foreground
+        }
+      }
+      Text {
+        anchors.right: parent.right
+        anchors.rightMargin: Style.space(10)
+        anchors.verticalCenter: parent.verticalCenter
+        text: root.percent + "%"
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+    }
+
+    Row_ {
+      visible: root.phase === "done"
+      width: column.width
+      rowIndex: root.devices.length
+      icon: root.result === "sent" ? "󰄬" : "󰅖"
+      label: root.resultText
+      detail: "Done"
+      onActivated: root.finishSend()
+    }
+
+    Row_ {
+      visible: root.phase !== "done"
+      width: column.width
+      rowIndex: root.devices.length + 1
+      icon: "󰜺"
+      label: "Cancel"
+      detail: root.phase === "sending" ? "Stops the transfer" : "Leaves sending"
+      onActivated: root.finishSend()
     }
   }
 

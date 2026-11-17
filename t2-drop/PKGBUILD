@@ -27,7 +27,7 @@
 pkgname=t2-drop
 _ver=0.1.0
 pkgver=0.1.0.r8.c9e24f7
-pkgrel=3
+pkgrel=4
 pkgdesc="AirDrop with Apple devices over AWDL for Apple T2 Macs (KaiT2en's t2-drop)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -41,8 +41,10 @@ _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
 _commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
 source=("kait2en::git+${_repo}#commit=${_commit}"
         'discovery.patch'
-        'connect.patch')
+        'connect.patch'
+        'cli-json.patch')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP'
             'SKIP')
 
@@ -57,6 +59,7 @@ prepare() {
   cd kait2en
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/discovery.patch"
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/connect.patch"
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/cli-json.patch"
   cd apps/t2-drop
   sed -i -e 's|/usr/local/bin/|/usr/bin/|' -e '/^Documentation=/d' systemd/t2-drop.service
   sed -i -e 's/the kait2en brcmfmac patch/the T2 brcmfmac patches/' \

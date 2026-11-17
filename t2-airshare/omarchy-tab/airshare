@@ -2,17 +2,25 @@
 """The T2 panel's AirShare tab helper: T2 AirShare's state and
 actions for the Omarchy bar, where the panel has no D-Bus or TOML of its own.
 
-  status                 JSON: installed, visible, downloadDir, trusted, recent
+  status                 JSON: installed, visible, downloadDir, trusted, recent, pending
   visible on|off|toggle  the receiver (t2-airshare.service, as the app's switch)
   untrust <name>         drop a device from trusted_devices in config.toml
-  send-files             pick files (omarchy-file-select), then AirShare's send window
-  send-clipboard         the clipboard (text or image) as a file, then the send window
-  send-screenshot        the newest screenshot, then the send window
+  send-files             pick files (omarchy-file-select), then the tab's send view
+  send-clipboard         the clipboard (text or image) as a file, then the send view
+  send-screenshot        the newest screenshot, then the send view
+  pending clear          leave the send view
+  nearby [seconds]       the phones (Quick Share) and Apple devices (AirDrop) nearby,
+                         one JSON line each as found: proto, id, name, type, addr
+  send-to quickshare <addr> <files...> / send-to airdrop <id> <files...>
+                         send to one, progress as JSON lines (waiting with the PIN,
+                         sending, progress, sent, declined, error)
   open <path> / show <path>   open a received file / show it in the file manager
 
-Sending goes through `t2-airshare <files>`: its window finds Android phones
-(Quick Share) and Apple devices (AirDrop) and lets one be picked. Received
-files come from the receiver's journal ("received <path>" for Quick Share,
+The send actions record the files as pending and open the T2 panel on this
+tab, which lists the devices nearby (`t2airshare list --json` and
+`t2drop list --json`, run side by side) and sends to the one picked
+(`t2airshare send --addr` / `t2drop send --id`, with --json). Received files
+come from the receiver's journal ("received <path>" for Quick Share,
 "saved [...]" for AirDrop), the only record of them.
 """
 
@@ -27,10 +35,12 @@ import tomllib
 from pathlib import Path
 
 UNIT = "t2-airshare.service"
-APP = "t2-airshare"
+APP = "t2airshare"
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "t2-airshare" / "config.toml"
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "t2-airshare-tab"
 RECENT = 8
+PENDING = RUNTIME / "pending.json"
+PENDING_TTL = 15 * 60  # pending files older than this are forgotten
 
 
 def run(*cmd, check=False, capture=True):
@@ -117,7 +127,18 @@ def status():
         "downloadDir": download_dir(conf),
         "trusted": conf.get("trusted_devices", []),
         "recent": recent(),
+        "pending": pending(),
     }, ensure_ascii=False))
+
+
+def pending():
+    try:
+        p = json.loads(PENDING.read_text())
+    except (OSError, ValueError):
+        return []
+    if time.time() - p.get("at", 0) > PENDING_TTL:
+        return []
+    return [f for f in p.get("files", []) if os.path.exists(f)]
 
 
 def set_visible(arg):
@@ -132,10 +153,60 @@ def untrust(name):
 
 
 def send(paths):
+    """Records the files as pending and opens the T2 panel on this tab."""
     if not paths:
         return
-    subprocess.Popen(["uwsm-app", "--", APP, *paths], start_new_session=True,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    RUNTIME.mkdir(parents=True, exist_ok=True)
+    tmp = PENDING.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"files": [os.path.abspath(p) for p in paths], "at": time.time()}))
+    tmp.replace(PENDING)
+    # Closed first: opening runs the tab's refresh, which finds the files.
+    run("omarchy-shell", "-q", "t2.panel", "close")
+    run("omarchy-shell", "-q", "t2.panel", "tab", "airshare")
+
+
+def nearby(seconds):
+    """Both discoveries side by side, their JSON lines passed on as they come."""
+    import selectors
+    import signal
+    run("bluetoothctl", "power", "on")  # Quick Share finds phones over Bluetooth LE
+    procs = []
+    for cmd in (["t2airshare", "list", "--json", "--wait", str(seconds)],
+                ["t2drop", "list", "--json", "--wait", str(seconds)]):
+        if shutil.which(cmd[0]):
+            procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True))
+
+    def stop(*_):
+        for p in procs:
+            p.terminate()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    sel = selectors.DefaultSelector()
+    for p in procs:
+        sel.register(p.stdout, selectors.EVENT_READ)
+    open_streams = len(procs)
+    while open_streams:
+        for key, _ in sel.select():
+            line = key.fileobj.readline()
+            if not line:
+                sel.unregister(key.fileobj)
+                open_streams -= 1
+            elif line.startswith("{"):
+                print(line.rstrip("\n"), flush=True)
+    for p in procs:
+        p.wait()
+
+
+def send_to(proto, target, files):
+    if proto == "quickshare":
+        cmd = ["t2airshare", "send", "--addr", target, "--json", *files]
+    elif proto == "airdrop":
+        cmd = ["t2drop", "send", "--id", target, "--json", *files]
+    else:
+        raise SystemExit(f"unknown protocol {proto!r}")
+    os.execvp(cmd[0], cmd)
 
 
 def send_files():
@@ -209,6 +280,12 @@ def main(argv):
         send_clipboard()
     elif cmd == "send-screenshot":
         send_screenshot()
+    elif cmd == "pending" and args == ["clear"]:
+        PENDING.unlink(missing_ok=True)
+    elif cmd == "nearby":
+        nearby(int(args[0]) if args and args[0].isdigit() else 30)
+    elif cmd == "send-to" and len(args) >= 3:
+        send_to(args[0], args[1], args[2:])
     elif cmd == "open" and args:
         open_file(args[0])
     elif cmd == "show" and args:

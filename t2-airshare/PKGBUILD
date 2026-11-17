@@ -2,11 +2,16 @@
 # phones (Google's Nearby protocol: found over Bluetooth LE, then the transfer
 # over the shared Wi-Fi network, or over a short-lived hotspot the Mac opens
 # beside its own connection) and AirDrop with Apple devices (through t2-drop).
-# One send window, one accept notification, one trusted-device list; a
-# Nautilus "Send with T2 AirShare" entry and an "Open With" entry.
+# Sending, the visibility switch, received files and trusted devices are the
+# AirShare tab of the T2 panel on Omarchy's bar (ours, below), with Share-menu
+# entries; accepting is a notification. No GTK app: built without upstream's
+# `gui` feature, so neither its windows (send window, settings) nor its
+# Nautilus entries are here, and no GTK either.
 #
 # Pieces:
-#   t2-airshare             the GTK4/libadwaita app (send window, settings)
+#   t2airshare list|send    the CLI the tab uses (cli-json.patch: `list --json`
+#                           streams the phones found, `send --addr --json`
+#                           sends to one with JSON progress)
 #   t2airshare daemon       the receiver, a user service (graphical-session):
 #                           Quick Share on TCP 47901 (omarchy.patch: fixed, so
 #                           a default-drop firewall can allow it; upstream
@@ -36,12 +41,12 @@
 pkgname=t2-airshare
 _ver=0.1.0
 pkgver=0.1.0.r8.c9e24f7
-pkgrel=4
+pkgrel=5
 pkgdesc="Quick Share with Android and AirDrop with Apple devices for Apple T2 Macs (KaiT2en's t2-airshare)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later' 'Apache-2.0' 'BSD-3-Clause')
-depends=('gtk4' 'libadwaita' 'bluez' 'networkmanager' 'iw' 'dnsmasq' 'wpa_supplicant' 'dbus' 'systemd' 'python' 't2-omarchy-plugins')
+depends=('bluez' 'networkmanager' 'iw' 'dnsmasq' 'wpa_supplicant' 'dbus' 'systemd' 'python' 't2-omarchy-plugins')
 optdepends=('t2-drop: AirDrop with Apple devices'
             'nautilus-python: the "Send with T2 AirShare" entry in Nautilus')
 makedepends=('git' 'cargo')
@@ -50,8 +55,10 @@ options=('!debug')
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
 _commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
 source=("kait2en::git+${_repo}#commit=${_commit}"
-        'omarchy.patch')
+        'omarchy.patch'
+        'cli-json.patch')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP')
 
 pkgver() {
@@ -64,14 +71,12 @@ pkgver() {
 prepare() {
   cd kait2en
   patch -Np1 --no-backup-if-mismatch -i "$srcdir/omarchy.patch"
+  patch -Np1 --no-backup-if-mismatch -i "$srcdir/cli-json.patch"
   cd apps/t2-airshare
   sed -i -e 's|/usr/local/libexec/|/usr/lib/t2-airshare/|' -e 's|/usr/local/bin/|/usr/bin/|' \
     -e '/^Documentation=/d' systemd/*.service
-  sed -i 's|/usr/local/bin/|/usr/bin/|g' org.t2airshare.gtk.desktop integration/org.t2airshare.send.desktop \
-    integration/t2-airshare-send.py
   sed -i 's/endpoint_info(DeviceType::Laptop, "kait2en")/endpoint_info(DeviceType::Laptop, "t2airshare")/' src/bluetooth.rs
-  if grep -rni -e kait2en -e /usr/local src systemd dbus org.t2airshare.gtk.desktop \
-      integration/org.t2airshare.send.desktop integration/t2-airshare-send.py Cargo.toml; then
+  if grep -rni -e kait2en -e /usr/local src/bin/t2airshare.rs src/*.rs systemd dbus Cargo.toml; then
     echo "a KaiT2en name or /usr/local path is left" >&2
     return 1
   fi
@@ -81,13 +86,13 @@ prepare() {
 build() {
   cd kait2en/apps/t2-airshare
   export CARGO_TARGET_DIR=target
-  cargo build --release --frozen
+  # No `gui` feature: the CLI, the receiver and the hotspot helper only.
+  cargo build --release --frozen --no-default-features
 }
 
 package() {
   cd kait2en
   local app=apps/t2-airshare rel=apps/t2-airshare/target/release
-  install -Dm755 "$rel/t2-airshare" "$pkgdir/usr/bin/t2-airshare"
   install -Dm755 "$rel/t2airshare" "$pkgdir/usr/bin/t2airshare"
   install -Dm755 "$rel/t2-quickshare-hotspot" "$pkgdir/usr/lib/t2-airshare/t2-quickshare-hotspot"
   install -Dm644 "$app/systemd/t2-airshare.service" "$pkgdir/usr/lib/systemd/user/t2-airshare.service"
@@ -96,11 +101,6 @@ package() {
     "$pkgdir/usr/share/dbus-1/system.d/org.t2airshare.QuickShareHotspot.conf"
   install -Dm644 "$app/dbus/org.t2airshare.QuickShareHotspot.service" \
     "$pkgdir/usr/share/dbus-1/system-services/org.t2airshare.QuickShareHotspot.service"
-  install -Dm644 "$app/org.t2airshare.gtk.desktop" "$pkgdir/usr/share/applications/org.t2airshare.gtk.desktop"
-  install -Dm644 "$app/integration/org.t2airshare.send.desktop" "$pkgdir/usr/share/applications/org.t2airshare.send.desktop"
-  install -Dm644 "$app/assets/icons/hicolor/scalable/apps/org.t2airshare.gtk.svg" \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.t2airshare.gtk.svg"
-  install -Dm644 "$app/integration/t2-airshare-send.py" "$pkgdir/usr/share/nautilus-python/extensions/t2-airshare-send.py"
   install -Dm644 "$app/LICENSE" "$app/THIRD-PARTY-NOTICES.md" "$app/proto/LICENSE-Apache-2.0" \
     "$app/proto/LICENSE-Chromium" LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
   # The AirShare tab of the T2 panel on Omarchy's bar and the Share-menu

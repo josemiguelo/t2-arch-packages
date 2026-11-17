@@ -118,7 +118,9 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   Tabs: `battery` (t2-smc-control: battery, power, charge limit, SMC clock), `fans`
   (t2-fan-control: the curve or the SMC, the target, both fans, temperatures), `trackpad`
   (t2-force-click: click pressure, force click, its pressure and action), `light` (t2-truetone), `airshare` (t2-airshare, with its Share-menu entries;
-  indicator t2-airshare.service), `sidecar` (t2-sidecar; indicator t2-sidecar.service). A tab is
+  indicator t2-airshare.service; sending picks a device nearby in the tab: `t2airshare list --json` and
+  `t2drop list --json` side by side, then `t2airshare send --addr --json` / `t2drop send --id --json`,
+  both cli-json.patch; the GTK app is built out, `--no-default-features`), `sidecar` (t2-sidecar; indicator t2-sidecar.service). A tab is
   an Item taking bar, foreground, urgent, dim, fontFamily, with optional moveCursor,
   moveSideways (true when used; else ←/→ switch tabs), activateCursor, textKey and a
   closeRequested signal. The fork's first login runs the setup; an installed Mac runs it once
