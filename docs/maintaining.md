@@ -38,6 +38,17 @@ release by hand (`T2_DKMS_GUARD_ALLOW_SKIP=1` lets it through without it).
 
 ## Build and release
 
+The maintainer's own releases go through a local `publish.sh` (outside the
+repo): it signs the packages, updates the release's database, uploads exactly
+those files and deletes the versions they replace (`--remove <pkgname>` drops
+a package). Before anything changes it refuses a package whose file name is
+already in the release with different contents (`publish.sh --check` runs
+only that check): pacman caches packages by file name, so a changed package
+under the same name fails its checksum wherever the old one is cached. **A
+changed package always gets a new `pkgrel`** (on 2026-11-17 a re-uploaded
+`apple-bcm-firmware-fetcher-1-2` broke an ISO build's package cache).
+
+By hand, the same:
 
 Sources are pinned to a KaiT2en commit (`_commit` in each PKGBUILD) and fetched
 from GitHub; `KAIT2EN_GIT=file:///path/to/clone` builds from a local checkout.

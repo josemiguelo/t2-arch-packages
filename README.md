@@ -213,9 +213,10 @@ Each package ships KaiT2en's `LICENSING.md` and `AUTHORS`. KaiT2en's name and
 logo are its trademarks: the logo is removed from the apps, and the packages use
 their own names. `bankstown-lv2` is chadmed's (Asahi Linux), MIT. The Wi-Fi
 firmware fetcher is t2linux's. Sunshine (`sunshine-t2`) is LizardByte's, with
-the V4L2 encoder KaiT2en contributed. The packages this repo writes itself (the
-T2 panel, the Omarchy integration, the helpers and patches) are
-GPL-3.0-or-later.
+the V4L2 encoder KaiT2en contributed. What this repo writes itself (the
+PKGBUILDs, the T2 panel, the Omarchy integration, the helpers, tools and
+patches) is GPL-3.0-or-later: [LICENSE](LICENSE). The upstream code each
+package builds keeps its own license, shipped in that package.
 
 ## More detail
 

@@ -281,6 +281,14 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   key up on keyservers (it isn't on any): add the key first.
 - `op item edit` reads dots in field names as section.field: escape them (`name\.ext[file]=`).
 
+## Not doing
+
+- **GTK-free builds of the fan, Force Touch and SMC daemons** (dropped 2026-11-17): each app is
+  one binary, daemon and old GTK window together (`--daemon`); the daemon code is GTK-free but
+  the window shares `main.rs` (2,029 lines in t2-fan-control), so a split is three patches to
+  rebase on every KaiT2en change of those files. The gain is nil: GTK 4 and libadwaita stay for
+  Omarchy's own apps (Nautilus, Papers, Pinta), and the binaries are 0.7-0.9 MB.
+
 ## Roadmap
 
 In order of value for the MacBookPro16,1. Re-check each path's history with `git log -- <path>`
