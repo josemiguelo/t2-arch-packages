@@ -2,7 +2,8 @@
 # KaiT2en's Apple fixes, DKMS. They replace the in-tree modules from updates/.
 # Replaces t2-bluetooth-dkms (the same Bluetooth part, which this grew from).
 #
-# Wi-Fi, brcmfmac (+ brcmfmac-wcc/-cyw/-bca, brcmutil), for the BCM4364 of
+# Wi-Fi, brcmfmac (its helpers brcmutil and brcmfmac-wcc/-cyw/-bca stay the
+# kernel's unless a patch touches them), for the BCM4364 of
 # the MacBookPro15/16 and the BCM4355/BCM4377 of the others:
 #   0001  TX beamforming off on the BCM4364
 #   0003  200 ms power-save timeout by default
@@ -59,7 +60,7 @@ pkgname=t2-wireless-dkms
 _kver=7.2.15
 _modname=t2-wireless
 pkgver=7.2.15.r25.7e9903c
-pkgrel=2
+pkgrel=3
 pkgdesc="Broadcom Wi-Fi and Bluetooth drivers with KaiT2en's Apple fixes (resume, LE devices, AWDL), DKMS"
 arch=('any')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -91,10 +92,13 @@ pkgver() {
 }
 
 prepare() {
-  rm -rf src
-  mkdir src
+  rm -rf src pristine
+  mkdir src pristine
   bsdtar -xf "linux-${_kver}.tar.xz" -C src --strip-components=1 \
     "linux-${_kver}/drivers/bluetooth" \
+    "linux-${_kver}/drivers/net/wireless/broadcom/brcm80211"
+  # Untouched, to tell which helper modules the patches change (package()).
+  bsdtar -xf "linux-${_kver}.tar.xz" -C pristine --strip-components=1 \
     "linux-${_kver}/drivers/net/wireless/broadcom/brcm80211"
   cd src
   local p f
@@ -118,15 +122,27 @@ package() {
   printf 'obj-m += bluetooth/\nobj-m += brcm80211/\n' > "$dst/Makefile"
   find "$dst" -name '*.orig' -delete
 
-  local i=0 m
+  # The modules the patches change are installed over the in-tree ones; the
+  # helper modules (brcmutil, the vendor parts) only when a patch touches their
+  # folder. Otherwise they build from the kernel's own source, so they're the
+  # same code as the kernel's, and DKMS won't put an unversioned module over
+  # the kernel's anyway: listed, they'd only show as "differences between
+  # built and installed modules".
+  local mods=(bluetooth/btbcm bluetooth/hci_uart bluetooth/hci_bcm4377 brcm80211/brcmfmac/brcmfmac)
+  local m dir
+  for m in brcmutil/brcmutil brcmfmac/wcc/brcmfmac-wcc brcmfmac/cyw/brcmfmac-cyw brcmfmac/bca/brcmfmac-bca; do
+    dir=${m%/*}
+    if ! diff -rq "$srcdir/pristine/drivers/net/wireless/broadcom/brcm80211/$dir" \
+        "$srcdir/src/drivers/net/wireless/broadcom/brcm80211/$dir" >/dev/null; then
+      mods+=("brcm80211/$m")
+    fi
+  done
+  local i=0
   {
     printf 'PACKAGE_NAME="%s"\nPACKAGE_VERSION="%s"\n' "$_modname" "$_kver"
     echo '# The kernel'"'"'s own Makefiles build what its config enables; only these are'
-    echo '# installed, over the in-tree ones.'
-    for m in bluetooth/btbcm bluetooth/hci_uart bluetooth/hci_bcm4377 \
-             brcm80211/brcmutil/brcmutil brcm80211/brcmfmac/brcmfmac \
-             brcm80211/brcmfmac/wcc/brcmfmac-wcc brcm80211/brcmfmac/cyw/brcmfmac-cyw \
-             brcm80211/brcmfmac/bca/brcmfmac-bca; do
+    echo '# installed, over the in-tree ones (the patched ones, see the PKGBUILD).'
+    for m in "${mods[@]}"; do
       printf 'BUILT_MODULE_NAME[%d]="%s"\nBUILT_MODULE_LOCATION[%d]="%s"\nDEST_MODULE_LOCATION[%d]="/updates/dkms"\n' \
         "$i" "${m##*/}" "$i" "${m%/*}/" "$i"
       i=$((i + 1))
