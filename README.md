@@ -37,7 +37,7 @@ On the tested Mac, a MacBookPro16,1 (16-inch, 2019, Intel + AMD Radeon Pro
 |---|---|---|
 | Keyboard, incl. the disk unlock prompt | ✅ | |
 | Keyboard backlight, idle fade | ✅ | |
-| Trackpad: multitouch, Force Touch, haptics | ✅ | |
+| Trackpad: multitouch, palm rejection, Force Touch, haptics | ✅ | |
 | Touch Bar | ✅ | |
 | Touch ID: sudo, polkit, lock screen | ⚠️ | needs fingers enrolled in macOS; after a power loss, log into macOS once to unlock it |
 | Speakers, with macOS-like sound | ✅ | the sound profile is the 16-inch 2019's |
@@ -70,7 +70,7 @@ What each of those gives you, in more detail.
 | Area | What you get |
 |---|---|
 | **Keyboard** | Works everywhere, including the disk unlock prompt at boot, with `hid-apple`'s layout options (Fn/Ctrl, Option/Command). The keyboard backlight fades out after 30 s without input and comes back on the next keystroke. |
-| **Trackpad** | Full multitouch (two-finger scroll, tap to click, gestures) and Force Touch: a harder press gives a second, felt click from the Taptic Engine, and can run an action you choose (copy/paste, a key combo, a command). |
+| **Trackpad** | Full multitouch (two-finger scroll, tap to click, gestures), palm rejection while typing, and Force Touch: a harder press gives a second, felt click from the Taptic Engine, and can run an action you choose (copy/paste, a key combo, a command). |
 | **Touch Bar** | Dark until touched or Fn is held; media and F-key layers, swipes for volume and brightness, haptic feedback, and a "touch to unlock" prompt when Touch ID is waiting. |
 | **Touch ID** | `sudo`, polkit prompts and the lock screen accept your fingerprint: the fingers you enrolled in macOS. |
 | **Sound** | The speakers sound like they do in macOS: KaiT2en's recreation of macOS's speaker processing (EQ, crossovers, bass enhancement), for the 16-inch 2019's speakers. The microphones and the headphone jack work. |

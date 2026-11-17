@@ -15,7 +15,7 @@
 pkgname=t2-precision-trackpad-dkms
 _modname=t2_precision_trackpad
 _modver=0.01
-pkgver=0.01.r4.27fd5c9
+pkgver=0.01.r6.5658cc8
 pkgrel=1
 pkgdesc="Apple T2 MacBook internal trackpad driver (multitouch, Force Touch) from KaiT2en, DKMS"
 arch=('any')
@@ -25,7 +25,7 @@ depends=('dkms')
 makedepends=('git')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
-_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+_commit=5658cc83be7967007b6a2fd91041d9ec2bd7d2a1
 source=("kait2en::git+${_repo}#commit=${_commit}")
 sha256sums=('SKIP')
 
