@@ -17,7 +17,7 @@ migrations that assume a T2 Mac runs `linux-t2`.
 | **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages, and everything T2 that isn't configuration: the DKMS modules, the services and apps, the T2 panel on Omarchy's bar (`t2-omarchy-plugins` and a tab per package), the kernel arguments (`t2-kernel-args`), `t2-dkms-guard`, the keyring. Two meta-packages hold it together: `t2-mac` (every T2 Mac) and `t2-mac-hybrid` (hybrid graphics); a new package reaches installed Macs as a new dependency of them. [packages.md](packages.md) lists them all | Every time pacman installs or updates them, from the GitHub release `repo` |
 | **omarchy fork**, branch `t2-kait2en-stable` (`josemiguelo/omarchy`) | Replaces upstream's T2 support (`linux-t2` plus `t2fanrd`) with stock `linux-omarchy` plus your packages: `install/hardware/apple/fix-t2.sh`, `install/hardware/pacman.sh`, the package list | **Only during installation** |
 | **omarchy-iso fork**, branch `t2-kait2en` (`josemiguelo/omarchy-iso`) | Builds the ISO that runs that installer: picks `linux-omarchy` on T2 Macs, trusts your repo key, adds the repo to the ISO's pacman configs, populates hardware keyrings once the target's keyring is ready | Only when building the ISO and installing |
-| **dotfiles** (`~/.local/share/chezmoi`, `loadouts/.etc/t2/`) | The `t2-*` scripts: the owner's options and setup only (the charge limit, which services run, Touch ID's PAM, the keyboard switch-over, Hybrid once); no software since 2026-11-16 | Whenever you run `loadout` (status, sync, run) |
+| **dotfiles** (`~/.local/share/chezmoi`, `loadouts/.etc/t2/`) | The `t2-*` scripts: the owner's preferences and per-person setup only (the charge limit, the key swaps, Hybrid once, the stable channel, the Wi-Fi firmware fallback, Touch ID's finger and PAM); no software since 2026-11-16, no service switched on since 2026-11-17 | Whenever you run `loadout` (status, sync, run) |
 
 The omarchy fork has one branch, `t2-kait2en-stable` (its default on GitHub): the T2 commits on
 the commit Omarchy's stable package is built from (the `_commit` in omarchy-pkgs'
@@ -47,15 +47,18 @@ whose `--stable` produces stable ISOs.
        the file that way afterwards, against anything that rewrites it.
      - `/etc/modules-load.d/t2.conf`: `t2bce_vhci`, `hci_bcm4377`.
    - **Services and rules:** the Wi-Fi firmware on the first boot, the fan daemon (80 °C system
-     target), gauging, Touch ID, the Touch Bar, the keyboard backlight fade, True Tone, the ACPI
-     fix's first-boot build, and the firewall rules for AirShare, AirDrop and Sidecar's Moonlight.
+     target), gauging, Force Touch, Touch ID, the Touch Bar, the keyboard backlight fade, True
+     Tone, the video encoders (Sidecar), the boot GPU keeper (dual-GPU models), the ACPI fix's
+     first-boot build, and the firewall rules for AirShare, AirDrop and Sidecar's Moonlight (saved
+     with ufw switched off for the moment: the installer's firewall is the live system's).
 4. **The ISO's keyring step** trusts your repo key once the target's keyring is ready. Doing it
    earlier is what broke an install before.
 5. **The first login** (`install/user/first-run/t2-omarchy.sh`) puts the T2 panel on the bar
-   (`t2-omarchy-setup`: Omarchy loads third-party plugins only from the user's config).
+   (`t2-omarchy-setup`: Omarchy loads third-party plugins and hooks only from the user's config),
+   with its menu entries and the hook that keeps the repo in `pacman.conf`.
 6. **The dotfiles bootstrap** (`bootstrap.sh t2-macbook-omarchy`) runs the owner's T2 setup:
-   keyboard swaps and fnmode, the Wi-Fi firmware fallback, the 90 % charge limit, Hybrid once,
-   the stable channel, the repo guard.
+   the key swaps, the Wi-Fi firmware fallback, the 90 % charge limit, Hybrid once, the stable
+   channel, Touch ID's finger and PAM.
 
 ## 3. After the install, the fork is gone from the system
 
@@ -83,8 +86,8 @@ packages since their pin; `kait2en-sync check` lists them.
 - **Orphan cleanup:** `omarchy-update-orphan-pkgs -y` removes every `pacman -Qtdq` package
   without asking. It won't touch the T2 stack: all 16 T2 packages are explicitly installed.
 - **`pacman.conf` rewrites:** if an update, a channel switch or `omarchy refresh pacman` rewrites
-  it, `~/.config/omarchy/hooks/pre-refresh-pacman.d/t2-arch-packages` (written by the dotfiles'
-  `t2-arch-packages-repo`) adds `[t2-arch-packages]` back.
+  it, `~/.config/omarchy/hooks/pre-refresh-pacman.d/t2-arch-packages` (`t2-omarchy-plugins`'
+  hook, linked by `t2-omarchy-setup`) adds `[t2-arch-packages]` back.
 
 ### B. A kernel update within 7.2 (7.2.16 and so on): guarded
 

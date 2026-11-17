@@ -148,8 +148,12 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   phone".
 - **Software goes in packages, never in the dotfiles' scripts** (the owner, 2026-11-16): sleep
   hooks, udev rules, units, watchers, uwsm env snippets ship with a package (`/usr/lib/...`,
-  `/usr/share/uwsm/env-hyprland.d/`); the dotfiles only set options (e.g. `/etc/t2-charge-limit.conf`)
-  and enable things. Moved that day: `t2-gmux-backlight` (new; the sleep hook, the udev rule, a
+  `/usr/share/uwsm/env-hyprland.d/`); the dotfiles only set preferences and options (e.g.
+  `/etc/t2-charge-limit.conf`, the key swaps) and per-person setup (Touch ID's finger). A service
+  a feature needs is enabled by the fork's `fix-t2.sh`, never by the dotfiles (2026-11-17: the
+  encoders `t2-ave` and `t2-boot-gpu.service` were only enabled by the dotfiles, so Sidecar was
+  dead on a fresh install; a fake-T2 VM install found it); something per user goes in
+  `t2-omarchy-setup` (the panel, menu entries, Omarchy hooks such as the repo's). Moved that day: `t2-gmux-backlight` (new; the sleep hook, the udev rule, a
   root watcher that resends the level when the panel's DPMS goes Off -> On and records it, a
   login unit that restores it; replaced a wrapper around `omarchy-brightness-display` and a
   Hyprland start hook), `t2-kbd-backlight-sync` (in t2-kbd-backlight: tells UPower about LED
@@ -272,7 +276,7 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 - Omarchy: boots UKIs (the initramfs is the `.initrd` section of `/boot/EFI/Linux/*.efi`);
   `xhci_pci`, `usbhid`, `hid_generic` are built in; its pacman guard needs
   `OMARCHY_ALLOW_DIRECT_PACMAN=1` for a direct `-Syu`; the user password is the LUKS password;
-  `omarchy refresh pacman` rewrites pacman.conf (the loadout's hook re-adds the repo).
+  `omarchy refresh pacman` rewrites pacman.conf (`t2-omarchy-plugins`' hook, linked by `t2-omarchy-setup`, re-adds the repo).
 - A local `pacman -U` of a package with a `.sig` beside it checks the signature and looks the
   key up on keyservers (it isn't on any): add the key first.
 - `op item edit` reads dots in field names as section.field: escape them (`name\.ext[file]=`).

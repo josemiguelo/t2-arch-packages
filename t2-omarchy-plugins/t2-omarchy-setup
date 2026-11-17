@@ -19,12 +19,20 @@
 # - Menu: every /usr/share/t2-omarchy/menu/<name>.jsonc is kept as a marked
 #   block in ~/.config/omarchy/extensions/omarchy-menu.jsonc; a block from a
 #   package no longer installed is taken out.
+# - Hooks: every /usr/share/t2-omarchy/hooks/<hook>.d/<file> (Omarchy runs
+#   hooks only from ~/.config/omarchy/hooks) is linked as
+#   ~/.config/omarchy/hooks/<hook>.d/<file>; a file of the same name (a copy
+#   from before) is moved to ~/.local/state/t2-omarchy/replaced, and links to
+#   a removed package's hook are taken away. The T2 packages' one:
+#   pre-refresh-pacman.d/t2-arch-packages, which puts the repo back after
+#   `omarchy refresh pacman` rewrites pacman.conf.
 set -euo pipefail
 
 SHARE=/usr/share/t2-omarchy
 CFG=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy
 PLUGINS=$CFG/plugins
 MENU=$CFG/extensions/omarchy-menu.jsonc
+HOOKS=$CFG/hooks
 REPLACED=${XDG_STATE_HOME:-$HOME/.local/state}/t2-omarchy/replaced
 check=0
 [[ ${1:-} == --check ]] && check=1
@@ -33,6 +41,12 @@ check=0
 ids=()
 for dir in "$SHARE"/plugins/*/; do
   [[ -f $dir/manifest.json ]] && ids+=("$(basename "$dir")")
+done
+
+# The packages' hooks, as <hook>.d/<file> paths under $SHARE/hooks.
+hooks=()
+for f in "$SHARE"/hooks/*.d/*; do
+  [[ -f $f ]] && hooks+=("${f#"$SHARE"/hooks/}")
 done
 
 # The menu blocks, by python: the menu file is JSONC, edited as lines.
@@ -92,6 +106,9 @@ if (( check )); then
     [[ $(readlink "$PLUGINS/$id" 2>/dev/null) == "$SHARE/plugins/$id" ]] || exit 1
     jq -e --arg id "$id" '[.bar.layout[]?[]? | if type == "object" then .id else . end] | index($id)' "$CFG/shell.json" >/dev/null 2>&1 || exit 1
   done
+  for h in "${hooks[@]}"; do
+    [[ $(readlink "$HOOKS/$h" 2>/dev/null) == "$SHARE/hooks/$h" ]] || exit 1
+  done
   menu check
   exit
 fi
@@ -119,6 +136,23 @@ for link in "$PLUGINS"/*; do
 done
 
 menu write
+
+for h in "${hooks[@]}"; do
+  link=$HOOKS/$h
+  mkdir -p "${link%/*}"
+  if [[ -e $link && ! -L $link ]]; then
+    mkdir -p "$REPLACED"
+    mv "$link" "$REPLACED/${h//\//_}.$(date +%Y%m%d-%H%M%S)"
+    echo "t2-omarchy-setup: moved the old copy of the $h hook to $REPLACED"
+  fi
+  [[ $(readlink "$link" 2>/dev/null) == "$SHARE/hooks/$h" ]] || ln -sfn "$SHARE/hooks/$h" "$link"
+done
+# Links to hooks whose package is gone.
+for link in "$HOOKS"/*.d/*; do
+  [[ -L $link && $(readlink "$link") == "$SHARE"/hooks/* && ! -e $link ]] || continue
+  rm -f "$link"
+  echo "t2-omarchy-setup: removed the ${link#"$HOOKS"/} hook (its package no longer ships it)"
+done
 
 omarchy-shell -q shell rescanPlugins || true
 failed=0

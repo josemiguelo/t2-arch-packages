@@ -8,14 +8,16 @@
 # /usr/share/t2-omarchy/menu/<name>.jsonc, and t2-omarchy-setup links the panel
 # into ~/.config/omarchy/plugins (package updates then reach it), puts it on
 # the bar, keeps the menu entries as marked blocks, and retires the separate
-# widgets of 0.1. The bar icon carries a dot while AirShare is visible or
+# widgets of 0.1. It also links the packages' Omarchy hooks
+# (/usr/share/t2-omarchy/hooks/<hook>.d/, here the one that keeps the repo in
+# pacman.conf across `omarchy refresh pacman`). The bar icon carries a dot while AirShare is visible or
 # Sidecar streams. The Omarchy fork's first login runs it; on
 # a Mac installed before, run it once (and after a package adds a plugin).
 #
 # Ours (t2-arch-packages).
 
 pkgname=t2-omarchy-plugins
-pkgver=0.4
+pkgver=0.5
 pkgrel=1
 pkgdesc="The T2 panel on Omarchy's bar (a tab per T2 feature) and its per-user setup"
 arch=('any')
@@ -31,4 +33,6 @@ package() {
   install -Dm644 "$hub/manifest.json" "$hub/Panel.qml" -t "$dest/"
   install -Dm755 "$hub/t2hub" "$dest/t2hub"
   install -dm755 "$pkgdir/usr/share/t2-omarchy/tabs" "$pkgdir/usr/share/t2-omarchy/menu"
+  install -Dm755 "$startdir/hooks/pre-refresh-pacman.d/t2-arch-packages" \
+    "$pkgdir/usr/share/t2-omarchy/hooks/pre-refresh-pacman.d/t2-arch-packages"
 }

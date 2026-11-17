@@ -1,0 +1,9 @@
+#!/bin/bash
+# t2-omarchy-plugins (linked here by t2-omarchy-setup): `omarchy refresh pacman`
+# and channel switches just rewrote /etc/pacman.conf from Omarchy's channel
+# template, without the signed [t2-arch-packages] repo the T2 packages come
+# from; put it back, unless something already configures it (pacman-conf
+# follows Includes, so a repo in an included file counts).
+pacman-conf --repo-list 2>/dev/null | grep -qx t2-arch-packages && exit 0
+printf '\n[%s]\nServer = %s\n' t2-arch-packages https://github.com/josemiguelo/t2-arch-packages/releases/download/repo |
+  sudo tee -a /etc/pacman.conf >/dev/null
