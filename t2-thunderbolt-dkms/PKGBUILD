@@ -14,8 +14,7 @@
 # added, so it replaces t2thunderbolt-dkms. Ice Lake (MacBookAir9,1): runtime
 # PM for its routers in the software connection manager.
 #
-# Being tested (2026-11-16, MacBookPro16,1, the owner's exception to the
-# one-month rule) with pcie_ports=compat kept: KaiT2en drops it ("the
+# Tested (2026-11-16, MacBookPro16,1) with pcie_ports=compat kept: KaiT2en drops it ("the
 # Thunderbolt runtime PM needs the PCIe port services"), but it costs this Mac
 # its ~1 s wake (CLAUDE.md), and the port driver here binds the ports itself.
 #

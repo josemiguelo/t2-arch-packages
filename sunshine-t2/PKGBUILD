@@ -12,9 +12,7 @@
 # without it). Its udev rule gives the session uinput/uhid for remote input.
 # The build fetches npm packages (the web UI) and the submodules.
 #
-# Pinned to KaiT2en's Sunshine fork 0737eec (2026-10-19), as an exception to
-# the one-month rule granted by the owner on 2026-11-16 (would have been
-# eligible 2026-11-23 with apps/t2-sidecar); tested on a MacBookPro16,1:
+# Pinned to KaiT2en's Sunshine fork 0737eec (2026-10-19); tested on a MacBookPro16,1:
 # mirror and extended display to Moonlight on a phone, touch input, a sleep.
 
 pkgname=sunshine-t2

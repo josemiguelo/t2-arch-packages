@@ -7,18 +7,16 @@ the per-package detail is [packages.md](packages.md).
 ## Keeping up with KaiT2en
 
 
-`bin/kait2en-sync` carries KaiT2en's upstream work into the packages, **a
-month late on purpose**: KaiT2en ships dangerous changes often, so a package
-only moves to a KaiT2en commit that landed at least 30 days ago
-(`KAIT2EN_MIN_AGE_DAYS`) and after which its paths stayed quiet for 30 days. A
-follow-up sooner is a fix or a revert, and the clock restarts from it.
-Repo-wide sweeps (a commit touching more than 8 `apps/` or `modules/` folders,
-`KAIT2EN_SWEEP_DIRS`) are listed but don't restart it. Pins never move
-backwards.
+`bin/kait2en-sync` carries KaiT2en's upstream work into the packages: a package
+moves to KaiT2en's newest real commit on its paths. Repo-wide sweeps (a commit
+touching more than 8 `apps/` or `modules/` folders, `KAIT2EN_SWEEP_DIRS`) don't
+become a pin by themselves; they come along with the next real commit. Pins
+never move backwards. `KAIT2EN_MIN_AGE_DAYS` (default 0) can hold recent
+commits back if ever wanted.
 
 - `kait2en-sync check`: per package, the upstream commits since its pinned
-  `_commit`, each marked `eligible`, `waiting` or `sweep`, the commit it would
-  re-pin to, and the earliest day the waiting ones can qualify; plus changes to
+  `_commit`, each marked `eligible` or `sweep`, and the commit it would re-pin
+  to; plus changes to
   KaiT2en's Fedora installer (`scripts/fedora`), to review by hand for
   `fix-t2.sh` (new kernel arguments, modules, services). Exit 10 when a package
   has an eligible update.
@@ -29,7 +27,7 @@ backwards.
   `[omarchy]` has headers it hasn't tested yet; desktop notifications for
   eligible updates and for modules that don't build.
 - `kait2en-sync apply`: for each package with an eligible update, pins its
-  eligible commit (each package its own), builds and signs it, builds its DKMS modules against the newest
+  newest eligible commit (each package its own), builds and signs it, builds its DKMS modules against the newest
   headers, then, after asking, publishes to the release (replacing the old
   versions) and commits and pushes the PKGBUILDs.
 

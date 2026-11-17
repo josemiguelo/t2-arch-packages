@@ -24,8 +24,7 @@
 #         can't connect (MacBookPro16,1 on linux-omarchy: 320 drops in a boot)
 #   0013  strict duplicate filter quirk (scans report addresses promptly)
 #   0021, 0024  hci_bcm4377 resume and registration fixes (PCIe models)
-# Added with the re-pin to 7e9903c (2026-11-16, an exception to the one-month
-# rule by the owner):
+# Added with the re-pin to 7e9903c (2026-11-16):
 #   0025  brcmfmac: the antenna SKU optional for firmware selection on BCM4364
 #         rev 3 (iMacPro1,1, iMac19,x); no change on a MacBookPro16,1, whose
 #         BCM4364/4 has one
@@ -41,7 +40,7 @@
 # Pinned at 7e9903c (2026-11-11, 0027 as sent upstream), whose series is
 # 0001-0027; 0001-0024 are as at the old pin 27fd5c9 (0014's description
 # aside). The 7.3 rebase of 2026-11-10 didn't touch these. Wi-Fi ported
-# 2026-11-12 as an exception to the one-month rule (CLAUDE.md).
+# 2026-11-12.
 #
 # The sources must match the kernel the modules load into: linux-omarchy 7.2.x
 # is kernel.org 7.2.15 (no stable-review patch) plus patches of its own. Its

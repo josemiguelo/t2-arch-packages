@@ -21,8 +21,7 @@
 # and nothing goes into the initramfs.
 #
 # Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  modules/t2_trackpad_actuator
-# Ported 2026-11-12 as an exception to the one-month rule (last code change
-# 2026-10-15, a comments-only commit on 2026-11-08).
+# Ported 2026-11-12.
 
 pkgname=t2-trackpad-actuator-dkms
 _modname=t2_trackpad_actuator

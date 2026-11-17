@@ -167,24 +167,15 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   rules go in `fix-t2.sh` (fresh installs) and, where an existing Mac needs them too, the
   dotfiles' `t2-*` scripts. `fix-t2.sh` only runs at install: installed Macs follow upstream
   Omarchy's stable channel, where the fork's migrations never run.
-- **KaiT2en updates wait a month** (the owner's rule, 2026-11-12): KaiT2en ships dangerous
-  changes often, so nothing is ported, re-pinned or added until the KaiT2en commit that brings it
-  is **at least 30 days old**, and the paths it touches have had **no further real change for 30
-  days** (repo-wide sweeps such as lockfile alignment don't count; follow-up "fix"/"revert"
-  commits do, and restart the clock). Pin to that commit, not to KaiT2en's HEAD. Before porting,
-  read the 30 days of history after it for reverts and fixes, and check its issues. A security fix
-  or a fix for a bug this Mac actually hits can go sooner, by the owner's explicit decision only.
-  The pins in place on 2026-11-12 (`27fd5c9`, 2026-11-07) predate the rule; they're the tested
-  baseline, and the next re-pin follows it. Exception (2026-11-14, by the owner): `t2-fan-control`
-  re-pinned to `8c7f725` (2026-11-12: in SMC mode, automatic control off, the daemon sleeps until
-  the GUI asks instead of polling; no change with our config's automatic control on).
+- **KaiT2en updates come in as they land** (the owner, 2026-11-16): a package may move to KaiT2en's newest real commit on its paths. Read the
+  commit and its issues first, as always, and test on this Mac before publishing.
 - **KaiT2en tooling**: `bin/kait2en-sync check` (per-package upstream commits, plus
   `scripts/fedora` changes to port to `fix-t2.sh` by hand), `apply` (re-pin, build, sign, test
   DKMS against the newest headers, publish after asking), `kernel` (all DKMS packages vs the
-  newest `linux-omarchy-headers`), `notify` (the timer's). They follow the one-month rule
-  (`KAIT2EN_MIN_AGE_DAYS`, default 30; since 2026-11-12): `check` marks each upstream commit
-  `eligible`, `waiting` or `sweep` and says when the waiting ones qualify, `apply` pins each package
-  to its own eligible commit, never backwards, and `notify` only speaks for eligible updates.
+  newest `linux-omarchy-headers`), `notify` (the timer's). `check` marks each upstream commit
+  `eligible` or `sweep` (and `waiting` only when `KAIT2EN_MIN_AGE_DAYS`, default 0, holds commits
+  back), `apply` pins each package to its own newest eligible commit, never backwards, and `notify`
+  only speaks for eligible updates.
   Sweeps are a heuristic (more than 8 `apps/`/`modules/` folders): `6ddacd9`, a new feature, counts
   as one, so read sweep lines. `apply` hasn't had a real run yet. Until 2026-11-12 `check` saw no
   package at all (a failing `grep` on the keyring's PKGBUILD ended the list under `pipefail`), so
@@ -224,7 +215,7 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   (`snd_apple_t2`) and `modules/apple-t2-alsa-ucm-conf`. Re-pinning `t2bce-stack-dkms` or
   `t2bce-audio-ucm` at or past it would ship no keyboard driver: their `prepare()` stops the
   build there. Moving to it is a port by hand (new package, initramfs `MODULES` in `fix-t2.sh`,
-  UCM, the DSP's udev match, the dotfiles' hid/audio assumptions), after the one-month rule.
+  UCM, the DSP's udev match, the dotfiles' hid/audio assumptions).
   `kait2en-sync` took it for a repo-wide sweep (12 folders) until a commit that deletes or
   renames files in a package's paths stopped counting as one.
 
@@ -288,13 +279,11 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Roadmap
 
-In order of value for the MacBookPro16,1. "Eligible" is the earliest date under the one-month
-rule (30 days after the path's last real change as seen on 2026-11-12); any later change pushes
-it back, so re-check with `git log -- <path>` before starting.
+In order of value for the MacBookPro16,1. Re-check each path's history with `git log -- <path>`
+before starting.
 
 1. **ACPI fixes** (`scripts/fedora/acpi-autofix.py`): **done 2026-11-15 as `t2-acpi-fix`**, the
-   owner's choice although the gain is mostly correctness (eligible: last change eebd9b1,
-   2026-10-07). Every boot logged 18 `AE_ALREADY_EXISTS` lines: the `CpuSsdt`'s `GCAP` re-loads
+   owner's choice although the gain is mostly correctness (last change eebd9b1, 2026-10-07). Every boot logged 18 `AE_ALREADY_EXISTS` lines: the `CpuSsdt`'s `GCAP` re-loads
    sub-tables the kernel already loaded, aborting `\_PR.CPU0._OSC`, CPU1's `APPT`/`APCT` and
    CPU0-2's `_PDC`. The override sets `Name (\SDTL, Zero)` to the mask of those sub-tables
    (`0x3A` here: CPU0IST, CPU0CST, APIST, APCST) and bumps the revision (`0x3001`; the kernel
@@ -319,18 +308,14 @@ it back, so re-check with `git log -- <path>` before starting.
      this Mac (2026-11-15) by removing the override and rebooting: the unit built the same
      table and the image before the login (+14 s, that boot only), and the next boot loaded it
      with no ACPI errors and skipped the unit. Not in an ISO yet.
-2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`): **done 2026-11-12, as an exception to
-   the one-month rule**, at the existing pin `27fd5c9` (patches 0001-0024): `t2-bluetooth-dkms`
-   became `t2-wireless-dkms`. **Re-pinned 2026-11-16 to `7e9903c`** (0001-0027, the owner's
-   exception): 0025 (BCM4364 rev 3 antenna SKU, iMacs) and 0026 (BCM4377 ASPM, PCIe Bluetooth)
+2. **`brcmfmac` Wi-Fi patches** (`patches/runtime/wireless`): **done 2026-11-12**, at the existing pin `27fd5c9` (patches 0001-0024): `t2-bluetooth-dkms`
+   became `t2-wireless-dkms`. **Re-pinned 2026-11-16 to `7e9903c`** (0001-0027): 0025 (BCM4364 rev 3 antenna SKU, iMacs) and 0026 (BCM4377 ASPM, PCIe Bluetooth)
    don't touch this Mac; 0027 (brcmfmac inband deep sleep) only switches on when the firmware
    sets shared flag 0x40000000, and this Mac's (9.30.514.0.32.5.94, from macOS) doesn't: with
    `brcmfmac debug=0x80000` and dynamic debug on, no "deep sleep" messages in 20 s idle, and
    `pmc_core/ltr_show` `SOUTHPORT_A` still 61 us. Wi-Fi, Bluetooth LE devices, S3 and AirDrop
    fine; first ping after idle unchanged (~2 ms).
-3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): **done 2026-11-12, as an
-   exception to the one-month rule** granted by the owner (would have been eligible 2026-12-08);
-   sounds like macOS, ~17% of one core while playing, 0 xruns. Packaged as `t2-dsp` at `402a353` (2026-11-08), the last DSP before
+3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): **done 2026-11-12**: sounds like macOS, ~17% of one core while playing, 0 xruns. Packaged as `t2-dsp` at `402a353` (2026-11-08), the last DSP before
    `6ddacd9`: its udev rule matches `KERNELS=="t2bce_audio"`, the driver in use; from `6ddacd9`
    on it matches `snd_apple_t2`. PipeWire filter chain; needs `lsp-plugins-lv2` (`[extra]`) and
    bankstown (`bankstown-lv2`, packaged here: AUR only). Userspace only: removing the package
@@ -449,8 +434,7 @@ it back, so re-check with `git log -- <path>` before starting.
      throttling). Switch only if the SMC's curve keeps it cool enough; on Linux it ramps late.
    - KaiT2en's i915 patches (`patches/runtime/i915`: PSR on Apple panels, restoring the gmux
      brightness) matter once the iGPU drives the panel: look at them with this.
-6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): **done 2026-11-14, as an
-   exception to the one-month rule** (pin `c9e24f7`; module code unchanged since 2026-10-28, the
+6. **Touch Bar** (`modules/t2touchbar`, `modules/t2bdrm`, `apps/t2-touchbar`): **done 2026-11-14** (pin `c9e24f7`; module code unchanged since 2026-10-28, the
    app since 2026-10-31). `t2-touchbar-dkms` (`t2hid`, `t2touchbar_kbd`/`_bl`, `t2bdrm`) and
    `t2-touchbar` (the daemon). Tested on this Mac: live swap, then the bar, touch, swipes, layers,
    haptics, the Touch ID prompt, suspend, and a reboot with `t2hid` at the unlock prompt.
@@ -488,11 +472,11 @@ it back, so re-check with `git log -- <path>` before starting.
      snapshot. `t2-touchbar --detach` (or disabling the unit globally) brings Apple's firmware row
      back.
 7. **Trackpad haptics** (`modules/t2_trackpad_actuator`, `apps/t2-force-click`): **done
-   2026-11-12, as an exception to the one-month rule**: `t2-trackpad-actuator-dkms` (with a udev
+   2026-11-12**: `t2-trackpad-actuator-dkms` (with a udev
    rule, see the facts above) and `t2-force-click`. The force click replays Apple's captured
    plain click, so it feels like a second click, not macOS's force-click haptic.
 8. **Thunderbolt hotplug and controller power-down** (`patches/runtime/thunderbolt`): **stage A
-   done 2026-11-16** (the owner's exception to the one-month rule) as `t2-thunderbolt-dkms`
+   done 2026-11-16** as `t2-thunderbolt-dkms`
    (7.2.15 `drivers/thunderbolt` + Omarchy's 0601/0602/0605/0606/0608, vendored from omarchy-pkgs
    `48d5518`, + KaiT2en's 0001 at `4b29a99` rebased onto them: one include hunk), replacing
    `t2thunderbolt-dkms`, **with `pcie_ports=compat` kept**: the patch's `thunderbolt-apple-power`
@@ -536,8 +520,7 @@ it back, so re-check with `git log -- <path>` before starting.
      `t2-wireless-dkms`) replacing `t2thunderbolt-dkms`; `pcie_ports=compat` dropped from
      `fix-t2.sh`, the dotfiles' `t2-kernel-args` (which enforces it today) and Limine; the resume
      time re-measured; hotplug tested with a Thunderbolt dock or eGPU.
-9. **Touch ID** (`t2-services/t2-touchid`): **packaged 2026-11-14 as `t2-touchid`, an exception to
-   the one-month rule** (pin `c9e24f7`). Tested on this Mac by hand first: sudo, polkit and the lock
+9. **Touch ID** (`t2-services/t2-touchid`): **packaged 2026-11-14 as `t2-touchid`** (pin `c9e24f7`). Tested on this Mac by hand first: sudo, polkit and the lock
    screen, before and after suspend. How it works: the T2's Secure Enclave matches the finger
    (fingers enrolled in macOS only; it reports none until macOS has been logged into once since
    the T2 last lost power: seen 2026-11-16 after a forced power-off, "no macOS user on this Mac
@@ -586,8 +569,7 @@ it back, so re-check with `git log -- <path>` before starting.
      everywhere, if it bites again.
    - **Not done**: an ISO with it (the fork installs and enables `t2-touchid`; `libfprint-git`
      and fprintd are in its offline list for the setup).
-10. **Keyboard backlight idle fade** (`apps/t2-kbd-backlight`): **done 2026-11-15, as an exception to
-   the one-month rule** (pin `c9e24f7`; one real commit, fb187c0). Not auto-brightness: it fades the
+10. **Keyboard backlight idle fade** (`apps/t2-kbd-backlight`): **done 2026-11-15** (pin `c9e24f7`; one real commit, fb187c0). Not auto-brightness: it fades the
    keyboard backlight out after 30 s without keyboard, trackpad or Touch Bar input and back on the
    next, and sets the level back before suspend. A root system service, through UPower's
    `KbdBacklight` (never sysfs), its own libinput contexts on `seat0` and `seat-touchbar`. Config
@@ -600,8 +582,7 @@ it back, so re-check with `git log -- <path>` before starting.
      command to call `KbdBacklight.SetBrightness` with the LED's level after it. `t2-touchbar` 2
      fixed a leftover `/etc/kait2en` path in its config comment (its name check now covers
      `config/`).
-11. **AirDrop and Quick Share** (`apps/t2-drop`, `apps/t2-airshare`): **packaged 2026-11-15, as an
-   exception to the one-month rule** (pin `c9e24f7`). AirDrop tested both ways with an iPhone,
+11. **AirDrop and Quick Share** (`apps/t2-drop`, `apps/t2-airshare`): **packaged 2026-11-15** (pin `c9e24f7`). AirDrop tested both ways with an iPhone,
    Quick Share both ways with a Galaxy A56 over the shared Wi-Fi (2026-11-15). The hotspot path
    is untested, by the owner's choice (phone Wi-Fi stays on): with the phone's Wi-Fi *off* the
    Mac isn't listed at all, which is expected (it couldn't join the hotspot); a btmon capture
@@ -632,8 +613,7 @@ it back, so re-check with `git log -- <path>` before starting.
      ~15 s (the first connect lands before awdl0's address is usable), so use `--wait 30`; the app
      browses while its window has focus. An iPhone may send a transfer twice (each upload ends
      with a connection reset): watch.
-12. **True Tone and auto-brightness** (`apps/t2-truetone`): **ported 2026-11-15, as an exception to
-   the one-month rule** (pin `c9e24f7`; 8de9546, 2026-11-08, then only a lockfile sweep). Upstream
+12. **True Tone and auto-brightness** (`apps/t2-truetone`): **ported 2026-11-15** (pin `c9e24f7`; 8de9546, 2026-11-08, then only a lockfile sweep). Upstream
    is GNOME-only; `omarchy.patch` (ours, about 400 lines in, 1400 out with the GTK app) swaps the
    backends and keeps the core (sensor, white-point model, macOS curve, ramps, learning, config,
    status file) as it is. Tested on MacBookPro16,1: the panel warms with the room (~6400 K at
@@ -657,7 +637,7 @@ it back, so re-check with `git log -- <path>` before starting.
      automatic brightness, the live reading, forgetting the learned curve. Its evening mode is
      left off (night light does it). The fork's `fix-t2.sh` installs it and enables the user
      service globally (`aaa3b48d9`); not in an ISO yet.
-13. **`t2-services`**: **done 2026-11-16** (the owner's exception to the one-month rule), both over
+13. **`t2-services`**: **done 2026-11-16** , both over
    the T2 link `t2-touchid`'s udev rule brings up (upstream's `t2-services-common` does the same
    and is otherwise Fedora migration scripts: not packaged).
    - **`t2-journal`** (at `c9e24f7`): `t2journal`, run as the user, pulls a bridgeOS sysdiagnose
@@ -678,8 +658,7 @@ it back, so re-check with `git log -- <path>` before starting.
      ID fine. Encode only, not VA-API: Chromium/mpv/OBS don't use it; KaiT2en's Sunshine fork does.
    - The `ffmpeg` on the PATH here is Homebrew's (no VA-API, no hwaccels); `/usr/bin/ffmpeg` has
      VA-API, and the iGPU encodes and decodes HEVC through it (`renderD128`).
-14. **`t2-sidecar`: done 2026-11-16, as an exception to the one-month rule** granted by the owner
-   (would have been eligible 2026-11-23). A phone/tablet as a second screen through Moonlight,
+14. **`t2-sidecar`: done 2026-11-16.** A phone/tablet as a second screen through Moonlight,
    encoded by the T2's Sidecar encoder (`/dev/video3`, needs `t2-ave`). Not Apple's Sidecar: Sunshine
    on the Mac, Moonlight on the device (input comes back).
    - **`sunshine-t2`**: KaiT2en's Sunshine fork (`deqrocks/Sunshine` `t2-sidecar`, pinned `0737eec`,

@@ -24,19 +24,16 @@
 # are listed apart: they are where new kernel arguments, modules or services
 # show up, and Omarchy's fix-t2.sh may need the same (review them by hand).
 #
-# The one-month rule (CLAUDE.md): KaiT2en ships dangerous changes often, so a
-# package only moves to a commit that is at least KAIT2EN_MIN_AGE_DAYS old and
-# after which its paths stayed quiet that long. Walking its real commits since
-# the pin, newest first, the eligible one is the newest landed (committer date)
-# before the cutoff whose next change on the same paths came at least that
-# many days later, or never: a follow-up sooner is a fix or a revert, and the
-# clock restarts from it. Repo-wide sweeps (a commit touching more than
-# KAIT2EN_SWEEP_DIRS apps/ or modules/ folders, such as lockfile alignment)
-# don't count. A pin never moves backwards: pins older than the rule stay as
-# they are until an eligible commit comes after them.
+# A package moves to KaiT2en's newest real commit on its paths: "eligible" is
+# that commit. Repo-wide sweeps (a commit touching more than KAIT2EN_SWEEP_DIRS
+# apps/ or modules/ folders, such as lockfile alignment) don't become a pin by
+# themselves; they come along with the next real commit. A pin never moves
+# backwards. KAIT2EN_MIN_AGE_DAYS (default 0, none) can hold commits back: a
+# commit then qualifies only once it is that old and its paths stayed quiet
+# that long after it ("waiting" until then).
 #
 # Environment: KAIT2EN_CLONE (default ~/Repos/gh/kaiT2en/KaiT2en-Fedora, cloned
-# if missing), KAIT2EN_MIN_AGE_DAYS (default 30), KAIT2EN_SWEEP_DIRS (default
+# if missing), KAIT2EN_MIN_AGE_DAYS (default 0), KAIT2EN_SWEEP_DIRS (default
 # 8), T2_SIGN_KEY (default the repo key), T2_WORK (default
 # ~/.cache/t2-arch-packages).
 
@@ -51,7 +48,7 @@ GH_REPO=josemiguelo/t2-arch-packages
 RELEASE=repo
 DB=t2-arch-packages
 GUARD=$ROOT/t2-dkms-guard/t2-dkms-guard
-MIN_AGE_DAYS=${KAIT2EN_MIN_AGE_DAYS:-30}
+MIN_AGE_DAYS=${KAIT2EN_MIN_AGE_DAYS:-0}
 SWEEP_DIRS=${KAIT2EN_SWEEP_DIRS:-8}
 [[ $MIN_AGE_DAYS =~ ^[0-9]+$ ]] || { echo "KAIT2EN_MIN_AGE_DAYS must be a whole number of days" >&2; exit 1; }
 MIN_AGE=$((MIN_AGE_DAYS * 86400))
@@ -112,7 +109,7 @@ sweep_for() {
   [[ -z $(git -C "$KAIT2EN" show --diff-filter=DR --name-only --format= "$c" -- "$@") ]]
 }
 
-# One package's upstream state under the one-month rule (see the top). Sets
+# One package's upstream state (see the top). Sets
 # PLAN_TARGET (the eligible commit, empty when none), PLAN_LOG (its commits
 # since the pin, each marked eligible, waiting or sweep), PLAN_SWEEPS (how many
 # are sweeps) and PLAN_WAIT (the earliest day the waiting ones can become
@@ -200,7 +197,7 @@ cmd_check() {
     echo "$log"
   fi
   echo
-  ((${#waiting[@]} == 0)) || say "waiting under the one-month rule: ${waiting[*]}"
+  ((${#waiting[@]} == 0)) || say "waiting (KAIT2EN_MIN_AGE_DAYS=$MIN_AGE_DAYS): ${waiting[*]}"
   if ((${#eligible[@]})); then
     say "eligible updates: ${eligible[*]} — kait2en-sync apply"
     return 10
@@ -323,7 +320,7 @@ cmd_notify() {
   local out rc stamp=$WORK/kernel-tested headers
   rc=0; out=$(cmd_check 2>&1) || rc=$?
   if (( rc == 10 )); then
-    notify-send -a kait2en-sync "KaiT2en updates are a month old and settled" \
+    notify-send -a kait2en-sync "KaiT2en has updates for T2 packages" \
       "$(sed 's/\x1b\[[0-9;]*m//g' <<<"$out" | sed -n 's/^==> eligible updates: //p')"
   elif (( rc != 0 )); then
     notify-send -a kait2en-sync -u critical "kait2en-sync check failed" "$(tail -3 <<<"$out")"

@@ -188,9 +188,9 @@ same time.
   driver unbuilt, the upgrade stops and you stay on the kernel that works. The
   move to each new kernel series (7.3 next) is done here first; then the guard
   lets it through.
-- **KaiT2en's changes arrive a month late, on purpose.** KaiT2en moves fast and
-  sometimes breaks things, so a change gets packaged only once it has been out
-  for 30 days without fixes or reverts.
+- **KaiT2en's changes come in as they land:** a daily check lists KaiT2en's new
+  commits per package, and they're packaged and tested here before they're
+  published.
 
 ## Known limits
 
