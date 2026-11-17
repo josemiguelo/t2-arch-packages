@@ -116,7 +116,9 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   (`Tab.qml`, `tab.json`: title, icon, order, indicator unit; a helper beside it) and its menu
   entries under `/usr/share/t2-omarchy/menu/<name>.jsonc`, and depends on `t2-omarchy-plugins`.
   Tabs: `battery` (t2-smc-control: battery, power, charge limit, SMC clock), `fans`
-  (t2-fan-control: the curve or the SMC, the target, both fans, temperatures), `trackpad`
+  (t2-fan-control: the curve or the SMC, the target, both fans, temperatures), `graphics`
+  (t2-boot-gpu: Hybrid or Discrete from the next boot through pkexec, what runs now, whether the
+  Radeon is awake; the owner's dotfiles only pick Hybrid once, the tab owns the choice), `trackpad`
   (t2-force-click: click pressure, force click, its pressure and action), `light` (t2-truetone), `airshare` (t2-airshare, with its Share-menu entries;
   indicator t2-airshare.service; sending picks a device nearby in the tab: `t2airshare list --json` and
   `t2drop list --json` side by side, then `t2airshare send --addr --json` / `t2drop send --id --json`,

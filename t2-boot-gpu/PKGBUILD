@@ -18,13 +18,15 @@
 # t2-hybrid-gpu-control helper.
 
 pkgname=t2-boot-gpu
-pkgver=0.2
+pkgver=0.3
 pkgrel=1
 pkgdesc="Keep the boot GPU (hybrid or discrete) of dual-GPU T2 MacBook Pros across macOS boots"
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"
 license=('GPL-3.0-or-later')
-depends=('bash' 'e2fsprogs' 'systemd')
+depends=('bash' 'e2fsprogs' 'systemd'
+         # the T2 panel's Graphics tab: its helper, the password prompt, GPU names
+         'python' 'polkit' 'hwdata' 't2-omarchy-plugins')
 optdepends=('t2gmux-dkms: the gmux driver hybrid mode needs'
             't2-amdgpu-dkms: the dGPU powered off in hybrid mode'
             't2-i915-dkms: the panel on the iGPU, waking with it')
@@ -37,4 +39,10 @@ package() {
   # Hyprland on the panel's GPU, through uwsm's system env.d (read from
   # XDG_DATA_DIRS); was the owner's dotfiles' t2-render-gpu script.
   install -Dm644 t2-render-gpu.env "$pkgdir/usr/share/uwsm/env-hyprland.d/50-t2-render-gpu"
+  # The Graphics tab of the T2 panel on Omarchy's bar (ours; for KaiT2en's T2
+  # Hybrid GPU Control window): Hybrid or Discrete from the next boot (pkexec
+  # t2-boot-gpu), what runs now, whether the Radeon is awake.
+  local tab="$startdir/omarchy-tab" dest="$pkgdir/usr/share/t2-omarchy/tabs/graphics"
+  install -Dm644 "$tab/Tab.qml" "$tab/tab.json" -t "$dest/"
+  install -Dm755 "$tab/graphics" "$dest/graphics"
 }

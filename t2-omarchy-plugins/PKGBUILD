@@ -15,7 +15,7 @@
 # Ours (t2-arch-packages).
 
 pkgname=t2-omarchy-plugins
-pkgver=0.3
+pkgver=0.4
 pkgrel=1
 pkgdesc="The T2 panel on Omarchy's bar (a tab per T2 feature) and its per-user setup"
 arch=('any')

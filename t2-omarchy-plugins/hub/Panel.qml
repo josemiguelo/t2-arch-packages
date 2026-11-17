@@ -144,7 +144,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: panel.loadedContent
-    contentWidth: panel.fittedContentWidth(Style.space(540))
+    contentWidth: panel.fittedContentWidth(Style.space(640))
     contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(620))
 
     content: PanelKeyCatcher {
