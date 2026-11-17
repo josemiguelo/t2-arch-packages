@@ -105,6 +105,13 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Procedures
 
+- **The docs are split by reader** (2026-11-16): `README.md` is for other T2 owners (what this is,
+  what works on the Mac, the T2 panel, how to install, known limits, credits), in plain language;
+  `docs/packages.md` has every package's source and test results; `docs/omarchy-integration.md`
+  how the forks and this repo fit over an install and an update; `docs/maintaining.md` keeping up
+  with KaiT2en, building and publishing, and old measurements. A new feature updates the README's
+  "What works" (and the panel list, for a tab) and its row in `docs/packages.md`. The two forks'
+  READMEs have a short T2 section on top pointing here.
 - **One T2 panel on Omarchy's bar, a tab per feature; tabs and menu entries ship with their
   packages** (the owner, 2026-11-16). `t2-omarchy-plugins` ships the panel (`t2.panel`, in
   `/usr/share/t2-omarchy/plugins/t2.panel/`: the bar icon, a dot while a tab's indicator unit

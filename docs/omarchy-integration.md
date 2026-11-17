@@ -1,11 +1,12 @@
 # KaiT2en on Omarchy: how the fork works and how to maintain it
 
-State as of 2026-11-12, on `t2-macbook-omarchy` (MacBookPro16,1), Omarchy 4.5.0-3 stable,
-`linux-omarchy` 7.2.15.
+State as of 2026-11-16 (first written 2026-11-12), on `t2-macbook-omarchy` (MacBookPro16,1),
+Omarchy 4.5.0-3 stable, `linux-omarchy` 7.2.15. The owner-facing overview is the
+[README](../README.md).
 
 **In short:** the fork only matters while Omarchy is being installed. On the running system,
 upstream Omarchy is in charge again, and what keeps the T2 setup intact is your package repo,
-the T2 scripts in your dotfiles, and `t2-dkms-guard`. Updates are safe as long as those three
+`t2-dkms-guard`, and the few T2 setup scripts in your dotfiles. Updates are safe as long as those three
 keep doing their jobs. There are two real risks: the first 7.3 kernel, and future upstream
 migrations that assume a T2 Mac runs `linux-t2`.
 
@@ -13,10 +14,10 @@ migrations that assume a T2 Mac runs `linux-t2`.
 
 | Piece | What it does | When it acts |
 |---|---|---|
-| **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages: 7 DKMS kernel-module packages (`t2bce-stack`, `t2smc`, `t2sbs`, `t2smp`, `t2thunderbolt`, `t2-precision-trackpad`, `t2-wireless`), `t2-fan-control`, `t2-smc-control`, `t2-dsp` (with `bankstown-lv2`), `t2-trackpad-actuator-dkms` and `t2-force-click`, `t2bce-audio-ucm`, `t2-dkms-guard`, the keyring | Every time pacman installs or updates them, from the GitHub release `repo` |
+| **t2-arch-packages** (`josemiguelo/t2-arch-packages`, a signed pacman repo) | KaiT2en's drivers and tools as Arch packages, and everything T2 that isn't configuration: the DKMS modules, the services and apps, the T2 panel on Omarchy's bar (`t2-omarchy-plugins` and a tab per package), the kernel arguments (`t2-kernel-args`), `t2-dkms-guard`, the keyring. Two meta-packages hold it together: `t2-mac` (every T2 Mac) and `t2-mac-hybrid` (hybrid graphics); a new package reaches installed Macs as a new dependency of them. [packages.md](packages.md) lists them all | Every time pacman installs or updates them, from the GitHub release `repo` |
 | **omarchy fork**, branch `t2-kait2en-stable` (`josemiguelo/omarchy`) | Replaces upstream's T2 support (`linux-t2` plus `t2fanrd`) with stock `linux-omarchy` plus your packages: `install/hardware/apple/fix-t2.sh`, `install/hardware/pacman.sh`, the package list | **Only during installation** |
 | **omarchy-iso fork**, branch `t2-kait2en` (`josemiguelo/omarchy-iso`) | Builds the ISO that runs that installer: picks `linux-omarchy` on T2 Macs, trusts your repo key, adds the repo to the ISO's pacman configs, populates hardware keyrings once the target's keyring is ready | Only when building the ISO and installing |
-| **dotfiles** (`~/.local/share/chezmoi`, `loadouts/.etc/t2/`) | The `t2-*` scripts: re-check and repair the T2 setup on the running system | Whenever you run `loadout` (status, sync, run) |
+| **dotfiles** (`~/.local/share/chezmoi`, `loadouts/.etc/t2/`) | The `t2-*` scripts: the owner's options and setup only (the charge limit, which services run, Touch ID's PAM, the keyboard switch-over, Hybrid once); no software since 2026-11-16 | Whenever you run `loadout` (status, sync, run) |
 
 The omarchy fork has one branch, `t2-kait2en-stable` (its default on GitHub): the T2 commits on
 the commit Omarchy's stable package is built from (the `_commit` in omarchy-pkgs'
@@ -33,30 +34,27 @@ whose `--stable` produces stable ISOs.
 2. **The fork's `pacman.sh`** adds `[t2-arch-packages]` to `/etc/pacman.conf`.
 3. **The fork's `fix-t2.sh`**, when it detects PCI ID `106b:1801/1802`, sets up:
    - **Packages:** the keyring first (with `--noscriptlet` during an ISO install, because the
-     installer is still building the target's keyring), then `linux-omarchy-headers`, the 7 DKMS
-     packages, `t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp`, `t2-dkms-guard`,
-     `linux-apfs-rw-dkms` and `apple-bcm-firmware-fetcher` (from `[t2-arch-packages]`, taken over from `[arch-mact2]` on 2026-11-15). DKMS compiles
-     the modules for the installed kernel.
+     installer is still building the target's keyring), then `linux-apfs-rw-dkms` on its own
+     (DKMS builds at the end of a transaction, and the firmware fetcher needs it), then `t2-mac`,
+     and `t2-mac-hybrid` on the dual-GPU models. DKMS compiles the modules for the installed
+     kernel.
    - **Boot setup:**
      - `/etc/mkinitcpio.conf.d/apple-t2.conf`: the initramfs modules.
        `t2_precision_trackpad` goes first so it claims the trackpad before `hid-apple` does, and
        `t2bce_vhci` is there so the keyboard works at the disk unlock prompt.
-     - `/etc/limine-entry-tool.d/t2-mac.conf`: the kernel arguments
-       `intel_iommu=on iommu=pt mem_sleep_default=deep pci=noaer pcie_ports=compat` (the ~1 s
-       wake, together with `t2smp`).
+     - `t2-kernel-args --write`: `/etc/limine-entry-tool.d/t2-mac.conf`, the kernel arguments
+       (`pci=noaer pcie_ports=compat` for the ~1 s wake, forced PCIe ASPM, ...). The package keeps
+       the file that way afterwards, against anything that rewrites it.
      - `/etc/modules-load.d/t2.conf`: `t2bce_vhci`, `hci_bcm4377`.
-   - **Services and rules:**
-     - `t2-wifi-firmware.service` plus `/usr/local/sbin/t2-wifi-reload`: on the first boot,
-       copy the Wi-Fi firmware off the macOS volume, then bring the card up on it.
-     - `t2-fancontrol.service`, with an 80 °C system target.
-     - `t2-smc-gaugingd.service`: calibration charges under a charge limit.
-     - `/etc/udev/rules.d/90-t2-ibridge-unmanaged.rules`: NetworkManager leaves the T2's
-       internal USB network link (`05ac:8233`) alone.
+   - **Services and rules:** the Wi-Fi firmware on the first boot, the fan daemon (80 °C system
+     target), gauging, Touch ID, the Touch Bar, the keyboard backlight fade, True Tone, the ACPI
+     fix's first-boot build, and the firewall rules for AirShare, AirDrop and Sidecar's Moonlight.
 4. **The ISO's keyring step** trusts your repo key once the target's keyring is ready. Doing it
    earlier is what broke an install before.
-5. **The dotfiles bootstrap** (`bootstrap.sh t2-macbook-omarchy`) runs the T2 scripts, which
-   check all of the above and add what no installer writes: keyboard swaps and fnmode, the gmux
-   backlight, the EC clock, the render GPU, the Wi-Fi firmware fallback, the 85% charge limit,
+5. **The first login** (`install/user/first-run/t2-omarchy.sh`) puts the T2 panel on the bar
+   (`t2-omarchy-setup`: Omarchy loads third-party plugins only from the user's config).
+6. **The dotfiles bootstrap** (`bootstrap.sh t2-macbook-omarchy`) runs the owner's T2 setup:
+   keyboard swaps and fnmode, the Wi-Fi firmware fallback, the 90 % charge limit, Hybrid once,
    the stable channel, the repo guard.
 
 ## 3. After the install, the fork is gone from the system
@@ -118,8 +116,9 @@ not before 2026-12-11).
 Upstream has already shipped changes like this:
 
 - **One rewrote the kernel arguments.** `1785944594` replaced `pcie_ports=compat` with
-  `pm_async=off` in `t2-mac.conf`. The dotfiles' `t2-kernel-args` catches this, but **only when
-  you run loadout**, not by itself.
+  `pm_async=off` in `t2-mac.conf`. Since 2026-11-16 the `t2-kernel-args` package puts the file
+  back within a second and rebuilds the boot image, by itself (a path unit on the file, and a
+  boot service).
 - **One rewrote the module list.** `1785273276` changed `apple-t2.conf`.
 - **A new one could install `linux-t2`.** It conflicts with the DKMS `t2bce` (both drive the same
   device), and Omarchy's boot order puts `linux-t2` first
@@ -137,10 +136,10 @@ itself. They can be spotted early: stable releases trail upstream's `quattro`, a
 
 It's automatic since 2026-11-12: the dotfiles' `t2-post-update-check` keeps a post-update hook
 (`~/.config/omarchy/hooks/post-update.d/t2-loadout-check`) that runs `loadout status` for the T2
-items (the repo, its key and hook, the packages, the kernel arguments, the stable channel, the
-keyboard settings, the Wi-Fi firmware, the charge limit, the daemons, the network rule) and sends
-a critical notification naming any the update undid. `loadout run <name>` repairs a script,
-`loadout install <name>` a package.
+items (the repo, its key and hook, the stable channel, the keyboard settings, the Wi-Fi
+firmware, the charge limit, the daemons) and sends a critical notification naming any the update
+undid. `loadout run <name>` repairs one. The packages themselves no longer need it: `t2-mac` keeps
+them installed, and the orphan cleanup can't remove what it depends on.
 
 ### Before updating, now and then
 
@@ -187,7 +186,7 @@ earliest dates are in CLAUDE.md's Roadmap.
 
 ### Publishing a package by hand
 
-From the t2-arch-packages README ("Build and release"), for one package added to the existing
+From [maintaining.md](maintaining.md) ("Build and release"), for one package added to the existing
 database:
 
 1. Build: `makepkg -d -f` in the package folder (`-d` because Rust comes from rustup or mise,

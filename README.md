@@ -1,177 +1,229 @@
-# t2-arch-packages
+# T2 Macs on Omarchy
 
-Arch/Omarchy packages of the T2 Mac drivers and tools from
-[KaiT2en-Fedora](https://github.com/kaiT2en/KaiT2en-Fedora), for a stock
-`linux-omarchy` kernel (no `linux-t2`). Tested on a MacBook Pro 16-inch 2019
-(MacBookPro16,1).
+Everything an Intel Mac with Apple's T2 chip needs to run
+[Omarchy](https://omarchy.org) well: the drivers and tools from
+[KaiT2en](https://github.com/kaiT2en/KaiT2en-Fedora), packaged for Arch Linux
+on Omarchy's stock `linux-omarchy` kernel, plus a T2 panel on Omarchy's bar and
+an Omarchy installer that sets it all up.
 
-This is an independent repackaging, not a KaiT2en project and not endorsed by
-it. All driver and app code is KaiT2en's: kernel modules under GPL-2.0, userspace
-under GPL-3.0-or-later with a section 7(b) author attribution term (André
-Eikmeyer; 4f1sh3r for the fan and SMC tools). Each package ships KaiT2en's
-`LICENSING.md` and `AUTHORS`. KaiT2en's name and logo are its trademarks; the
-logo is removed from `t2-fan-control` and `t2-smc-control` (`no-wordmark.patch`). `bankstown-lv2` is
-chadmed's (Asahi Linux), MIT, not KaiT2en's.
+It's in daily use on a MacBook Pro 16-inch 2019 (MacBookPro16,1): keyboard,
+trackpad, Touch Bar, Touch ID, sound, Wi-Fi, Bluetooth, sleep, fans and both
+GPUs work, and so do things the usual T2 setup doesn't have, like AirDrop,
+True Tone and hybrid graphics.
 
-## Use the repo
+This is an independent, personal project: not part of KaiT2en, Omarchy or
+t2linux, and not endorsed by any of them.
+
+## Why not `linux-t2`?
+
+Omarchy's own T2 support installs `linux-t2`, a kernel patched for T2 Macs.
+This repo does it the other way round: the stock kernel Omarchy ships for
+everyone, with KaiT2en's T2 drivers built for it by DKMS. That gives you:
+
+- **Omarchy's kernel and its updates**, the same as every other Omarchy machine.
+- **KaiT2en's newer drivers and apps**, which go well beyond what `linux-t2`
+  does: Touch ID, AirDrop and Quick Share, hybrid graphics, True Tone, the
+  macOS speaker processing, and more (below).
+- **A safety net for kernel updates:** a pacman hook refuses a kernel upgrade
+  that would leave any T2 driver unbuilt, so an update can't leave you without
+  a keyboard.
+
+## Status at a glance
+
+On the tested Mac, a MacBookPro16,1 (16-inch, 2019, Intel + AMD Radeon Pro
+5300M/5500M). ✅ works, tested · ⚠️ works, with a catch · ❓ not tested yet.
+
+| | Status | |
+|---|---|---|
+| Keyboard, incl. the disk unlock prompt | ✅ | |
+| Keyboard backlight, idle fade | ✅ | |
+| Trackpad: multitouch, Force Touch, haptics | ✅ | |
+| Touch Bar | ✅ | |
+| Touch ID: sudo, polkit, lock screen | ⚠️ | needs fingers enrolled in macOS; after a power loss, log into macOS once to unlock it |
+| Speakers, with macOS-like sound | ✅ | the sound profile is the 16-inch 2019's |
+| Microphones | ✅ | with KaiT2en's processing |
+| Headphone jack | ✅ | |
+| FaceTime camera | ✅ | |
+| Wi-Fi | ✅ | firmware copied from macOS on the first boot |
+| Bluetooth, incl. LE keyboards and mice | ✅ | |
+| Sleep, ~1 s wake | ✅ | |
+| Hibernation | ❓ | not tried |
+| Battery percentage, charge limit, calibration | ✅ | |
+| Fans | ✅ | |
+| Hybrid graphics, Radeon off at idle | ✅ | dual-GPU MacBook Pros |
+| Discrete graphics | ✅ | |
+| External displays (Thunderbolt/USB-C) | ❓ | not tested; need Discrete mode (the ports are wired to the Radeon) |
+| USB-C devices on every port | ✅ | |
+| Thunderbolt docks, eGPUs | ❓ | not tested; can't be hot-plugged (part of the 1 s wake) |
+| Idle power saving (Thunderbolt off, ASPM) | ✅ | |
+| True Tone, auto-brightness | ✅ | |
+| AirDrop (iPhone, Mac) | ✅ | cancel only stops waiting on this side |
+| Quick Share (Android) | ✅ | Samsung phones show as "Android phone"; the hotspot fallback is untested |
+| Second screen through Moonlight (Sidecar) | ✅ | |
+| The T2 panel on the bar | ✅ | |
+| Other T2 Macs | ❓ | see [Which Macs](#which-macs) |
+
+## What works
+
+What each of those gives you, in more detail.
+
+| Area | What you get |
+|---|---|
+| **Keyboard** | Works everywhere, including the disk unlock prompt at boot, with `hid-apple`'s layout options (Fn/Ctrl, Option/Command). The keyboard backlight fades out after 30 s without input and comes back on the next keystroke. |
+| **Trackpad** | Full multitouch (two-finger scroll, tap to click, gestures) and Force Touch: a harder press gives a second, felt click from the Taptic Engine, and can run an action you choose (copy/paste, a key combo, a command). |
+| **Touch Bar** | Dark until touched or Fn is held; media and F-key layers, swipes for volume and brightness, haptic feedback, and a "touch to unlock" prompt when Touch ID is waiting. |
+| **Touch ID** | `sudo`, polkit prompts and the lock screen accept your fingerprint: the fingers you enrolled in macOS. |
+| **Sound** | The speakers sound like they do in macOS: KaiT2en's recreation of macOS's speaker processing (EQ, crossovers, bass enhancement), for the 16-inch 2019's speakers. The microphones and the headphone jack work. |
+| **Wi-Fi and Bluetooth** | Both work, with KaiT2en's fixes for Apple's Broadcom chips (waking from sleep, Bluetooth LE keyboards and mice). The firmware is copied from your macOS partition on the first boot. |
+| **Sleep** | Deep sleep, and **waking takes about 1 second** (about 16 s before the tuning). |
+| **Battery** | The correct percentage, a charge limit (so the battery isn't kept at 100 %), and the occasional calibration charge macOS would do. |
+| **Fans** | A fan curve that keeps the Mac quiet at idle and cools hard under load, or the SMC's own control, as in macOS. |
+| **Graphics** | **Hybrid graphics** on the dual-GPU MacBook Pros: the Intel GPU drives the screen and the Radeon powers off until an app asks for it. Idle battery draw went from **32 W to about 12 W**. The screen comes back properly after sleep, and its brightness is kept. Discrete mode (the Radeon for everything) is one switch away, for external displays. |
+| **Power** | The idle Thunderbolt controllers power off and PCIe links save power, so the processor reaches deep idle states it never reached before. |
+| **Camera** | The FaceTime HD camera works in any app. |
+| **True Tone and auto-brightness** | The screen's white follows the room's light, from the T2's ambient light sensor, and brightness adjusts by itself, learning from your brightness keys. |
+| **AirDrop and Quick Share** | Send to and receive from iPhones, iPads and Macs (AirDrop) and Android phones (Quick Share), while staying on your Wi-Fi network. |
+| **A second screen, Sidecar-style** | A phone or tablet as an extra screen, or a mirror of this one, through [Moonlight](https://moonlight-stream.org). The T2 chip encodes the video, so the processor barely notices. |
+| **The T2's own logs** | `t2journal` merges the T2 chip's logs with Linux's, for debugging. |
+| **Fixes under the hood** | An ACPI fix that stops the firmware's processor tables from erroring at every boot. |
+
+### The T2 panel
+
+A single icon on Omarchy's bar opens a panel with a tab for each T2 feature
+installed:
+
+- **Battery:** charge, time left, power draw, the charge limit and battery health.
+- **Fans:** fan speeds and temperatures, the fan curve or the SMC's control, the target temperature.
+- **Graphics:** Hybrid or Discrete from the next boot, and whether the Radeon is asleep.
+- **Trackpad:** click pressure, Force Click on or off, how hard, and its action.
+- **Ambient Light:** True Tone, its strength, automatic brightness.
+- **AirShare:** be visible to phones and Macs nearby, send files, the clipboard
+  or the last screenshot, the files received lately, trusted devices.
+- **Sidecar:** the second screen on or off, extended or mirrored, its size, pairing a new device.
+
+The icon shows a dot while you're visible to AirDrop and Quick Share senders,
+or while Sidecar is on. Everything also works from the command line.
+
+## Which Macs
+
+**Tested:** MacBookPro16,1 only. **Should work:** the other T2 Macs KaiT2en
+supports, since the drivers are the same, but nobody has tried them with this
+repo yet. A few parts are model-specific: the speaker sound profile is the
+16-inch 2019's, and hybrid graphics is for the dual-GPU MacBook Pros (15,1,
+15,3, 16,1, 16,4). If you try another model, an issue saying what works and
+what doesn't is very welcome.
+
+## Installing
+
+**Keep macOS.** The Wi-Fi and Bluetooth firmware is copied from the macOS
+partition, Touch ID uses the fingers enrolled in macOS, and macOS is how the
+T2's own firmware gets updated. Install Linux beside it.
+
+### A fresh install (recommended)
+
+Omarchy installs from its own ISO. For T2 Macs there's a forked installer
+([`josemiguelo/omarchy`](https://github.com/josemiguelo/omarchy), branch
+`t2-kait2en-stable`) and ISO builder
+([`josemiguelo/omarchy-iso`](https://github.com/josemiguelo/omarchy-iso),
+branch `t2-kait2en`), which install these packages instead of `linux-t2` and
+set everything up. No ISO is published yet; you build it yourself (Docker
+needed, about 45 minutes):
+
+```bash
+git clone -b t2-kait2en-stable https://github.com/josemiguelo/omarchy.git
+git clone -b t2-kait2en https://github.com/josemiguelo/omarchy-iso.git
+git clone https://github.com/omacom/omarchy-pkgs.git
+cd omarchy-iso
+bin/omarchy-iso-make --local-source ../omarchy ../omarchy-pkgs --stable
+# the ISO lands in release/*-local-stable.iso
+```
+
+Then, on the Mac:
+
+1. In macOS, make room for Linux: free space or a new partition, in Disk Utility.
+2. In macOS Recovery, open Startup Security Utility: set **No Security** and
+   **allow booting from external media**. A T2 Mac won't boot a Linux ISO otherwise.
+3. Write the ISO to a USB stick, start the Mac holding Option, pick the stick,
+   and install as with any Omarchy ISO.
+4. On the first login, Omarchy offers to set up the fingerprint reader: that's
+   Touch ID. The T2 panel appears on the bar by itself.
+
+### An existing Omarchy install
+
+Not a tested path. Omarchy's own T2 setup (`linux-t2`) and this one can't share
+a kernel, and the installer's T2 step
+([`install/hardware/apple/fix-t2.sh`](https://github.com/josemiguelo/omarchy/blob/t2-kait2en-stable/install/hardware/apple/fix-t2.sh))
+does more than install packages: initramfs modules, module options, services,
+firewall rules. A fresh install from the ISO is much easier.
+
+### Plain Arch, or just the packages
+
+Add the repo and install the meta-package, plus the hybrid one on a dual-GPU
+MacBook Pro:
 
 ```bash
 # Trust the signing key (fingerprint 077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F)
 curl -fsSL https://github.com/josemiguelo/t2-arch-packages/releases/download/repo/t2-arch-packages.asc |
   sudo pacman-key --add -
 sudo pacman-key --lsign-key 077D8295CCF834D3F5EC25F70506B72C34EB162F
-# then install t2-arch-packages-keyring, which keeps the key trusted through
-# `pacman-key --populate` (like archlinux-keyring). It is signed with this same
-# key, so it cannot replace the two commands above on a first install: pacman
-# would look the key up on a keyserver, where it is not published.
 
 # /etc/pacman.conf
 [t2-arch-packages]
 Server = https://github.com/josemiguelo/t2-arch-packages/releases/download/repo
+
+sudo pacman -Sy t2-mac            # every T2 Mac
+sudo pacman -S t2-mac-hybrid      # dual-GPU MacBook Pros: hybrid graphics
 ```
 
-Then `sudo pacman -Sy linux-omarchy-headers t2bce-stack-dkms t2smc-dkms t2sbs-dkms t2smp-dkms t2thunderbolt-dkms t2-precision-trackpad-dkms t2-trackpad-actuator-dkms t2-force-click t2-wireless-dkms t2-fan-control t2-smc-control t2bce-audio-ucm t2-dsp bankstown-lv2 t2-dkms-guard t2-arch-packages-keyring t2-touchid t2-touchbar-dkms t2-touchbar t2-kbd-backlight t2-drop t2-airshare t2-truetone linux-apfs-rw-dkms apple-bcm-firmware-fetcher` (`linux-apfs-rw-dkms`, the APFS driver the fetcher mounts the macOS volume with, is Arch's own in `[extra]`; the fetcher is packaged here, taken over from `[arch-mact2]`).
-`linux-t2` must not be installed on the same kernel: it has its own t2bce. See
-[Omarchy's `fix-t2.sh` on the `t2-kait2en` branch](#port-status) for the module,
-initramfs and kernel-argument setup.
+The packages target `linux-omarchy` (the DKMS modules build only for it) and
+the Limine bootloader (the kernel arguments). `fix-t2.sh` above is the
+reference for the rest of the setup. `linux-t2` must not be installed at the
+same time.
 
-## Packages
+## Updates
 
-| Package | Source in KaiT2en | Status |
-|---|---|---|
-| `t2bce-stack-dkms` | `modules/t2bce_*`, `t2-services/t2-ave/kernel/*` | **works on MacBookPro16,1**: keyboard/trackpad (incl. LUKS prompt), Touch Bar, audio device |
-| `t2bce-audio-ucm` | `modules/t2bce_audio-alsa-ucm-conf/ucm2` | builds; replaces arch-mact2's older `t2bce_audio-alsa-ucm-conf` |
-| `t2smc-dkms` | `modules/t2smc` | **works**: 2 fans, 50 temps, charge control on `BAT0`, rtc2, watchdog. Skips `applesmc` (fails `-EIO` on T2 with a stock kernel) on kernels that have `t2smc` |
-| `t2sbs-dkms` | `modules/t2sbs` | **works**: capacity 98% (correct, `charge_now/charge_full`) vs stock `sbs` 78% (design-relative). Skips `sbs` on kernels that have `t2sbs` |
-| `t2thunderbolt-dkms` | `modules/t2thunderbolt` | loads (4 PM ordering links on 2× Titan Ridge 4C); autoloads by NHI alias; no wake-time change on its own |
-| `t2-thunderbolt-dkms` | kernel.org 7.2.15 `drivers/thunderbolt` + linux-omarchy's Thunderbolt patches + `patches/runtime/thunderbolt` 0001 (at `4b29a99`, rebased) | **works** (2026-11-16, MacBookPro16,1, `pcie_ports=compat` kept): the idle Titan Ridge controllers powered off (RTD3); the package reaches PC6/PC7. Replaces `t2thunderbolt-dkms` |
-| `t2-kernel-args` | (this repo) | **works** (2026-11-16): keeps the T2 Mac's kernel arguments (`pci=noaer pcie_ports=compat`, forced PCIe ASPM, ...) in `/etc/limine-entry-tool.d/t2-mac.conf`, writing it back and rebuilding the boot image when something rewrites it |
-| `sunshine-t2` | KaiT2en's Sunshine fork (`0737eec`, PR #5717) | **works** (2026-11-16): Sunshine with the V4L2 encoder, for the T2's Sidecar encoder |
-| `t2-sidecar` | (this repo) | **works** (2026-11-16): `t2-sidecar on/mirror/off`, a phone or tablet as a second screen through Moonlight on Hyprland, encoded by the T2 |
-| `t2-omarchy-plugins` | (this repo) | **works** (2026-11-16): the T2 panel on Omarchy's bar, one icon with a tab per T2 feature installed (Battery, Fans, Graphics, Trackpad, Ambient Light, AirShare, Sidecar), and `t2-omarchy-setup` for each user |
-| `t2-gmux-backlight` | (this repo) | **works** (2026-11-16): the gmux panel backlight kept across suspend, blanks and logins (dual-GPU MacBook Pros) |
-| `t2smp-dkms` | `modules/t2smp` | **works**: removes the slow early-resume CPU bring-up; part of the ~1 s wake |
-| `t2-dkms-guard` | (this repo) | pacman PreTransaction hook: aborts a `linux-omarchy-headers` upgrade if any `# t2-arch-packages` DKMS module fails to build against the new headers, or would be left out of it (`BUILD_EXCLUSIVE_KERNEL`, since 0.2) (tested: pass, fail, no-op) |
-| `t2-precision-trackpad-dkms` | `modules/t2_precision_trackpad` | compiles clean vs `linux-omarchy` 7.2.15. Multitouch/Force Touch for the internal trackpad: stock kernels drive it as a plain mouse (no two-finger scroll, no tap to click), `linux-t2` uses a patched `hid_magicmouse`. Must load before `t2bce_vhci` in the initramfs |
-| `t2-trackpad-actuator-dkms` | `modules/t2_trackpad_actuator` | **works** (2026-11-12, MacBookPro16,1): a force click plays Apple's captured plain click on the Taptic Engine (a felt and audible second click; not macOS's deeper force-click haptic). `hid-apple` binds the haptic interface first, so its udev rule hands it over by report descriptor, at boot (coldplug `add`) and after resume (`bind`): checked after a reboot and a resume. Exception to the one-month rule |
-| `t2-force-click` | `apps/t2-force-click` | **works**: root daemon (`t2-force-click.service`) and the T2 panel's Trackpad tab (no GTK window since 2026-11-16) for click pressure, the force click threshold and an action bound to force click; upstream's 5 tests pass. The wordmark shows only if its image exists, which nothing ships. Exception to the one-month rule |
-| `t2-touchid` | `t2-services/t2-touchid` (at `c9e24f7`) | **works** (2026-11-14, MacBookPro16,1): Touch ID for sudo, polkit and the lock screen through stock fprintd (libfprint's virtual storage driver, from Omarchy's `libfprint-git`), before and after suspend. Fingers are enrolled in macOS; with the daemon enabled, Omarchy's fingerprint setup finds the reader (`/usr/share/omarchy-platform/fingerprint-readers`, `reader-status.patch`), installs fprintd and `libfprint-git`, binds the finger and adds PAM; its removal undoes it. A udev rule brings the T2 link up as it appears; `resume-reopen.patch` keeps the lock screen listening after resume. Exception to the one-month rule |
-| `t2-touchbar-dkms` | `modules/t2touchbar`, `modules/t2bdrm` (at `c9e24f7`) | **works** (2026-11-14, MacBookPro16,1): `t2hid` (hid-apple fork: keyboard, its options, the keyboard backlight; in the initramfs for the unlock prompt), `t2touchbar_kbd`/`_bl` and `t2bdrm` (the bar's screen). Installed inert (its `/usr/lib/modprobe.d/t2-touchbar.conf` blacklists them); `/etc/modprobe.d/t2-touchbar.conf` switches over (blacklisting `hid_apple`, `hid_appletb_*`, `appletbdrm`), with `t2hid` in `apple-t2.conf`'s `MODULES`. Exception to the one-month rule |
-| `t2-touchbar` | `apps/t2-touchbar` (at `c9e24f7`) | **works** (2026-11-14, MacBookPro16,1): the bar dark until touched or Fn, media and F-key layers, swipes for volume and brightness, haptics, the Touch ID prompt; across suspend and reboot. Renamed from `kait2en-touchbar`; group `t2-touchbar` (join it, then reboot); `systemctl --global enable t2-touchbar.service`. Exception to the one-month rule |
-| `t2-kbd-backlight` | `apps/t2-kbd-backlight` (at `c9e24f7`) | **works** (2026-11-15, MacBookPro16,1): the keyboard backlight fades out after 30 s without input and back on the next; lit after resume. Through UPower (Omarchy's brightness keys need a nudge to UPower: the dotfiles wrap them). `systemctl enable --now t2-kbd-backlight`. Exception to the one-month rule |
-| `t2-drop` | `apps/t2-drop` (at `c9e24f7`) | **works** (2026-11-15, MacBookPro16,1 with an iPhone): AirDrop over AWDL, both ways, the Mac staying on its 5 GHz Wi-Fi. Our `discovery.patch` and `connect.patch` fix the AirDrop port and lost first connects. Exception to the one-month rule |
-| `t2-airshare` | `apps/t2-airshare` (at `c9e24f7`) | **works** (2026-11-15): sent from the T2 panel's AirShare tab (devices nearby, PIN, progress; no GTK app since 2026-11-16); AirDrop with an iPhone and Quick Share with a Galaxy A56, both ways, over the shared Wi-Fi; the hotspot path not tested yet. GTK app, a user-service receiver (Quick Share on TCP 47901, fixed by `omarchy.patch`) and a root hotspot helper. Needs ufw rules (see CLAUDE.md). Exception to the one-month rule |
-| `t2-truetone` | `apps/t2-truetone` (at `c9e24f7`) | **works** (2026-11-15, MacBookPro16,1): True Tone (the panel's white follows the room) and automatic brightness that learns from the brightness keys, from the ambient light sensor. Ported from GNOME to Hyprland by our `omarchy.patch`: colour through wlr-gamma-control (stacks on Omarchy's night light), brightness through logind; nothing learned in the 5 s after a wake (pkgrel 2). `systemctl --user enable --now t2-truetone`. Exception to the one-month rule |
-| `t2-wireless-dkms` (replaces `t2-bluetooth-dkms`) | kernel.org 7.2.15 `drivers/bluetooth` + `drivers/net/wireless/broadcom/brcm80211` + `patches/runtime/wireless/0001-0027` (at `7e9903c`) | **works** (2026-11-12, MacBookPro16,1; 0025-0027 since 2026-11-16, 0027's deep sleep dormant with this firmware): Wi-Fi on the patched `brcmfmac`, 3 resumes (one of 21 min) with no `brcmf` errors (6 on the stock driver) and Wi-Fi back in ~4.7 s (each wake re-probes the card with a firmware reload); Bluetooth LE devices connect after resume. Replaces `btbcm`, `hci_uart`, `hci_bcm4377` (stock `btbcm` drops these Macs' LE advertisements, so LE keyboards/mice don't appear) and `brcmfmac`; DKMS keeps the stock `brcmutil`/`brcmfmac-wcc/-cyw/-bca`, the same code when built from the patched tree. 7.2.x `-omarchy` kernels only. Wi-Fi ported as an exception to the one-month rule |
-| `t2gmux-dkms` | `modules/t2gmux` (at `c9e24f7`) | **works** (2026-11-15, MacBookPro16,1): the gmux driver in place of `apple_gmux` (skipped where t2gmux exists), with the T2 dGPU power sequencing; keeps `gmux_backlight` |
-| `t2-amdgpu-dkms` | kernel.org 7.2.15 `drivers/gpu/drm/amd` + `patches/runtime/gpu-runtime-pm` (vendored, see the PKGBUILD) | **works** (2026-11-16, hybrid mode): amdgpu with the Apple GMUX runtime PM: the dGPU in D3cold while the iGPU drives the panel, woken for `DRI_PRIME=1`. 7.2.x only; ~5-9 min DKMS build |
-| `t2-i915-dkms` | kernel.org 7.2.15 `drivers/gpu/drm/i915` + `display` + `patches/runtime/i915`, and our 0004 | **works** (2026-11-16, hybrid mode): i915 for the panel on the iGPU: the gmux brightness restored after a lock, the panel power cycled after a failed link training at wake (it stays dark otherwise), no Apple PSR on dual-GPU Macs. 7.2.x only |
-| `t2-boot-gpu` | (this repo) | **works** (2026-11-16): the T2 panel's Graphics tab switches it (Hybrid/Discrete); `t2-boot-gpu integrated\|discrete` sets Apple's boot GPU variable, and its service keeps it across macOS boots |
-| `t2-journal` | `t2-services/t2-journal` (at `c9e24f7`) | **works** (2026-11-16): `t2journal` merges the T2's bridgeOS logs with a Linux boot's journal, over the T2 link (needs `t2-touchid`'s udev rule) |
-| `t2-ave` | `t2-services/t2-ave` (at `27fd5c9`, matching `t2bce-stack-dkms`) | **works** (2026-11-16): the T2's HEVC and Sidecar (H.264/HEVC) encoders as V4L2 devices through `t2remote`; `systemctl enable --now t2-ave.service t2-ave-suspend.service`; ffmpeg `hevc_v4l2m2m`/`h264_v4l2m2m` |
-| `t2-acpi-fix` | `scripts/fedora/acpi-autofix.py` (at `c9e24f7`) | **works** (2026-11-15, MacBookPro16,1): builds this Mac's CpuSSDT override from its own tables (the 18 `AE_ALREADY_EXISTS` boot errors gone, `_OSC`/`_PDC` complete). For mkinitcpio by our `arch.patch`. Run `sudo t2-acpi-fix`, then `limine-mkinitcpio` and reboot |
-| `apple-bcm-firmware-fetcher` | (t2linux's `firmware.sh`, method 4; from `[arch-mact2]`) | **works**: copies the Wi-Fi and Bluetooth firmware off the macOS volume. arch-mact2's script and scriptlet unchanged, as `1-2`: its `1-1` upgrades in place and keeps the firmware. Never `pacman -R` it: its `pre_remove` deletes the firmware |
-| `t2-arch-packages-keyring` | (this repo) | signing key in `/usr/share/pacman/keyrings`, populated on install |
-| `t2-fan-control` | `apps/t2-fan-control` | **works** with the shipped `/etc/t2-fancontrol/config.txt` (system chill 80 °C). Upstream's default 45 °C pins MacBookPro16,1 fans at 100%. Paths moved `/usr/local` → `/usr`; replaces `t2fanrd`. At `8c7f725` (2026-11-14, an exception to the one-month rule) |
-| `t2-smc-control` | `apps/t2-smc-control` | **builds**, upstream's 13 tests pass (2026-11-12). `t2-smc-gaugingd.service` and the T2 panel's Battery tab (no GTK window since 2026-11-16); the daemon lifts a charge limit (t2smc's `battery_charge_limit_suspended`) for a full charge when the gauge needs one to recalibrate, as macOS's powerd does. Paths moved `/usr/local` → `/usr`; the unit runs only where t2smc is loaded |
-| `t2-dsp` | `dsp` (at `402a353`) | **works** (2026-11-12, MacBookPro16,1): the card is renamed `t2-16_1`, "Mac 16,1 native DSP Speakers" is the default output and sounds like macOS. About 17% of one core while playing (3.6 ms of a 21.3 ms cycle), 0 xruns. Pinned before `6ddacd9` (moved to `snd_apple_t2`); `build()` refuses a version whose udev rule doesn't match `t2bce_audio`. Ported as an exception to the one-month rule |
-| `bankstown-lv2` | chadmed/bankstown `8e6f96f` | the virtual bass LV2 plugin `t2-dsp` runs: release 1.1.0 plus a fix that keeps a zero sample rate from panicking it |
+- **Omarchy updates** work as usual. The T2 packages come from this repo next
+  to Omarchy's, and `t2-mac` pulls in any T2 package added later.
+- **Kernel updates are guarded:** if a new `linux-omarchy` would leave a T2
+  driver unbuilt, the upgrade stops and you stay on the kernel that works. The
+  move to each new kernel series (7.3 next) is done here first; then the guard
+  lets it through.
+- **KaiT2en's changes arrive a month late, on purpose.** KaiT2en moves fast and
+  sometimes breaks things, so a change gets packaged only once it has been out
+  for 30 days without fixes or reverts.
 
-### Notes from testing (MacBookPro16,1)
+## Known limits
 
-- The T2 SMC keeps manual fan mode across reboots. To hand fans back: stop the
-  daemon, then write `0` to each `fanN_target` of the `t2smc` hwmon.
-- `modprobe -r sbs` also unloads `sbshc`; load it again before `insmod t2sbs.ko`.
-- Charge limit writes (`charge_control_end_threshold`) not tested yet; the SMC
-  may keep them across reboots.
-- The fan daemon saves its config on every start. Running it before the package
-  is installed leaves a `/etc/t2-fancontrol/config.txt` with upstream defaults,
-  and pacman then puts the shipped config in `config.txt.pacnew`.
+- **One model tested** (above).
+- **Samsung phones show as "Android phone"** when you send with Quick Share:
+  they hide their name, even when visible to everyone.
+- **External displays on the Thunderbolt ports need Discrete graphics** (the
+  Graphics tab, then a reboot).
+- **Panel self refresh stays off** on the dual-GPU MacBook Pros: with it, the
+  screen doesn't come back after sleep.
+- **No native PCIe hotplug on the Thunderbolt ports**, the price of the 1 s
+  wake: Thunderbolt docks and eGPUs aren't hot-pluggable. USB-C devices work.
+- **AirDrop's cancel** stops waiting on this side; a transfer the other device
+  already accepted may still finish.
 
-## Resume speed (MacBookPro16,1, linux-omarchy, 2026-11-08)
+## Credits and licensing
 
-Kernel/journal timestamps are unreliable across S3 on this Mac; per-device
-times come from `echo 1 > /sys/power/pm_print_times` (`returned 0 after N usecs`).
+All driver and app code is [KaiT2en](https://github.com/kaiT2en/KaiT2en-Fedora)'s,
+by André Eikmeyer and 4f1sh3r (the fan and SMC tools): kernel modules under
+GPL-2.0, userspace under GPL-3.0-or-later with a section 7(b) attribution term.
+Each package ships KaiT2en's `LICENSING.md` and `AUTHORS`. KaiT2en's name and
+logo are its trademarks: the logo is removed from the apps, and the packages use
+their own names. `bankstown-lv2` is chadmed's (Asahi Linux), MIT. The Wi-Fi
+firmware fetcher is t2linux's. Sunshine (`sunshine-t2`) is LizardByte's, with
+the V4L2 encoder KaiT2en contributed. The packages this repo writes itself (the
+T2 panel, the Omarchy integration, the helpers and patches) are
+GPL-3.0-or-later.
 
-| Change | Result |
-|---|---|
-| `pm_async=1` (drop `pm_async=off`) | works; devices resume in parallel |
-| `t2thunderbolt` | loads (4 PM ordering links), no wake-time change |
-| `t2smp` | removes the slow early-resume CPU bring-up ("Enabling non-boot CPUs"); wake ~16 s |
-| remaining | Titan Ridge TB upstream bridges ~10.8 s each (`pci_pm_resume_noirq`), TB NHIs ~5 s, chipset root port ~1.4 s, amdgpu ~1.1 s, t2smc ~1.1 s |
-| `pci=noaer pcie_ports=compat` (+ `t2smp`, `pm_async=1`) | **wake ~1 s** (from ~16 s). Trade-off: no native PCIe hotplug on the TB ports |
+## More detail
 
-Still seen after resume: `xHC error in resume ... Reinit` on the Titan Ridge xHCIs
-(harmless), and once a brcmfmac firmware timeout + reload (Wi-Fi reconnected by
-itself; 0 in 5 earlier resumes). If it recurs: KaiT2en's wireless patches or its
-brcmfmac unload/reload around suspend (`kait2en-suspend.service`).
-
-## Dual-kernel test setup (2026-11-08)
-
-`linux-omarchy` + these packages next to `linux-t2` on one install works:
-DKMS guarded by `BUILD_EXCLUSIVE_KERNEL=".*-omarchy$"`, `applesmc`/`sbs` skipped
-only where `t2smc`/`t2sbs` exist, `t2fanrd` limited to `*-t2` kernels by a
-drop-in, `t2smc?`/`t2sbs?` optional in mkinitcpio. Avoid
-`KERNEL_CMDLINE["linux-omarchy"]` in Limine: it replaces the default cmdline.
-
-## Keeping up with KaiT2en
-
-`bin/kait2en-sync` carries KaiT2en's upstream work into the packages, **a
-month late on purpose**: KaiT2en ships dangerous changes often, so a package
-only moves to a KaiT2en commit that landed at least 30 days ago
-(`KAIT2EN_MIN_AGE_DAYS`) and after which its paths stayed quiet for 30 days. A
-follow-up sooner is a fix or a revert, and the clock restarts from it.
-Repo-wide sweeps (a commit touching more than 8 `apps/` or `modules/` folders,
-`KAIT2EN_SWEEP_DIRS`) are listed but don't restart it. Pins never move
-backwards.
-
-- `kait2en-sync check`: per package, the upstream commits since its pinned
-  `_commit`, each marked `eligible`, `waiting` or `sweep`, the commit it would
-  re-pin to, and the earliest day the waiting ones can qualify; plus changes to
-  KaiT2en's Fedora installer (`scripts/fedora`), to review by hand for
-  `fix-t2.sh` (new kernel arguments, modules, services). Exit 10 when a package
-  has an eligible update.
-- `kait2en-sync kernel`: builds every published DKMS package against the newest
-  `linux-omarchy-headers` of this machine's `[omarchy]` channel, ahead of
-  Omarchy shipping that kernel. Exit 1 when one doesn't build.
-- `kait2en-sync notify`: for a timer: `check`, and `kernel` only when
-  `[omarchy]` has headers it hasn't tested yet; desktop notifications for
-  eligible updates and for modules that don't build.
-- `kait2en-sync apply`: for each package with an eligible update, pins its
-  eligible commit (each package its own), builds and signs it, builds its DKMS modules against the newest
-  headers, then, after asking, publishes to the release (replacing the old
-  versions) and commits and pushes the PKGBUILDs.
-
-`t2-wireless-dkms` also tracks a kernel version (`_kver`): when
-`linux-omarchy` moves to a new minor, `kernel` reports it left out and
-`t2-dkms-guard` (0.2) holds that kernel back until its sources move to that
-release by hand (`T2_DKMS_GUARD_ALLOW_SKIP=1` lets it through without it).
-
-## Build and release
-
-Sources are pinned to a KaiT2en commit (`_commit` in each PKGBUILD) and fetched
-from GitHub; `KAIT2EN_GIT=file:///path/to/clone` builds from a local checkout.
-
-```bash
-KEY=077D8295CCF834D3F5EC25F70506B72C34EB162F
-for p in */; do (cd "$p" && PKGDEST=$PWD/../out makepkg -f --sign --key $KEY); done
-cd out && repo-add --sign --key $KEY --verify t2-arch-packages.db.tar.zst *.pkg.tar.zst
-# GitHub release assets cannot be symlinks
-for l in t2-arch-packages.{db,files}{,.sig}; do cp --remove-destination "$(readlink -f $l)" $l; done
-gh release upload repo --clobber *.pkg.tar.zst *.sig t2-arch-packages.{db,files}* t2-arch-packages.asc
-```
-
-## Port status
-
-Omarchy integration lives on the `t2-kait2en` branch of an Omarchy clone
-(`install/hardware/apple/fix-t2.sh`): these packages instead of `linux-t2`,
-`t2smc`/`t2sbs` in the initramfs, kernel arguments `pci=noaer pcie_ports=compat`
-without `pm_async=off`.
-
-1. ✅ `t2bce-stack-dkms` (keyboard, trackpad, audio transport)
-2. ✅ `t2smc`, `t2sbs` + fan control (replaces `t2fanrd`)
-3. ✅ UCM · ⬜ DSP profile `16_1`
-4. ✅ Suspend: deep S3, ~1 s wake (`t2smp`, `t2thunderbolt`, kernel arguments)
-5. ⬜ `t2touchbar`, `t2gmux` + dGPU services, `t2bdrm` + Touch Bar app, trackpad actuator
-6. ⬜ ACPI autofix (only if its log signatures appear)
-7. ⬜ In-tree patch series (`patches/runtime/{wireless,gpu-runtime-pm}`)
+- [docs/packages.md](docs/packages.md): every package, where it comes from, and
+  how it was tested.
+- [docs/omarchy-integration.md](docs/omarchy-integration.md): how the installer,
+  the ISO and this repo fit together over an install and an update.
+- [docs/maintaining.md](docs/maintaining.md): keeping up with KaiT2en, building
+  and publishing.
