@@ -7,7 +7,7 @@
 #   kait2en-sync kernel    build every published DKMS package against the newest
 #                          linux-omarchy-headers of this machine's [omarchy] channel (exit 0:
 #                          all build, 1: some don't — fix before Omarchy ships it)
-#   kait2en-sync notify    for a timer: check, bin/omarchy-patch-check (linux-omarchy's
+#   kait2en-sync notify    for a timer (waits up to 2 minutes for the network): check, bin/omarchy-patch-check (linux-omarchy's
 #                          own patches vs the DKMS packages), and kernel when
 #                          [omarchy] has headers it hasn't tested yet; desktop
 #                          notifications to act on
@@ -318,6 +318,13 @@ cmd_apply() {
 # headers not tested yet; a desktop notification for anything to act on.
 cmd_notify() {
   local out rc stamp=$WORK/kernel-tested headers
+  # A run missed during sleep starts the moment the Mac wakes, before Wi-Fi is
+  # back: wait for the network, and if it doesn't come, skip today quietly
+  # (tomorrow's run catches up) rather than report failed fetches.
+  if command -v nm-online >/dev/null && ! nm-online -q -t 120; then
+    echo "kait2en-sync notify: no network after 2 minutes; skipping this run" >&2
+    return 0
+  fi
   rc=0; out=$(cmd_check 2>&1) || rc=$?
   if (( rc == 10 )); then
     notify-send -a kait2en-sync "KaiT2en has updates for T2 packages" \
