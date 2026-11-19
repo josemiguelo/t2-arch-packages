@@ -5,13 +5,15 @@
 # Wi-Fi, brcmfmac (its helpers brcmutil and brcmfmac-wcc/-cyw/-bca stay the
 # kernel's unless a patch touches them), for the BCM4364 of
 # the MacBookPro15/16 and the BCM4355/BCM4377 of the others:
-#   0001  TX beamforming off on the BCM4364
+#   0001  TX beamforming off on Apple's BCM4364 (the board type starts with
+#         "apple,")
 #   0003  200 ms power-save timeout by default
 #   0004  firmware capabilities matched as whole words
-#   0005  the AP 4-way handshake left to the host (the firmware's never finishes)
+#   0005  the AP 4-way handshake left to the host on Apple's BCM4364/4377 (the
+#         firmware's never finishes)
 #   0006-0011  AWDL (what AirDrop runs on): interface, data path, vendor
 #         commands; inert until something uses it
-#   0014  ARP/ND offload off on the BCM4364 while awake
+#   0014  ARP/ND offload off on Apple's BCM4355 and BCM4364 while awake
 #   0015-0020, 0022, 0023  PCIe power states and resume: D3 handling, mailbox
 #         and core startup of newer firmware, probing again after a resume
 #         through firmware, flowring delete without waiting, no host-ready
@@ -38,9 +40,10 @@
 #         package's previous build. Meant for PC10 with Wi-Fi associated
 #         instead of the short LTR holding the package out of it
 #
-# Pinned at 7e9903c (2026-11-11, 0027 as sent upstream), whose series is
-# 0001-0027; 0001-0024 are as at the old pin 27fd5c9 (0014's description
-# aside). The 7.3 rebase of 2026-11-10 didn't touch these. Wi-Fi ported
+# Pinned at fd6e0cf (2026-11-18): 0001, 0005 and 0014 in their v2 for
+# upstream, each now gated on Apple boards ("apple," board type); on the
+# MacBookPro16,1's BCM4364 they do what they did at 7e9903c (2026-11-11, 0027
+# as sent upstream), and 0002-0004, 0006-0013 and 0015-0027 are unchanged. The 7.3 rebase of 2026-11-10 didn't touch these. Wi-Fi ported
 # 2026-11-12.
 #
 # The sources must match the kernel the modules load into: linux-omarchy 7.2.x
@@ -59,8 +62,8 @@
 pkgname=t2-wireless-dkms
 _kver=7.2.15
 _modname=t2-wireless
-pkgver=7.2.15.r25.7e9903c
-pkgrel=3
+pkgver=7.2.15.r26.fd6e0cf
+pkgrel=1
 pkgdesc="Broadcom Wi-Fi and Bluetooth drivers with KaiT2en's Apple fixes (resume, LE devices, AWDL), DKMS"
 arch=('any')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -72,7 +75,7 @@ conflicts=('t2-bluetooth-dkms')
 replaces=('t2-bluetooth-dkms')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
-_commit=7e9903ceb8df8c638fbfe9d3cc64c4f510bd855b
+_commit=fd6e0cf90f4a3c02b3a7e3493ba42eab1934dc33
 _patches=(0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012
           0013 0014 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024
           0025 0026 0027)

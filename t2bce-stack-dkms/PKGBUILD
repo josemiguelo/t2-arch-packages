@@ -1,3 +1,4 @@
+# kait2en-sync: retired (2026-11-19: replaced by apple-t2-bridge-dkms; kept as the way back)
 # T2 BCE stack (DMA, core, VHCI keyboard/trackpad host, audio, AVE, Sidecar)
 # from KaiT2en-Fedora, packaged as DKMS for Arch/Omarchy.
 #

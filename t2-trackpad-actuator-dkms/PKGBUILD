@@ -26,8 +26,8 @@
 pkgname=t2-trackpad-actuator-dkms
 _modname=t2_trackpad_actuator
 _modver=0.01
-pkgver=0.01.r2.27fd5c9
-pkgrel=2
+pkgver=0.01.r3.f43a396
+pkgrel=1
 pkgdesc="Apple T2 MacBook trackpad Taptic Engine (haptics) driver from KaiT2en, DKMS"
 arch=('any')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -36,7 +36,7 @@ depends=('dkms' 't2-precision-trackpad-dkms')
 makedepends=('git')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
-_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+_commit=f43a39656599400b18ebe5e3618da8346e24ba2f
 source=("kait2en::git+${_repo}#commit=${_commit}"
         't2-trackpad-actuator.rules'
         'rebind')

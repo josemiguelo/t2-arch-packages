@@ -1,3 +1,4 @@
+# kait2en-sync: retired (2026-11-19: replaced by apple-t2-audio-ucm; kept as the way back)
 # ALSA UCM profiles for KaiT2en's t2bce_audio driver (card drivers AppleT2x2/x4/x6).
 #
 # Upstream: https://github.com/kaiT2en/KaiT2en-Fedora

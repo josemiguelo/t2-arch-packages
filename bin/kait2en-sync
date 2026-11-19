@@ -70,6 +70,9 @@ packages() {
     # so every check came back empty.
     paths=$(grep -oE 'rev-list --count HEAD -- [^)"]+' "$pkgbuild" | sed 's/^rev-list --count HEAD -- //' | head -1) || true
     [[ -n $commit && -n $paths ]] || continue
+    # A retired package (kept as the way back, its upstream paths gone) is
+    # never re-pinned: `# kait2en-sync: retired` in its PKGBUILD.
+    grep -q '^# kait2en-sync: retired' "$pkgbuild" && continue
     printf '%s\t%s\t%s\n' "$dir" "$commit" "$paths"
   done
 }

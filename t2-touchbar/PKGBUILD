@@ -9,17 +9,24 @@
 # 7(b) attribution term (LICENSING.md); tiny-dfr's MIT notice in
 # THIRD-PARTY-NOTICES.md. Both ship in /usr/share/licenses.
 #
-# How it runs: a root oneshot (t2-touchbar-attach.service, wanted by a udev
-# rule when 05ac:8302 appears in configuration 1) switches the Touch Bar to
-# configuration 2, where t2bdrm drives its screen and its digitizer appears;
-# the user service (t2-touchbar.service, graphical-session) draws on it. A udev
+# How it runs: Apple's firmware row (configuration 1 of 05ac:8302, Esc and
+# the media keys) stays until a member of the group t2-touchbar starts a
+# graphical session, so the console and the unlock prompt keep it (KaiT2en's
+# b0acfa7, 2026-11-18). That session's user service (t2-touchbar.service,
+# graphical-session) pulls in t2-touchbar-panel.service, which starts the root
+# t2-touchbar-session@<UID>.service (allowed by a polkit rule, for exactly that
+# unit): it switches the Touch Bar to configuration 2, where t2bdrm drives its
+# screen and its digitizer appears, and switches it back when the session
+# ends. The root oneshot t2-touchbar-attach.service (wanted by a udev rule when
+# the bar appears in configuration 1, after a resume) switches it again while
+# such a session runs. A udev
 # rule puts that DRM card and digitizer on a private seat (seat-touchbar) so
 # the compositor leaves them alone, and gives the group t2-touchbar the
 # internal keyboard's event node (for Fn), /dev/uinput (its virtual keys), the
 # Touch Bar backlight and the actuator's `play` parameter. The attach service
-# only switches when the user service is enabled globally
-# (`systemctl --global enable t2-touchbar.service`), so with it disabled the
-# next boot keeps Apple's firmware row; `t2-touchbar --detach` goes back now.
+# also requires the user service enabled globally (`systemctl --global enable
+# t2-touchbar.service`), so with it disabled the firmware row stays;
+# `t2-touchbar --detach` goes back now.
 # Needs t2-touchbar-dkms switched over (t2bdrm, t2touchbar_kbd/_bl).
 #
 # Changes from upstream (KaiT2en's trademark terms don't allow its name in
@@ -30,8 +37,8 @@
 
 pkgname=t2-touchbar
 _ver=0.1.0
-pkgver=0.1.0.r39.c9e24f7
-pkgrel=3
+pkgver=0.1.0.r40.b0acfa7
+pkgrel=1
 pkgdesc="Touch Bar daemon for Apple T2 MacBooks (KaiT2en's, from tiny-dfr)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -47,7 +54,7 @@ backup=('etc/t2-touchbar/touchbar.toml')
 options=('!debug')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
-_commit=c9e24f78fb455461c03f28d19b1f9ca81b55da65
+_commit=b0acfa7c0abe203d45152d61e190165278b39c1e
 source=("kait2en::git+${_repo}#commit=${_commit}")
 sha256sums=('SKIP')
 
@@ -98,6 +105,12 @@ package() {
 Description=T2 Touch Bar
 After=graphical-session.target
 PartOf=graphical-session.target
+# Users outside the group keep Apple's firmware row.
+ConditionGroup=t2-touchbar
+# The panel unit switches the bar to the display first and back once the
+# daemon is gone (outside this sandbox, which allows one process per unit).
+Requires=t2-touchbar-panel.service
+After=t2-touchbar-panel.service
 StartLimitIntervalSec=30
 StartLimitBurst=5
 
@@ -126,22 +139,71 @@ RestrictSUIDSGID=true
 WantedBy=graphical-session.target
 EOF
 
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/user/t2-touchbar-panel.service" <<'EOF'
+[Unit]
+Description=T2 Touch Bar display for this session
+ConditionGroup=t2-touchbar
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# The bar to the display for this session, and back to Apple's row when it
+# ends; the polkit rule allows exactly this system unit.
+ExecStart=/usr/bin/systemctl start --no-ask-password t2-touchbar-session@%U.service
+ExecStop=/usr/bin/systemctl stop --no-ask-password t2-touchbar-session@%U.service
+TimeoutStartSec=90
+EOF
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/t2-touchbar-session@.service" <<'EOF'
+[Unit]
+Description=Switch the Apple T2 Touch Bar to the display for user %i
+# The instance is the UID: it runs only alongside that user's manager and
+# stops with it, so a logout always hands the bar back to Apple's row.
+Requisite=user@%i.service
+After=user@%i.service
+PartOf=user@%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/t2-touchbar --attach
+ExecStop=/usr/bin/t2-touchbar --detach
+TimeoutStartSec=60
+EOF
+
   install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/system/t2-touchbar-attach.service" <<'EOF'
 [Unit]
 Description=Attach the Apple T2 Touch Bar display interface
 
 [Service]
 Type=oneshot
-# Switch away from Apple's firmware row only when the daemon will run: with
-# t2-touchbar.service disabled globally, the next boot keeps the native row.
+# Started by udev when the bar comes up on Apple's row (at boot, after a
+# resume). It switches only while a graphical session of a t2-touchbar member
+# runs the daemon, so the console and the unlock prompt keep the native row.
 ExecCondition=/usr/bin/systemctl --global is-enabled --quiet t2-touchbar.service
+ExecCondition=/usr/bin/systemctl is-active --quiet t2-touchbar-session@*.service
 ExecStart=/usr/bin/t2-touchbar --attach
 TimeoutStartSec=60
 Restart=on-failure
 RestartSec=5
+EOF
 
-[Install]
-WantedBy=multi-user.target
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/polkit-1/rules.d/50-t2-touchbar.rules" <<'EOF'
+// Members of t2-touchbar may start and stop the root unit that switches the
+// Touch Bar between Apple's row and the display; their user service does that
+// when the graphical session starts and ends.
+polkit.addRule(function(action, subject) {
+	if (action.id != "org.freedesktop.systemd1.manage-units" ||
+	    !subject.isInGroup("t2-touchbar"))
+		return polkit.Result.NOT_HANDLED;
+	var unit = action.lookup("unit");
+	var verb = action.lookup("verb");
+	if (/^t2-touchbar-session@[0-9]+\.service$/.test(unit) &&
+	    (verb == "start" || verb == "stop"))
+		return polkit.Result.YES;
+	return polkit.Result.NOT_HANDLED;
+});
 EOF
 
   install -Dm644 /dev/stdin "$pkgdir/usr/lib/udev/rules.d/99-zz-t2-touchbar.rules" <<'EOF'
@@ -162,7 +224,7 @@ ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8102"
 SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="*Apple Internal Keyboard / Trackpad", GROUP="t2-touchbar", MODE="0660"
 
 # Configuration 1 is the firmware key row; 2 exposes the DRM display and the
-# digitizer. The root oneshot switches it, at boot and after resume.
+# digitizer. The root oneshot switches it while a session runs the daemon.
 ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", ATTR{power/control}="on", ATTR{power/autosuspend_delay_ms}="-1"
 ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", ATTR{bConfigurationValue}=="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="t2-touchbar-attach.service"
 
