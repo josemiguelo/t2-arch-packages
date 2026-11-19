@@ -213,6 +213,15 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Facts that cost time to learn
 
+- **t2-dkms-guard before 0.2-3 would have blocked every kernel update** (found 2026-11-19 by
+  `kait2en-sync kernel rc`): it built each `/usr/src/*` folder with `make -C <headers> M=<folder>`,
+  but t2-amdgpu, t2-i915 and t2-thunderbolt (added 2026-11-16, after the guard) build a subfolder
+  through their own `MAKE[0]`, so all three "failed" against any headers, the running kernel's
+  included. 0.2-3 runs a `MAKE[0]` that names `${kernel_source_dir}`, in DKMS's layout. Checked:
+  all 14 modules build for 7.2.15-1 (stable, rc) and 7.2.15-2 (edge). The kernel-tested stamp
+  from 2026-11-16 predates those packages. After changing how a DKMS package builds, run
+  `kait2en-sync kernel` to check the guard still builds it.
+
 - **Bonded Bluetooth LE devices only reconnect while no LE discovery runs** (2026-11-19): the
   kernel's reconnect scan (passive, accept list, 30 ms of every 60) gives way to discovery, and
   t2-drop kept discovery running (30 ms of every 300, restarted every ~10 s) to spot AirDrop

@@ -90,8 +90,30 @@ for conf in "${confs[@]}"; do
     skipped+=("$name")
     continue
   fi
-  cp -a "$dir" "$tmp/src/$name"
-  if make -C "$build" M="$tmp/src/$name" -j"$(nproc)" modules >"$tmp/$name.log" 2>&1; then
+  # A package whose dkms.conf builds a subfolder against the kernel tree
+  # (t2-amdgpu, t2-i915, t2-thunderbolt: MAKE[0]="make -C ${kernel_source_dir}
+  # M=${dkms_tree}/.../build/<dir> modules") is built with that line, in the
+  # layout DKMS gives it; the others (a Makefile or Kbuild at the top) with
+  # the kernel's own make, as before.
+  make_line=$(sed -n 's/^MAKE\[0\]="\(.*\)"$/\1/p' "$conf" | tail -1)
+  if [[ $make_line == *'${kernel_source_dir}'* ]]; then
+    pkg_name=$(sed -n 's/^PACKAGE_NAME="\(.*\)"$/\1/p' "$conf" | tail -1)
+    pkg_version=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' "$conf" | tail -1)
+    tree=$tmp/tree
+    mkdir -p "$tree/$pkg_name/$pkg_version"
+    cp -a "$dir" "$tree/$pkg_name/$pkg_version/build"
+    build_cmd() (
+      cd "$tree/$pkg_name/$pkg_version/build" || exit 1
+      kernel_source_dir=$build dkms_tree=$tree kernelver=$kver
+      PACKAGE_NAME=$pkg_name PACKAGE_VERSION=$pkg_version
+      export MAKEFLAGS="-j$(nproc)"
+      eval "$make_line"
+    )
+  else
+    cp -a "$dir" "$tmp/src/$name"
+    build_cmd() { make -C "$build" M="$tmp/src/$name" -j"$(nproc)" modules; }
+  fi
+  if build_cmd >"$tmp/$name.log" 2>&1; then
     say "  $name: ok"
   else
     say "  $name: FAILED"

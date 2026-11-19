@@ -20,12 +20,19 @@ commits back if ever wanted.
   KaiT2en's Fedora installer (`scripts/fedora`), to review by hand for
   `fix-t2.sh` (new kernel arguments, modules, services). Exit 10 when a package
   has an eligible update.
-- `kait2en-sync kernel`: builds every published DKMS package against the newest
-  `linux-omarchy-headers` of this machine's `[omarchy]` channel, ahead of
-  Omarchy shipping that kernel. Exit 1 when one doesn't build.
-- `kait2en-sync notify`: for a timer: `check`, and `kernel` only when
-  `[omarchy]` has headers it hasn't tested yet; desktop notifications for
-  eligible updates and for modules that don't build.
+- `kait2en-sync kernel [channel]`: builds every published DKMS package against
+  the newest `linux-omarchy-headers` of this machine's `[omarchy]` channel, or
+  of the named one (`stable`, `rc`, `edge`), ahead of Omarchy shipping that
+  kernel. Exit 1 when one doesn't build.
+- `kait2en-sync notify`: for a timer: `check`, `omarchy-patch-check`, and
+  `kernel` for this machine's channel and for `KAIT2EN_EARLY_CHANNELS`
+  (default `rc`) whenever one has headers it hasn't tested yet; desktop
+  notifications for eligible updates and for modules that don't build. The rc
+  channel carries Omarchy's release candidates, 1-2 weeks ahead of stable
+  during a release cycle (stable's packages between cycles), so a new kernel
+  that breaks a module shows up before the update t2-dkms-guard would hold
+  back. The Mac itself stays on stable (2026-11-19). Tested header packages
+  are listed in `~/.cache/t2-arch-packages/kernel-tested`.
 - `kait2en-sync apply`: for each package with an eligible update, pins its
   newest eligible commit (each package its own), builds and signs it, builds its DKMS modules against the newest
   headers, then, after asking, publishes to the release (replacing the old

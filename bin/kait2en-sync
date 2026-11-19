@@ -4,13 +4,17 @@
 #   kait2en-sync check     what changed upstream since each package's pinned
 #                          commit, split into eligible and waiting (exit 0:
 #                          nothing eligible, 10: eligible updates)
-#   kait2en-sync kernel    build every published DKMS package against the newest
-#                          linux-omarchy-headers of this machine's [omarchy] channel (exit 0:
-#                          all build, 1: some don't — fix before Omarchy ships it)
+#   kait2en-sync kernel [channel]
+#                          build every published DKMS package against the newest
+#                          linux-omarchy-headers of this machine's [omarchy] channel, or
+#                          of the named one (stable, rc, edge) (exit 0: all build, 1:
+#                          some don't — fix before Omarchy ships it)
 #   kait2en-sync notify    for a timer (waits up to 2 minutes for the network): check, bin/omarchy-patch-check (linux-omarchy's
-#                          own patches vs the DKMS packages), and kernel when
-#                          [omarchy] has headers it hasn't tested yet; desktop
-#                          notifications to act on
+#                          own patches vs the DKMS packages), and kernel for this
+#                          machine's channel and for KAIT2EN_EARLY_CHANNELS (default
+#                          rc: Omarchy's release candidates, 1-2 weeks ahead of
+#                          stable during a release cycle) whenever one has headers
+#                          not tested yet; desktop notifications to act on
 #   kait2en-sync apply [--yes]
 #                          for each package with an eligible update: pin its
 #                          eligible commit, build and sign it, build its DKMS
@@ -208,16 +212,28 @@ cmd_check() {
   say "no eligible updates for the packages"
 }
 
-# The newest linux-omarchy-headers in the [omarchy] repo this machine uses,
-# read from the repo's own database (fresher than the local sync db, and
-# unprivileged), downloaded and verified with pacman's keyring; prints its path.
+# Omarchy's channels besides this machine's that notify tests kernels for:
+# their headers reach stable later, so a module that doesn't build shows up
+# ahead of the update t2-dkms-guard would then hold back.
+EARLY_CHANNELS=${KAIT2EN_EARLY_CHANNELS-rc}
+
+# The newest linux-omarchy-headers in the [omarchy] repo this machine uses, or
+# in channel $1 (stable, rc, edge), read from the repo's own database (fresher
+# than the local sync db, and unprivileged), downloaded and verified with
+# pacman's keyring; prints its path.
 latest_headers() {
-  local server db url file name
-  server=$(pacman-conf -r omarchy Server 2>/dev/null | head -1)
-  [[ -n $server ]] || fail "no [omarchy] repo in pacman.conf"
-  server=${server//\$arch/x86_64}
-  mkdir -p "$WORK/headers"
-  db=$WORK/headers/omarchy.db
+  local channel=${1:-} server db url file name dir
+  if [[ -n $channel ]]; then
+    [[ $channel =~ ^(stable|rc|edge)$ ]] || fail "unknown Omarchy channel: $channel (stable, rc, edge)"
+    server=https://pkgs.omarchy.org/$channel/x86_64
+  else
+    server=$(pacman-conf -r omarchy Server 2>/dev/null | head -1)
+    [[ -n $server ]] || fail "no [omarchy] repo in pacman.conf"
+    server=${server//\$arch/x86_64}
+  fi
+  dir=$WORK/headers${channel:+/$channel}
+  mkdir -p "$dir"
+  db=$dir/omarchy.db
   curl -fsSL -o "$db" "$server/omarchy.db" || fail "can't download $server/omarchy.db"
   name=$(bsdtar -tf "$db" | grep -E '^linux-omarchy-headers-[^/]+/desc$' | head -1)
   [[ -n $name ]] || fail "[omarchy] has no linux-omarchy-headers"
@@ -229,10 +245,11 @@ latest_headers() {
   echo "$file"
 }
 
-# Build the DKMS sources in the given package files against the newest headers.
+# Build the DKMS sources in the given package files against the newest headers
+# (of channel $KERNEL_CHANNEL when set, see latest_headers).
 test_dkms() {
   local headers src pkg
-  headers=$(latest_headers)
+  headers=$(latest_headers "${KERNEL_CHANNEL:-}")
   src=$WORK/dkms-src
   rm -rf "$src"
   mkdir -p "$src"
@@ -255,6 +272,7 @@ release_fetch() {
 
 cmd_kernel() {
   local dir
+  KERNEL_CHANNEL=${1:-}
   dir=$(release_fetch -p '*-dkms-*.pkg.tar.zst')
   test_dkms "$dir"/*-dkms-*.pkg.tar.zst
 }
@@ -317,10 +335,11 @@ cmd_apply() {
   say "published: ${pins[*]}"
 }
 
-# For a timer: check, omarchy-patch-check, and kernel when [omarchy] has
-# headers not tested yet; a desktop notification for anything to act on.
+# For a timer: check, omarchy-patch-check, and kernel for this machine's
+# channel and the early ones whenever one has headers not tested yet; a
+# desktop notification for anything to act on.
 cmd_notify() {
-  local out rc stamp=$WORK/kernel-tested headers
+  local out rc stamp=$WORK/kernel-tested headers channel where
   # A run missed during sleep starts the moment the Mac wakes, before Wi-Fi is
   # back: wait for the network, and if it doesn't come, skip today quietly
   # (tomorrow's run catches up) rather than report failed fetches.
@@ -343,19 +362,25 @@ cmd_notify() {
   elif (( rc != 0 )); then
     notify-send -a kait2en-sync -u critical "omarchy-patch-check failed" "$(tail -3 <<<"$out")"
   fi
-  headers=$(latest_headers 2>/dev/null) || return 0
-  [[ $(cat "$stamp" 2>/dev/null) == "${headers##*/}" ]] && return 0
-  if out=$(cmd_kernel 2>&1); then
-    echo "${headers##*/}" > "$stamp"
-  else
-    notify-send -a kait2en-sync -u critical "T2 modules aren't ready for ${headers##*/}" \
-      "$(grep -E 'FAILED|ABORTING|left out' <<<"$out" | head -3) — t2-dkms-guard will hold that kernel back"
-  fi
+  # The stamp lists the header packages that built, one per line; a channel
+  # whose newest headers are listed (rc between release cycles carries
+  # stable's) costs nothing.
+  for channel in "" $EARLY_CHANNELS; do
+    headers=$(latest_headers "$channel" 2>/dev/null) || continue
+    grep -qxF "${headers##*/}" "$stamp" 2>/dev/null && continue
+    if out=$(cmd_kernel "$channel" 2>&1); then
+      echo "${headers##*/}" >> "$stamp"
+    else
+      where=${channel:+"Omarchy's $channel channel has"}
+      notify-send -a kait2en-sync -u critical "T2 modules aren't ready for ${headers##*/}" \
+        "${where:+$where it; stable follows in 1-2 weeks. }$(grep -E 'FAILED|ABORTING|left out' <<<"$out" | head -3) — t2-dkms-guard will hold that kernel back"
+    fi
+  done
 }
 
 case "${1:-check}" in
   check) cmd_check ;;
-  kernel) cmd_kernel ;;
+  kernel) shift; cmd_kernel "${1:-}" ;;
   notify) cmd_notify ;;
   apply) shift; cmd_apply "${1:-}" ;;
   -h|--help|help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' ;;

@@ -5,7 +5,7 @@
 
 pkgname=t2-dkms-guard
 pkgver=0.2
-pkgrel=2
+pkgrel=3
 pkgdesc="Abort linux-omarchy upgrades that would break the KaiT2en T2 DKMS modules"
 arch=('any')
 license=('GPL-3.0-or-later')
