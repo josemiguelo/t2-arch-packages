@@ -55,6 +55,15 @@ def client_connected():
     return bool(last) and "DISCONNECTED" not in last[-1]
 
 
+def encoder_present():
+    """The T2's Sidecar encoder, by its V4L2 name: its /dev/videoN number
+    depends on probe order (video3 on the MacBookPro16,1, today)."""
+    for name in Path("/sys/class/video4linux").glob("video*/name"):
+        if read(name) == "t2-sidecar":
+            return True
+    return False
+
+
 def status():
     installed = shutil.which("t2-sidecar") is not None
     active = installed and run("systemctl", "--user", "-q", "is-active", UNIT).returncode == 0
@@ -67,7 +76,7 @@ def status():
         "mode": mode,
         "size": size,
         "sizes": SIZES if size in SIZES else SIZES + [size],
-        "encoder": Path("/dev/video3").exists(),
+        "encoder": encoder_present(),
         "t2Ave": run("systemctl", "-q", "is-active", "t2-ave.service").returncode == 0,
         "client": active and client_connected(),
     }))

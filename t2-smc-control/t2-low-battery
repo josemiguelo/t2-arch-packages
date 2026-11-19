@@ -1,0 +1,40 @@
+#!/bin/sh
+# t2-low-battery (systemd-sleep hook): after a wake, on battery at 5 % or less,
+# power off instead of letting the Mac go back to sleep.
+#
+# A T2 Mac can't hibernate (the Radeon, Wi-Fi and T2 bridge drivers don't
+# survive it; tested 2026-11-19), so a battery that runs out during sleep
+# loses the session and resets the clock. On 2026-11-17 the battery reached
+# 2 %: upower's critical action asked for sleep, the Mac woke again at the
+# SMC's low-battery wake, upower's poweroff request was dropped while that
+# wake was finishing, the closed lid put it back to sleep, and the battery
+# died in S3. This catches that wake. Only a wake can run it: a Mac that sleeps
+# until empty without waking still dies.
+#
+#   T2_LOW_BATTERY_PERCENT=<n> in /etc/t2-low-battery.conf  (default 5)
+
+[ "$1" = post ] || exit 0
+
+limit=5
+[ -r /etc/t2-low-battery.conf ] && . /etc/t2-low-battery.conf
+limit=${T2_LOW_BATTERY_PERCENT:-$limit}
+
+bat=/sys/class/power_supply/BAT0
+[ -r "$bat/capacity" ] || exit 0
+for ac in /sys/class/power_supply/*; do
+  [ "$(cat "$ac/type" 2>/dev/null)" = Mains ] || continue
+  [ "$(cat "$ac/online" 2>/dev/null)" = 1 ] && exit 0
+done
+
+capacity=$(cat "$bat/capacity" 2>/dev/null)
+case $capacity in ''|*[!0-9]*) exit 0 ;; esac
+[ "$capacity" -le "$limit" ] || exit 0
+
+echo "t2-low-battery: woke on battery at $capacity % (limit $limit %): powering off" | systemd-cat -t t2-low-battery -p warning
+# Not right here: this hook runs inside the sleep operation, and logind refuses
+# a poweroff while it's in progress ("Action suspend already in progress",
+# which also dropped upower's request on 2026-11-17). A timer 2 s on runs
+# after it has finished, well ahead of a closed lid's next sleep.
+systemd-run --quiet --no-block --unit=t2-low-battery-poweroff --on-active=2s \
+  --timer-property=AccuracySec=100ms /usr/bin/systemctl poweroff
+exit 0

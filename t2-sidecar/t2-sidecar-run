@@ -15,7 +15,9 @@ if [[ ${1:-} == stop ]]; then
   exit 0
 fi
 
-[[ -e /dev/video3 ]] || echo "t2-sidecar: no T2 Sidecar encoder (/dev/video3); is t2-ave.service running?" >&2
+# The encoder by its V4L2 name: its /dev/videoN number depends on probe order.
+grep -qx t2-sidecar /sys/class/video4linux/video*/name 2>/dev/null ||
+  echo "t2-sidecar: no T2 Sidecar encoder (V4L2 t2-sidecar); is t2-ave.service running?" >&2
 
 if [[ $MODE == extend ]]; then
   # The rule first, so the new output comes up with it: right of the others,

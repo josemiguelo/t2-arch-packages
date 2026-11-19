@@ -16,11 +16,14 @@
 # them to /usr. The KaiT2en wordmark is removed from the GUI header
 # (no-wordmark.patch): KaiT2en's trademark terms do not allow its name or logo
 # in redistributions.
+#
+# Ours besides: t2-charge-limit.service, and the systemd-sleep hook
+# t2-low-battery (power off after a wake on battery at 5 % or less).
 
 pkgname=t2-smc-control
 _ver=0.1.0
 pkgver=0.1.0.r34.27fd5c9
-pkgrel=4
+pkgrel=5
 pkgdesc="Battery gauging daemon and charge limit for Apple T2 Macs, with the T2 panel's Battery tab (KaiT2en)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -86,6 +89,9 @@ package() {
   # (LIMIT=1..100; the SMC stops charging 5 points below it). Off until the
   # setup writes that file and enables it; was the owner's dotfiles' own unit.
   install -Dm644 "$startdir/t2-charge-limit.service" "$pkgdir/usr/lib/systemd/system/t2-charge-limit.service"
+  # Ours: after a wake on battery at 5 % or less, power off rather than sleep
+  # again (a T2 Mac can't hibernate; see the script).
+  install -Dm755 "$startdir/t2-low-battery" "$pkgdir/usr/lib/systemd/system-sleep/t2-low-battery"
 
   install -Dm644 "$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"

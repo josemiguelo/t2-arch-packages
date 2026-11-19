@@ -286,6 +286,16 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Not doing
 
+- **Hibernation** (tried 2026-11-19, MacBookPro16,1): the firmware's ACPI S4 step hangs
+  (`pm_test platform`); in `shutdown` mode every `pm_test` stage passes, but `test_resume`
+  breaks things: with t2bce the T2 command queue died after the restore (keyboard gone); with
+  apple-t2-bridge the Radeon failed to freeze for the restore (`amdgpu_pmops_freeze` -22, "GPU
+  mode1 reset failed"), which left it broken (Hyprland crashed) and Wi-Fi down ("bus is down").
+  Neither KaiT2en stack has freeze/thaw/restore callbacks; KaiT2en's author hasn't got it
+  working either. Instead: the fork's `omarchy-hibernation-setup` skips T2 Macs, and
+  t2-smc-control's `t2-low-battery` sleep hook powers off after a wake on battery at 5 % or
+  less (the battery died in S3 on 2026-11-17). The test script and its log were in `~` on the Mac.
+
 - **GTK-free builds of the fan, Force Touch and SMC daemons** (dropped 2026-11-17): each app is
   one binary, daemon and old GTK window together (`--daemon`); the daemon code is GTK-free but
   the window shares `main.rs` (2,029 lines in t2-fan-control), so a split is three patches to
@@ -663,8 +673,11 @@ before starting.
      `t2_ave`/`t2_sidecar`; at `27fd5c9` with `t2bce_ave`/`t2bce_sidecar` until 2026-11-19): `t2-ave.service` (ours, for `kait2en-t2-remote.service`) loads the modules
      and runs `t2remote daemon` (root, `/run/t2remote.sock` root-only), which holds
      `com.apple.aveservice` and `…videoprocessingd.encode.remote`; the T2 then shows the Sidecar
-     encoder as USB `05ac:9312`. V4L2 mem2mem: "Apple T2 HEVC Encoder" (`/dev/video2`, NV12/P010)
-     and "Apple T2 Sidecar Encoder" (`/dev/video3`, H.264/HEVC). `/usr/bin/ffmpeg` with
+     encoder as USB `05ac:9312`. V4L2 mem2mem: "Apple T2 HEVC Encoder" (NV12/P010)
+     and "Apple T2 Sidecar Encoder" (H.264/HEVC); their `/dev/videoN` follow probe order (HEVC
+     video2 on t2bce, video0 on apple-t2-bridge; Sidecar video3 on both), so look them up by
+     V4L2 name (`/sys/class/video4linux/*/name`: `apple-ave-enc`, `t2-sidecar`), as the Sidecar
+     tab does since t2-sidecar 0.4-4. `/usr/bin/ffmpeg` with
      `hevc_v4l2m2m`/`h264_v4l2m2m` encoded 10 s of 1080p30 at 8 Mbit/s in ~4 s; ffmpeg's own device
      pick took the Sidecar encoder for both. `t2-ave-suspend.service` (ours, for upstream's
      `sleep.d` hook) runs `t2remote pre-suspend`/`post-resume` around sleep: two S3 cycles, the
@@ -673,7 +686,7 @@ before starting.
    - The `ffmpeg` on the PATH here is Homebrew's (no VA-API, no hwaccels); `/usr/bin/ffmpeg` has
      VA-API, and the iGPU encodes and decodes HEVC through it (`renderD128`).
 14. **`t2-sidecar`: done 2026-11-16.** A phone/tablet as a second screen through Moonlight,
-   encoded by the T2's Sidecar encoder (`/dev/video3`, needs `t2-ave`). Not Apple's Sidecar: Sunshine
+   encoded by the T2's Sidecar encoder (V4L2 `t2-sidecar`, needs `t2-ave`). Not Apple's Sidecar: Sunshine
    on the Mac, Moonlight on the device (input comes back).
    - **`sunshine-t2`**: KaiT2en's Sunshine fork (`deqrocks/Sunshine` `t2-sidecar`, pinned `0737eec`,
      2026-10-19), which carries LizardByte/Sunshine PR #5717 (the V4L2 mem2mem encoder,

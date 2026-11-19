@@ -1,7 +1,7 @@
 #!/bin/bash
 # t2-sidecar: a phone, tablet or computer as a second screen (or a view of
 # this one) for a T2 Mac on Hyprland. Sunshine streams it, encoded by the T2's
-# Sidecar encoder (/dev/video3, from t2_sidecar + t2-ave), to Moonlight on
+# Sidecar encoder (V4L2 "t2-sidecar", from t2_sidecar + t2-ave), to Moonlight on
 # the other device, which sends touch, mouse and keyboard back.
 #
 #   t2-sidecar on [WxH[@Hz]]  extended display: a virtual monitor (SIDECAR-1)
