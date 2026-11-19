@@ -1,0 +1,261 @@
+diff --git i/apps/t2-drop/src/ble.rs w/apps/t2-drop/src/ble.rs
+index becf4e2..1b39e8f 100644
+--- i/apps/t2-drop/src/ble.rs
++++ w/apps/t2-drop/src/ble.rs
+@@ -42,6 +42,15 @@ trait Adapter1 {
+ 
+     #[zbus(property)]
+     fn discovering(&self) -> zbus::Result<bool>;
++
++    #[zbus(property)]
++    fn powered(&self) -> zbus::Result<bool>;
++}
++
++#[proxy(interface = "org.bluez.AdvertisementMonitorManager1", default_service = "org.bluez")]
++trait AdvertisementMonitorManager1 {
++    fn register_monitor(&self, application: &ObjectPath<'_>) -> zbus::Result<()>;
++    fn unregister_monitor(&self, application: &ObjectPath<'_>) -> zbus::Result<()>;
+ }
+ 
+ #[proxy(interface = "org.freedesktop.DBus.ObjectManager", default_service = "org.bluez", default_path = "/")]
+@@ -69,6 +78,83 @@ impl Advertisement {
+     }
+ }
+ 
++/// The application root BlueZ reads the monitors from (an ObjectManager), and
++/// the one monitor under it.
++const MONITOR_ROOT: &str = "/org/t2drop/monitor";
++const MONITOR_PATH: &str = "/org/t2drop/monitor/apple";
++
++/// A passive advertisement monitor for Apple manufacturer data (0x004C, any
++/// element: the AirDrop one need not come first). While one is registered
++/// the kernel keeps a passive scan running, its background scan, instead of
++/// the active discovery the scanner used before: discovery listened 30 ms out
++/// of every 300 and restarted every ~10 s, so bonded LE devices (mice,
++/// keyboards) hardly ever got their directed reconnect advertisements heard
++/// and stayed disconnected after waking. BlueZ creates and updates the
++/// devices the monitor matches, so the scanner sees them as before.
++struct AppleMonitor {
++    senders: Senders,
++}
++
++#[interface(name = "org.bluez.AdvertisementMonitor1")]
++impl AppleMonitor {
++    fn release(&self) {
++        debug!("Bluetooth advertisement monitor released");
++    }
++
++    fn activate(&self) {
++        debug!("Bluetooth advertisement monitor active");
++    }
++
++    /// A matching device advertises again: BlueZ only reports changed
++    /// properties, so this keeps a known sender's time current.
++    fn device_found(&self, device: OwnedObjectPath) {
++        if let Some(sender) = self.senders.lock().unwrap().get_mut(&device) {
++            sender.last = Instant::now();
++        }
++    }
++
++    fn device_lost(&self, _device: OwnedObjectPath) {}
++
++    #[zbus(property, name = "Type")]
++    fn kind(&self) -> String {
++        "or_patterns".to_string()
++    }
++
++    /// (start position, AD type, content): manufacturer specific data that
++    /// starts with Apple's company identifier, little endian.
++    #[zbus(property)]
++    fn patterns(&self) -> Vec<(u8, u8, Vec<u8>)> {
++        vec![(0, 0xff, APPLE.to_le_bytes().to_vec())]
++    }
++}
++
++/// Registers the Apple monitor with the adapter's monitor manager.
++async fn register_monitor(connection: &Connection, adapter: &OwnedObjectPath, senders: Senders) -> Result<()> {
++    let server = connection.object_server();
++    server.at(MONITOR_ROOT, zbus::fdo::ObjectManager).await?;
++    server.at(MONITOR_PATH, AppleMonitor { senders }).await?;
++    let registered = async {
++        AdvertisementMonitorManager1Proxy::builder(connection)
++            .path(adapter.clone())?
++            .build()
++            .await?
++            .register_monitor(&ObjectPath::try_from(MONITOR_ROOT)?)
++            .await
++            .context("register the Bluetooth advertisement monitor")
++    }
++    .await;
++    if registered.is_err() {
++        remove_monitor_objects(connection).await;
++    }
++    registered
++}
++
++async fn remove_monitor_objects(connection: &Connection) {
++    let server = connection.object_server();
++    let _ = server.remove::<AppleMonitor, _>(MONITOR_PATH).await;
++    let _ = server.remove::<zbus::fdo::ObjectManager, _>(MONITOR_ROOT).await;
++}
++
+ /// Bluetooth is powered off, so no advertisement can go out.
+ #[derive(Debug)]
+ pub struct BluetoothOff;
+@@ -180,14 +266,18 @@ fn update_sender(senders: &Senders, path: OwnedObjectPath, props: &HashMap<Strin
+     }
+ }
+ 
+-/// Bluetooth LE discovery that tracks the AirDrop senders nearby. BlueZ
+-/// reports a new device with its advertisement data once and changes only
+-/// when the data changes, so a device that carries the AirDrop element
+-/// counts as near until BlueZ removes it. BlueZ ends the discovery when the
+-/// connection closes.
++/// Tracks the AirDrop senders nearby, through a passive advertisement monitor
++/// when BlueZ offers one (bluetoothd -E, which t2-drop's drop-in sets), else
++/// through Bluetooth LE discovery. BlueZ reports a new device with its
++/// advertisement data once and changes only when the data changes, so a
++/// device that carries the AirDrop element counts as near until BlueZ removes
++/// it. BlueZ ends the discovery, and drops the monitor, when the connection
++/// closes.
+ pub struct BeaconScanner {
+     connection: Connection,
+     adapter: OwnedObjectPath,
++    /// Watching through the advertisement monitor, not discovery
++    monitor: bool,
+     /// Adapter index and the scan timing to set back
+     restore: Option<(u16, ScanTiming)>,
+     senders: Senders,
+@@ -225,30 +315,45 @@ impl BeaconScanner {
+         // Devices BlueZ knows already, the ones not paired were seen within
+         // its TemporaryTimeout
+         let senders: Senders = Arc::default();
++        let mut has_monitor_manager = false;
+         for (path, interfaces) in BluezObjectsProxy::new(&connection).await?.get_managed_objects().await? {
+             if let Some(props) = interfaces.get("org.bluez.Device1") {
+-                update_sender(&senders, path, props, true);
++                update_sender(&senders, path.clone(), props, true);
++            }
++            if path == adapter_path && interfaces.contains_key("org.bluez.AdvertisementMonitorManager1") {
++                has_monitor_manager = true;
+             }
+         }
+ 
+-        let restore = match adapter_index(&adapter_path) {
+-            Some(index) => match tokio::task::spawn_blocking(move || lower_scan(index)).await? {
+-                Ok(before) => Some((index, before)),
++        let monitor = has_monitor_manager &&
++            match register_monitor(&connection, &adapter_path, senders.clone()).await {
++                Ok(()) => true,
+                 Err(err) => {
+-                    warn!("lower the Bluetooth scan timing: {err:#}");
+-                    None
++                    warn!("{err:#}, falling back to discovery");
++                    false
+                 }
+-            },
+-            None => None,
+-        };
+-        let adapter = Adapter1Proxy::builder(&connection).path(adapter_path.clone())?.build().await?;
+-        let le = Value::from("le");
+-        let duplicates = Value::from(true);
+-        adapter
+-            .set_discovery_filter(HashMap::from([("Transport", &le), ("DuplicateData", &duplicates)]))
+-            .await
+-            .context("Bluetooth discovery filter")?;
+-        adapter.start_discovery().await.context("start Bluetooth discovery")?;
++            };
++        let mut restore = None;
++        if !monitor {
++            restore = match adapter_index(&adapter_path) {
++                Some(index) => match tokio::task::spawn_blocking(move || lower_scan(index)).await? {
++                    Ok(before) => Some((index, before)),
++                    Err(err) => {
++                        warn!("lower the Bluetooth scan timing: {err:#}");
++                        None
++                    }
++                },
++                None => None,
++            };
++            let adapter = Adapter1Proxy::builder(&connection).path(adapter_path.clone())?.build().await?;
++            let le = Value::from("le");
++            let duplicates = Value::from(true);
++            adapter
++                .set_discovery_filter(HashMap::from([("Transport", &le), ("DuplicateData", &duplicates)]))
++                .await
++                .context("Bluetooth discovery filter")?;
++            adapter.start_discovery().await.context("start Bluetooth discovery")?;
++        }
+ 
+         let s = senders.clone();
+         let changes = tokio::spawn(async move {
+@@ -286,8 +391,12 @@ impl BeaconScanner {
+                 }
+             }
+         });
+-        debug!("scanning for AirDrop senders on {}", adapter_path.as_str());
+-        Ok(Self { connection, adapter: adapter_path, restore, senders, tasks: vec![changes, added, removed] })
++        debug!(
++            "looking for AirDrop senders on {} through {}",
++            adapter_path.as_str(),
++            if monitor { "a passive advertisement monitor" } else { "discovery" }
++        );
++        Ok(Self { connection, adapter: adapter_path, monitor, restore, senders, tasks: vec![changes, added, removed] })
+     }
+ 
+     /// Whether an AirDrop sender is nearby.
+@@ -296,21 +405,35 @@ impl BeaconScanner {
+         senders.values().any(|s| !s.paired || s.last.elapsed() < PAIRED_LOST)
+     }
+ 
+-    /// Whether the adapter still discovers, it stops when Bluetooth goes
+-    /// off or the adapter goes away.
++    /// Whether the adapter still watches: powered with the monitor, still
++    /// discovering without it. Either ends when Bluetooth goes off or the
++    /// adapter goes away.
+     pub async fn alive(&self) -> bool {
+         let Ok(builder) = Adapter1Proxy::builder(&self.connection).path(self.adapter.clone()) else { return false };
+         let Ok(adapter) = builder.cache_properties(zbus::proxy::CacheProperties::No).build().await else {
+             return false;
+         };
+-        adapter.discovering().await.unwrap_or(false) && !self.tasks.iter().any(|t| t.is_finished())
++        let watching = if self.monitor {
++            adapter.powered().await.unwrap_or(false)
++        } else {
++            adapter.discovering().await.unwrap_or(false)
++        };
++        watching && !self.tasks.iter().any(|t| t.is_finished())
+     }
+ 
+     pub async fn stop(self) {
+         for task in &self.tasks {
+             task.abort();
+         }
+-        if let Ok(builder) = Adapter1Proxy::builder(&self.connection).path(self.adapter) {
++        if self.monitor {
++            if let Ok(builder) = AdvertisementMonitorManager1Proxy::builder(&self.connection).path(self.adapter) {
++                if let Ok(manager) = builder.build().await {
++                    let root = ObjectPath::try_from(MONITOR_ROOT).expect("valid path");
++                    let _ = manager.unregister_monitor(&root).await;
++                }
++            }
++            remove_monitor_objects(&self.connection).await;
++        } else if let Ok(builder) = Adapter1Proxy::builder(&self.connection).path(self.adapter) {
+             if let Ok(adapter) = builder.build().await {
+                 let _ = adapter.stop_discovery().await;
+             }
+@@ -364,6 +487,14 @@ impl AirDropBeacon {
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn monitors_apple_manufacturer_data() {
++        // AD type 0xff, Apple's company identifier 0x004c in little endian
++        let monitor = AppleMonitor { senders: Arc::default() };
++        assert_eq!(monitor.patterns(), vec![(0, 0xff, vec![0x4c, 0x00])]);
++        assert_eq!(monitor.kind(), "or_patterns");
++    }
++
+     #[test]
+     fn finds_airdrop_among_apple_elements() {
+         // Nearby info (0x10) first, then the AirDrop element macOS sends

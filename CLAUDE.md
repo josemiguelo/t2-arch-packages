@@ -213,6 +213,16 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
 
 ## Facts that cost time to learn
 
+- **Bonded Bluetooth LE devices only reconnect while no LE discovery runs** (2026-11-19): the
+  kernel's reconnect scan (passive, accept list, 30 ms of every 60) gives way to discovery, and
+  t2-drop kept discovery running (30 ms of every 300, restarted every ~10 s) to spot AirDrop
+  senders, so the MX Master 3 took ~26 s to reconnect, or never; with discovery off, 8 ms (btmon).
+  The advert-type quirk (KaiT2en's 0012, the owner's t2linux/linux-t2-patches#57) was already
+  working: 0 "unknown advertising packet type" since 2026-11-11. Fixed by t2-drop's
+  `advmon.patch` (a passive advertisement monitor, which needs `bluetoothd -E`). Omarchy's
+  Bluetooth panel also discovers while it's open. `t2airshare` D-Bus-activates t2-drop: to keep it
+  stopped for a test, `systemctl mask --runtime`.
+
 - **KaiT2en's `6ddacd9` (2026-11-11, "apple_t2_bridge: initial implementation") replaces the
   whole t2bce stack**: every `modules/t2bce_*` (keyboard `t2bce_vhci`, audio `t2bce_audio`, …) and
   `modules/t2bce_audio-alsa-ucm-conf` are gone, replaced by `modules/apple-t2-bridge`
