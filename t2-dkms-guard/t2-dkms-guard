@@ -7,7 +7,7 @@
 # and each module whose dkms.conf carries the "# t2-arch-packages" marker is
 # compiled against them. One failure aborts the whole transaction: the old,
 # working kernel stays installed. Without this, a failed DKMS build leaves the
-# new kernel without t2bce_vhci, so the internal keyboard is gone at the disk
+# new kernel without apple_t2_vhci_hcd, so the internal keyboard is gone at the disk
 # unlock prompt.
 #
 # A module whose dkms.conf limits it to other kernels (BUILD_EXCLUSIVE_KERNEL,
@@ -104,7 +104,7 @@ if (( ${#failed[@]} )); then
   echo
   say "ABORTING the upgrade: ${failed[*]} would not build for $kver."
   say "The new kernel would boot without them (no internal keyboard at the disk"
-  say "unlock prompt if t2bce_stack is among them). Nothing has been changed."
+  say "unlock prompt if apple-t2-bridge is among them). Nothing has been changed."
   say "Wait for a KaiT2en fix, or upgrade anyway with: sudo env T2_DKMS_GUARD_SKIP=1 pacman ..."
   exit 1
 fi

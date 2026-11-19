@@ -1,5 +1,5 @@
 # sunshine-t2: Sunshine with the V4L2 mem2mem encoder (encoder = v4l2m2m),
-# which streams through the T2's Sidecar encoder (/dev/video3, t2bce_sidecar):
+# which streams through the T2's Sidecar encoder (/dev/video3, t2_sidecar):
 # 1080p60 H.264 at ~6-11 % of one core instead of several. The encoder is
 # LizardByte/Sunshine PR #5717 ("zero-copy v4l2 encoder"), not merged yet;
 # KaiT2en's fork carries it unchanged on its t2-sidecar branch, pinned here.

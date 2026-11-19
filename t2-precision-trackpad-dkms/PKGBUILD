@@ -6,7 +6,7 @@
 # mouse interface as a plain mouse: no two-finger scroll, no tap to click.
 # This driver claims only that interface (HID_TYPE_USBMOUSE), so hid-apple
 # keeps the keyboard. It must register before the T2 bus enumerates the
-# device: list it ahead of t2bce_vhci in the initramfs MODULES.
+# device: list it ahead of apple_t2_vhci_hcd in the initramfs MODULES.
 #
 # Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  modules/t2_precision_trackpad
 # Its optional haptics partner, t2_trackpad_actuator, is weak-linked:

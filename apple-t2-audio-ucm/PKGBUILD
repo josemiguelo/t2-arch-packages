@@ -1,0 +1,46 @@
+# ALSA UCM profiles for KaiT2en's snd_apple_t2 audio driver (card drivers
+# AppleT2x2/x4/x6, after the number of speaker channels).
+#
+# Upstream: https://github.com/kaiT2en/KaiT2en-Fedora
+#   modules/apple-t2-alsa-ucm-conf/ucm2  ->  /usr/share/alsa/ucm2
+# Mirrors scripts/fedora/install-alsa-ucm.sh (minus its WirePlumber state reset,
+# which only matters when replacing an older profile on a used system).
+#
+# Replaces t2bce-audio-ucm: KaiT2en's 6ddacd9 (2026-11-11) moved the same files
+# here with the new driver, which names its cards as t2bce_audio did.
+
+pkgname=apple-t2-audio-ucm
+_ver=0
+pkgver=0.r1.6ddacd9
+pkgrel=1
+pkgdesc="ALSA UCM profiles for the Apple T2 audio driver snd_apple_t2 (KaiT2en)"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-3.0-or-later')
+depends=('alsa-ucm-conf')
+makedepends=('git')
+provides=('t2bce-audio-ucm' 'apple-t2-audio-config')
+conflicts=('t2bce-audio-ucm' 't2bce_audio-alsa-ucm-conf' 'apple-t2-audio-config' 'apple-t2-audio-config-alt')
+replaces=('t2bce-audio-ucm')
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=6ddacd9f5994db284552957ae6550f08e03708d1
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_ver" \
+    "$(git rev-list --count HEAD -- modules/apple-t2-alsa-ucm-conf)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd kait2en
+  install -dm755 "$pkgdir/usr/share/alsa/ucm2"
+  cp -a --no-preserve=ownership modules/apple-t2-alsa-ucm-conf/ucm2/. "$pkgdir/usr/share/alsa/ucm2/"
+  find "$pkgdir/usr/share/alsa/ucm2" -type f -exec chmod 644 {} +
+
+  install -Dm644 LICENSES/GPL-3.0-or-later.txt "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 LICENSING.md AUTHORS -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

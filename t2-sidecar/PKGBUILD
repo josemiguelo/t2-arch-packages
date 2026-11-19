@@ -19,7 +19,7 @@
 
 pkgname=t2-sidecar
 pkgver=0.4
-pkgrel=2
+pkgrel=3
 pkgdesc="Second screen for Apple T2 Macs on Hyprland: Sunshine on a virtual monitor, encoded by the T2"
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"

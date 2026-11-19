@@ -3,8 +3,8 @@
 # sessions the encoders need over BridgeXPC (com.apple.aveservice, and
 # com.apple.videoprocessingd.encode.remote, which makes the T2 expose its
 # Sidecar encoder as USB 05ac:9312), with the kernel modules from
-# t2bce-stack-dkms: t2bce_ave ("Apple T2 HEVC Encoder", HEVC 8/10-bit up to
-# 4096x2304, one session) and t2bce_sidecar (H.264/HEVC, low latency). Encode
+# apple-t2-bridge-dkms: t2_ave ("Apple T2 HEVC Encoder", HEVC 8/10-bit up to
+# 4096x2304, one session) and t2_sidecar (H.264/HEVC, low latency). Encode
 # only; reachable through ffmpeg's hevc_v4l2m2m/h264_v4l2m2m (and KaiT2en's
 # Sunshine fork), not VA-API, so Chromium/mpv/OBS don't use it.
 #
@@ -14,10 +14,10 @@
 # after (upstream's hook in t2-services-common's t2-ncm-sleep, here a unit of
 # its own); it does nothing while the daemon isn't running.
 #
-# Pinned at 27fd5c9, the t2bce-stack-dkms pin, so the daemon matches the
-# installed t2bce_ave/t2bce_sidecar exactly (later KaiT2en commits rename them
-# t2-ave/t2-sidecar on the apple-t2-bridge stack; the daemon differs by a few
-# lines). The T2 link: t2-touchid's udev rule brings it up.
+# Pinned at 6ddacd9, the apple-t2-bridge-dkms pin, so the daemon matches the
+# installed t2_ave/t2_sidecar exactly (until 2026-11-19 at 27fd5c9, with
+# t2bce-stack-dkms's t2bce_ave/t2bce_sidecar; the daemon only changed in
+# comments). The T2 link: t2-touchid's udev rule brings it up.
 #
 # Upstream: https://github.com/kaiT2en/KaiT2en-Fedora  t2-services/t2-ave
 # (+ t2-services/shared/protocols/t2-bridgexpc). Authors: André Eikmeyer and
@@ -28,20 +28,20 @@
 
 pkgname=t2-ave
 _ver=0.1.0
-pkgver=0.1.0.r11.27fd5c9
+pkgver=0.1.0.r14.6ddacd9
 pkgrel=1
 pkgdesc="Apple T2 hardware video encoders (HEVC, H.264) through V4L2 (KaiT2en's t2-ave)"
 arch=('x86_64')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
 license=('GPL-3.0-or-later')
-depends=('gcc-libs' 'systemd' 'kmod' 't2bce-stack-dkms' 't2-touchid')
+depends=('gcc-libs' 'systemd' 'kmod' 'apple-t2-bridge-dkms' 't2-touchid')
 optdepends=('ffmpeg: encoding with hevc_v4l2m2m and h264_v4l2m2m'
             'v4l-utils: v4l2-ctl --list-devices')
 makedepends=('git' 'cargo')
 options=('!debug')
 # KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
 _repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
-_commit=27fd5c963497556ffc9986779627a0d0f345fbe0
+_commit=6ddacd9f5994db284552957ae6550f08e03708d1
 source=("kait2en::git+${_repo}#commit=${_commit}")
 sha256sums=('SKIP')
 
@@ -82,8 +82,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStartPre=/usr/bin/modprobe t2bce_ave
-ExecStartPre=-/usr/bin/modprobe t2bce_sidecar
+ExecStartPre=/usr/bin/modprobe t2_ave
+ExecStartPre=-/usr/bin/modprobe t2_sidecar
 ExecStart=/usr/bin/t2remote daemon
 Restart=on-failure
 RestartSec=2

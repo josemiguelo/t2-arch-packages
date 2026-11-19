@@ -31,6 +31,16 @@ commits back if ever wanted.
   headers, then, after asking, publishes to the release (replacing the old
   versions) and commits and pushes the PKGBUILDs.
 
+**Going back from `apple-t2-bridge-dkms` to `t2bce-stack-dkms`** (both stay in
+the repo's release): `sudo pacman -U` the old `t2bce-stack-dkms` and
+`t2bce-audio-ucm`, and `t2-ave` 0.1.0.r11.27fd5c9-1 and `t2-dsp` 0.r14.402a353-1
+(the release dropped those two as superseded: from `/var/cache/pacman/pkg`, or
+rebuilt from their PKGBUILDs before the port commit), then put `t2bce_vhci` back in place of
+`apple_t2_bridge apple_t2_vhci_hcd` in `/etc/mkinitcpio.conf.d/apple-t2.conf` and
+of `apple_t2_vhci_hcd` in `/etc/modules-load.d/t2.conf`, run `sudo
+limine-mkinitcpio`, check with `lsinitcpio` that `t2bce_vhci` is in the image,
+and reboot. The new package renames them on install; nothing renames them back.
+
 `t2-wireless-dkms` also tracks a kernel version (`_kver`): when
 `linux-omarchy` moves to a new minor, `kernel` reports it left out and
 `t2-dkms-guard` (0.2) holds that kernel back until its sources move to that

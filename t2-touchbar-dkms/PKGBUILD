@@ -8,7 +8,7 @@
 #   t2bdrm          the Touch Bar's screen as a DRM device (appletbdrm's place),
 #                   on the 05ac:8302 device's configuration 2
 # Plain HID/USB/DRM drivers matched by device ID: they use nothing from the BCE
-# bus driver, so they work on t2bce_vhci as on KaiT2en's apple-t2-bridge.
+# bus driver, so they work on apple-t2-bridge-dkms's apple_t2_vhci_hcd as on t2bce_vhci before it.
 #
 # Installed inert: t2hid and t2touchbar_* claim the same IDs as hid-apple and
 # the in-kernel Touch Bar drivers, and udev would load both sets at every boot

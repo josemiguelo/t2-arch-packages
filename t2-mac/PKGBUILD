@@ -14,7 +14,7 @@
 
 pkgbase=t2-mac
 pkgname=('t2-mac' 't2-mac-hybrid')
-pkgver=3
+pkgver=4
 pkgrel=1
 arch=('any')
 url="https://github.com/josemiguelo/t2-arch-packages"
@@ -28,13 +28,13 @@ package_t2-mac() {
     # DKMS needs the headers of the kernel it builds for
     'linux-omarchy-headers'
     # drivers
-    't2bce-stack-dkms' 't2smc-dkms' 't2sbs-dkms' 't2smp-dkms' 't2-thunderbolt-dkms'
+    'apple-t2-bridge-dkms' 't2smc-dkms' 't2sbs-dkms' 't2smp-dkms' 't2-thunderbolt-dkms'
     't2-precision-trackpad-dkms' 't2-trackpad-actuator-dkms' 't2-wireless-dkms'
     't2-touchbar-dkms' 'linux-apfs-rw-dkms' 't2-dkms-guard'
     # firmware, boot
     'apple-bcm-firmware-fetcher' 't2-acpi-fix' 't2-kernel-args'
     # services and apps
-    't2-fan-control' 't2-smc-control' 't2bce-audio-ucm' 't2-dsp' 't2-force-click'
+    't2-fan-control' 't2-smc-control' 'apple-t2-audio-ucm' 't2-dsp' 't2-force-click'
     't2-touchid' 't2-touchbar' 't2-kbd-backlight' 't2-truetone'
     't2-drop' 't2-airshare' 't2-journal' 't2-ave' 'sunshine-t2' 't2-sidecar'
     # their Omarchy bar plugins and menu entries, for each user (t2-omarchy-setup)

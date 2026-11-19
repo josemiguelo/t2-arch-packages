@@ -1,0 +1,73 @@
+# KaiT2en's T2 bridge stack, DKMS: the Bridge Controller (PCI 106b:1801, DMA
+# queues to the T2), the virtual USB host the internal keyboard, trackpad,
+# Touch Bar, camera and Touch ID link hang off, the T2 audio device (PCI
+# 106b:1803), and the T2's AVE and Sidecar video encoders.
+#
+#   apple_t2_bridge     modules/apple-t2-bridge/drivers/platform/x86/apple
+#   apple_t2_vhci_hcd   modules/apple-t2-bridge/drivers/usb/host (auxiliary
+#                       device apple_t2_bridge.vhci)
+#   snd_apple_t2        modules/apple-t2-bridge/sound/pci/apple-t2 (cards
+#                       AppleT2x2/x4/x6, profiles in apple-t2-audio-ucm)
+#   t2_ave, t2_sidecar  t2-services/t2-ave/kernel/{t2-ave,t2-sidecar}, staged
+#                       in the bridge tree so they share its symbols
+# Mirrors copy_module_source() in scripts/fedora/install-dkms-modules.sh.
+#
+# Replaces t2bce-stack-dkms (t2bce_core/_dma/_vhci/_audio, t2bce_ave,
+# t2bce_sidecar), which KaiT2en's 6ddacd9 (2026-11-11) retired. Its install
+# script renames t2bce_vhci in the files the Omarchy fork's fix-t2.sh wrote
+# (the initramfs MODULES, modules-load.d), before the boot image is rebuilt
+# at the end of the same transaction: the keyboard at the disk unlock prompt
+# depends on it.
+#
+# Conflicts with any kernel that drives 106b:1801 in-tree (linux-t2). Meant
+# for a stock kernel such as linux-omarchy.
+
+pkgname=apple-t2-bridge-dkms
+_modname=apple-t2-bridge
+_modver=0.1
+pkgver=0.1.r8.6ddacd9
+pkgrel=1
+pkgdesc="Apple T2 bridge stack (keyboard, trackpad, Touch Bar, audio, video encoders) from KaiT2en, DKMS"
+arch=('any')
+url="https://github.com/kaiT2en/KaiT2en-Fedora"
+license=('GPL-2.0-only')
+depends=('dkms')
+makedepends=('git')
+provides=('t2bce-stack-dkms')
+conflicts=('t2bce-stack-dkms' 'apple-bce-dkms' 't2bce-dkms')
+replaces=('t2bce-stack-dkms')
+install=apple-t2-bridge-dkms.install
+# KAIT2EN_GIT=file:///path/to/clone builds from a local KaiT2en checkout.
+_repo="${KAIT2EN_GIT:-https://github.com/kaiT2en/KaiT2en-Fedora.git}"
+_commit=6ddacd9f5994db284552957ae6550f08e03708d1
+source=("kait2en::git+${_repo}#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd kait2en
+  printf '%s.r%s.%s' "$_modver" \
+    "$(git rev-list --count HEAD -- modules/apple-t2-bridge t2-services/t2-ave/kernel)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd kait2en
+  local dst="$pkgdir/usr/src/$_modname-$_modver"
+  install -dm755 "$dst"
+  cp -a --no-preserve=ownership modules/apple-t2-bridge/. "$dst/"
+  local c
+  for c in t2-ave t2-sidecar; do
+    install -dm755 "$dst/$c"
+    cp -a --no-preserve=ownership "t2-services/t2-ave/kernel/$c/." "$dst/$c/"
+  done
+
+  # Only for stock Omarchy kernels: linux-t2 carries its own driver for the
+  # bridge, and a DKMS copy in updates/ would silently override it.
+  printf '\n# t2-arch-packages: never for linux-t2 (drives the bridge in-tree)\nBUILD_EXCLUSIVE_KERNEL="%s"\n' \
+    "${T2_DKMS_KERNEL_REGEX:-.*-omarchy\$}" >> "$dst/dkms.conf"
+
+  # Unit tests, checkpatch stamps and stray build products don't belong in /usr/src.
+  rm -rf "$dst"/tests "$dst"/*/tests
+  find "$dst" \( -name '.checkpatch-*' -o -name '*.o' -o -name '*.ko' -o -name '*.mod' \
+    -o -name '*.mod.c' -o -name '.*.cmd' -o -name Module.symvers -o -name modules.order \) -delete
+}

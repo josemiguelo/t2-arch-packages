@@ -1,0 +1,32 @@
+# The Omarchy fork's fix-t2.sh names the old keyboard driver in two files of
+# its own. Installed Macs never run the fork's migrations, so the rename is
+# done here, before the boot image is rebuilt at the end of this transaction
+# (mkinitcpio's hook fires on the new dkms.conf): without it the image would
+# have no keyboard at the disk unlock prompt, or fail to build.
+#
+#   /etc/mkinitcpio.conf.d/apple-t2.conf  t2bce_vhci -> apple_t2_bridge apple_t2_vhci_hcd
+#   /etc/modules-load.d/t2.conf           t2bce_vhci -> apple_t2_vhci_hcd
+#
+# Downgrading to t2bce-stack-dkms needs the reverse; pre_remove can't tell a
+# downgrade from a removal, so that's by hand (docs/maintaining.md).
+
+_rename_t2bce() {
+  local conf=/etc/mkinitcpio.conf.d/apple-t2.conf
+  local load=/etc/modules-load.d/t2.conf
+  if [[ -f $conf ]] && grep -qw 't2bce_vhci' "$conf"; then
+    sed -i -E 's/(^|[ (])t2bce_vhci([ )])/\1apple_t2_bridge apple_t2_vhci_hcd\2/' "$conf"
+    echo ":: $conf: t2bce_vhci renamed to apple_t2_bridge apple_t2_vhci_hcd"
+  fi
+  if [[ -f $load ]] && grep -qx 't2bce_vhci' "$load"; then
+    sed -i 's/^t2bce_vhci$/apple_t2_vhci_hcd/' "$load"
+    echo ":: $load: t2bce_vhci renamed to apple_t2_vhci_hcd"
+  fi
+}
+
+post_install() {
+  _rename_t2bce
+}
+
+post_upgrade() {
+  _rename_t2bce
+}

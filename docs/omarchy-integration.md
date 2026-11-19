@@ -41,11 +41,13 @@ whose `--stable` produces stable ISOs.
    - **Boot setup:**
      - `/etc/mkinitcpio.conf.d/apple-t2.conf`: the initramfs modules.
        `t2_precision_trackpad` goes first so it claims the trackpad before `hid-apple` does, and
-       `t2bce_vhci` is there so the keyboard works at the disk unlock prompt.
+       `apple_t2_bridge apple_t2_vhci_hcd` are there so the keyboard works at the disk unlock prompt
+       (`t2bce_vhci` before 2026-11-19; `apple-t2-bridge-dkms`'s install script renames it on
+       installed Macs, which never run the fork's migrations).
      - `t2-kernel-args --write`: `/etc/limine-entry-tool.d/t2-mac.conf`, the kernel arguments
        (`pci=noaer pcie_ports=compat` for the ~1 s wake, forced PCIe ASPM, ...). The package keeps
        the file that way afterwards, against anything that rewrites it.
-     - `/etc/modules-load.d/t2.conf`: `t2bce_vhci`, `hci_bcm4377`.
+     - `/etc/modules-load.d/t2.conf`: `apple_t2_vhci_hcd`, `hci_bcm4377`.
    - **Services and rules:** the Wi-Fi firmware on the first boot, the fan daemon (80 °C system
      target), gauging, Force Touch, Touch ID, the Touch Bar, the keyboard backlight fade, True
      Tone, the video encoders (Sidecar), the boot GPU keeper (dual-GPU models), the ACPI fix's
@@ -96,7 +98,7 @@ packages since their pin; `kait2en-sync check` lists them.
   headers from the download cache and compiles every module whose `dkms.conf` is marked
   `# t2-arch-packages`.
 - **If any module fails, the whole update is aborted** and you stay on the working kernel.
-  Without `t2bce_vhci` there would be no keyboard to type the disk password.
+  Without `apple_t2_vhci_hcd` there would be no keyboard to type the disk password.
 - **If all build, the update goes ahead** and DKMS installs the modules for the new kernel.
 - To override: `sudo env T2_DKMS_GUARD_SKIP=1 pacman -Syu`. Not yet tested through a real kernel
   upgrade.
@@ -122,7 +124,7 @@ Upstream has already shipped changes like this:
   back within a second and rebuilds the boot image, by itself (a path unit on the file, and a
   boot service).
 - **One rewrote the module list.** `1785273276` changed `apple-t2.conf`.
-- **A new one could install `linux-t2`.** It conflicts with the DKMS `t2bce` (both drive the same
+- **A new one could install `linux-t2`.** It conflicts with the DKMS bridge stack (both drive the same
   device), and Omarchy's boot order puts `linux-t2` first
   (`BOOT_ORDER="linux-t2, linux-omarchy, …"` in `/etc/limine-entry-tool.d/omarchy-defaults.conf`),
   so it would become the default boot entry.

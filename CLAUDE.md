@@ -24,9 +24,9 @@ The loadout's `bare-repos` + `kait2en-dev` (machine `t2-macbook-omarchy`) recrea
 a fresh install, plus `omacom/omarchy-pkgs`, `nutanix/libvfio-user` (built), the signing key
 from 1Password (item `kait2en`, Personal vault) and the daily `kait2en-sync.timer`.
 
-Packages (docs/packages.md has the test results): `t2bce-stack-dkms`, `t2smc-dkms`, `t2sbs-dkms`,
+Packages (docs/packages.md has the test results): `apple-t2-bridge-dkms` (was `t2bce-stack-dkms`), `t2smc-dkms`, `t2sbs-dkms`,
 `t2smp-dkms`, `t2-thunderbolt-dkms`, `t2-precision-trackpad-dkms`, `t2-trackpad-actuator-dkms`, `t2-force-click`, `t2-wireless-dkms`,
-`t2-fan-control`, `t2-smc-control`, `t2bce-audio-ucm`, `t2-dsp` (with `bankstown-lv2`, not KaiT2en's),
+`t2-fan-control`, `t2-smc-control`, `apple-t2-audio-ucm` (was `t2bce-audio-ucm`), `t2-dsp` (with `bankstown-lv2`, not KaiT2en's),
 `t2-dkms-guard`, `t2-touchid`, `t2-arch-packages-keyring`. Arch's own
 `linux-apfs-rw-dkms` (`[extra]`) gives the firmware fetcher APFS. Signing key
 `077D 8295 CCF8 34D3 F5EC  25F7 0506 B72C 34EB 162F` (passphrase in the same 1Password item).
@@ -208,7 +208,7 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   OMARCHY_PATH=<omarchy worktree> bin/omarchy-iso-test <iso> --fake-pci 106b:1802:088000
   --no-preview` (~40 min; `--reuse-base --keep-running` then ssh `omarchy@127.0.0.1 -p 2222`
   with the run's `id_ed25519`). Expected VM-only failures: `t2-wifi-firmware` (no macOS volume)
-  and `systemd-modules-load` (`t2bce_vhci` EPROBE_DEFER: a fake 106b:1802 has no BCE). Write a
+  and `systemd-modules-load` (`apple_t2_vhci_hcd`, `t2bce_vhci` before: a fake 106b:1802 has no bridge). Write a
   stick raw (`dd` + compare), never sparse.
 
 ## Facts that cost time to learn
@@ -218,12 +218,15 @@ Upcoming upstream changes are watched through `upstream/quattro` (its migrations
   `modules/t2bce_audio-alsa-ucm-conf` are gone, replaced by `modules/apple-t2-bridge`
   (`snd_apple_t2`) and `modules/apple-t2-alsa-ucm-conf`. Re-pinning `t2bce-stack-dkms` or
   `t2bce-audio-ucm` at or past it would ship no keyboard driver: their `prepare()` stops the
-  build there. Moving to it is a port by hand (new package, initramfs `MODULES` in `fix-t2.sh`,
-  UCM, the DSP's udev match, the dotfiles' hid/audio assumptions).
+  build there. Ported by hand on 2026-11-19: `apple-t2-bridge-dkms` and `apple-t2-audio-ucm`
+  replace them (the old ones stay in the repo as the way back), `t2-ave` and `t2-dsp` moved
+  to `6ddacd9` with them, `fix-t2.sh` names the new modules, and the bridge package's install
+  script renames `t2bce_vhci` in an installed Mac's `apple-t2.conf` and `modules-load.d/t2.conf`
+  (installed Macs never run the fork's migrations).
   `kait2en-sync` took it for a repo-wide sweep (12 folders) until a commit that deletes or
   renames files in a package's paths stopped counting as one.
 
-- `t2_precision_trackpad` must load before `t2bce_vhci` (first in initramfs MODULES), or
+- `t2_precision_trackpad` must load before the T2's USB host (`apple_t2_vhci_hcd`, `t2bce_vhci` before; first in initramfs MODULES), or
   hid-apple takes the trackpad's mouse interface. It only claims that interface, so hid-apple
   keeps the keyboard (and the owner's `hid_apple` swaps).
 - Stock `btbcm` drops these Macs' LE advertisements ("unknown advertising packet type"):
@@ -328,8 +331,8 @@ before starting.
    `pmc_core/ltr_show` `SOUTHPORT_A` still 61 us. Wi-Fi, Bluetooth LE devices, S3 and AirDrop
    fine; first ping after idle unchanged (~2 ms).
 3. **`16_1` speaker DSP profile** (`dsp/profiles/16_1`, `install-dsp.sh`): **done 2026-11-12**: sounds like macOS, ~17% of one core while playing, 0 xruns. Packaged as `t2-dsp` at `402a353` (2026-11-08), the last DSP before
-   `6ddacd9`: its udev rule matches `KERNELS=="t2bce_audio"`, the driver in use; from `6ddacd9`
-   on it matches `snd_apple_t2`. PipeWire filter chain; needs `lsp-plugins-lv2` (`[extra]`) and
+   `6ddacd9`: its udev rule matched `KERNELS=="t2bce_audio"`; moved to `6ddacd9` with the bridge
+   port (2026-11-19), it matches `snd_apple_t2`. PipeWire filter chain; needs `lsp-plugins-lv2` (`[extra]`) and
    bankstown (`bankstown-lv2`, packaged here: AUR only). Userspace only: removing the package
    and rebooting undoes it.
 4. **Packaging the firmware fetcher here**, to drop `[arch-mact2]` (`SigLevel = Never`): **done
@@ -656,9 +659,8 @@ before starting.
      over BridgeXPC and merges the T2's unified logs with a Linux boot (`t2journal -b --grep
      'suspend|smc'`, `--list-boots`, `refresh [--sysdiagnose]`; snapshot in
      `~/.local/state/t2-journal`, ~41 MB, ~30 s to refresh). Tested; Touch ID unaffected.
-   - **`t2-ave`** (at `27fd5c9`, the `t2bce-stack-dkms` pin, so `t2remote` matches the installed
-     `t2bce_ave`/`t2bce_sidecar`; upstream later renames them `t2-ave`/`t2-sidecar` on
-     `apple-t2-bridge`): `t2-ave.service` (ours, for `kait2en-t2-remote.service`) loads the modules
+   - **`t2-ave`** (at `6ddacd9`, the `apple-t2-bridge-dkms` pin, so `t2remote` matches the installed
+     `t2_ave`/`t2_sidecar`; at `27fd5c9` with `t2bce_ave`/`t2bce_sidecar` until 2026-11-19): `t2-ave.service` (ours, for `kait2en-t2-remote.service`) loads the modules
      and runs `t2remote daemon` (root, `/run/t2remote.sock` root-only), which holds
      `com.apple.aveservice` and `…videoprocessingd.encode.remote`; the T2 then shows the Sidecar
      encoder as USB `05ac:9312`. V4L2 mem2mem: "Apple T2 HEVC Encoder" (`/dev/video2`, NV12/P010)
