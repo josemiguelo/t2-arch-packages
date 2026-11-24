@@ -13,6 +13,10 @@ and reports:
   - a carried patch whose part under the paths differs from upstream's now
   - a carried or ignored patch upstream no longer has
   - a patch not seen at review time that touches include/ (shared headers)
+  - a reviewed patch edited in place under its name since the review: what it
+    adds and removes under a package's paths (all of it when carried: the rest
+    is in the kernel and the carried part may need it) or in include/
+  - the kernel config changing since the review (signed-only modules, lockdown)
   - linux-omarchy's pkgver changing (the DKMS sources are pinned to it)
 
   bin/omarchy-patch-check [--fetch] [--repo PATH] [--ref REF]
@@ -34,6 +38,26 @@ PKGDIR = "pkgbuilds/linux-omarchy"
 def git(repo, *args):
     return subprocess.run(["git", "-C", repo, *args], check=True, text=True,
                           capture_output=True).stdout
+
+
+def changes(sections):
+    """The added and removed lines only: not context or offsets."""
+    return [l for s in sections for l in s.split("\n")
+            if l[:1] in "+-" and l and not re.match(r"(\+\+\+|---) (a/|b/|/dev/null)", l)]
+
+
+def config(text):
+    """{option: value} of a kernel config, unset ones as 'n'."""
+    out = dict(re.findall(r"(?m)^(CONFIG_\w+)=(.*)$", text))
+    out.update((o, "n") for o in re.findall(r"(?m)^# (CONFIG_\w+) is not set$", text))
+    return out
+
+
+def cant_read(repo, error):
+    """Report a git failure with git's own message; exit 2 (1 means findings)."""
+    why = (getattr(error, "stderr", None) or "").strip() or error
+    print(f"omarchy-patch-check: can't read omarchy-pkgs at {repo}: {why}", file=sys.stderr)
+    return 2
 
 
 def file_diffs(text):
@@ -70,13 +94,25 @@ def main():
         commit = git(args.repo, "rev-parse", "--short=8", args.ref).strip()
         pkgbuild = git(args.repo, "show", f"{args.ref}:{PKGDIR}/PKGBUILD")
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"omarchy-patch-check: can't read omarchy-pkgs at {args.repo}: {e}", file=sys.stderr)
-        return 2
+        return cant_read(args.repo, e)
 
     pkgver = re.search(r"(?m)^pkgver=(\S+)", pkgbuild).group(1)
     names = sorted(set(m[:-len(".patch")] for m in
-                       re.findall(r"\b[0-9]{4}-[A-Za-z0-9._+-]+\.patch\b", pkgbuild)))
-    patches = {n: file_diffs(git(args.repo, "show", f"{args.ref}:{PKGDIR}/{n}.patch")) for n in names}
+                       # ipu7-0004-... too: some patches carry a prefix.
+                       re.findall(r"(?<![\w.+-])(?:[a-z][a-z0-9]*-)*[0-9]{4}-[A-Za-z0-9._+-]+\.patch\b",
+                                  pkgbuild)))
+    # The prebuilt IPU7 module's, not the kernel's.
+    names = [n for n in names if not n.startswith("ipu7-")]
+    base = manifest["omarchy_pkgs_reviewed"]
+    try:
+        patches = {n: file_diffs(git(args.repo, "show", f"{args.ref}:{PKGDIR}/{n}.patch")) for n in names}
+        in_base = set(git(args.repo, "ls-tree", "--name-only", base, f"{PKGDIR}/").split())
+        edited = set(git(args.repo, "diff", "--name-only", base, args.ref, "--", PKGDIR).split())
+        before = {n: file_diffs(git(args.repo, "show", f"{base}:{PKGDIR}/{n}.patch")) for n in names
+                  if f"{PKGDIR}/{n}.patch" in edited & in_base}
+        configs = [config(git(args.repo, "show", f"{r}:{PKGDIR}/config.x86_64")) for r in (base, args.ref)]
+    except subprocess.CalledProcessError as e:
+        return cant_read(args.repo, e)
     reviewed = set(manifest["reviewed_patches"])
     findings = []
 
@@ -89,6 +125,23 @@ def main():
             hdrs = [p for p in patches[n] if p.startswith("include/")]
             if hdrs:
                 findings.append(f"new patch {n} changes shared headers: {', '.join(hdrs)}")
+
+    for n, old in before.items():
+        def differs(wanted):
+            return (changes(s for p, s in sorted(old.items()) if wanted(p))
+                    != changes(s for p, s in sorted(patches[n].items()) if wanted(p)))
+        where = [pkg for pkg, conf in manifest["packages"].items()
+                 if differs(lambda p: n in conf["carried"] or under(p, conf["paths"]))]
+        if differs(lambda p: p.startswith("include/")):
+            where.append("include/")
+        if where:
+            findings.append(f"{n} was edited since the review: {', '.join(where)}")
+
+    options = [f"{o} {configs[0].get(o, 'unset')} -> {configs[1].get(o, 'unset')}"
+               for o in sorted(set(configs[0]) | set(configs[1])) if configs[0].get(o) != configs[1].get(o)]
+    if options:
+        more = f" and {len(options) - 12} more" if len(options) > 12 else ""
+        findings.append(f"kernel config changed: {', '.join(options[:12])}{more}")
 
     for pkg, conf in manifest["packages"].items():
         prefixes, carried, ignored = conf["paths"], conf["carried"], conf["ignored"]
@@ -122,4 +175,8 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:  # a traceback's exit 1 would read as findings
+        print(f"omarchy-patch-check: {type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(2)

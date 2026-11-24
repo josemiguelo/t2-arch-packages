@@ -8,7 +8,7 @@
 #                          build every published DKMS package against the newest
 #                          linux-omarchy-headers of this machine's [omarchy] channel, or
 #                          of the named one (stable, rc, edge) (exit 0: all build, 1:
-#                          some don't — fix before Omarchy ships it)
+#                          some don't — fix before Omarchy ships it, 2: couldn't test)
 #   kait2en-sync notify    for a timer (waits up to 2 minutes for the network): check, bin/omarchy-patch-check (linux-omarchy's
 #                          own patches vs the DKMS packages), and kernel for this
 #                          machine's channel and for KAIT2EN_EARLY_CHANNELS (default
@@ -239,23 +239,38 @@ latest_headers() {
   [[ -n $name ]] || fail "[omarchy] has no linux-omarchy-headers"
   url=$server/$(bsdtar -xOf "$db" "$name" | sed -n '/^%FILENAME%$/{n;p}')
   file=$WORK/headers/${url##*/}
-  [[ -s $file ]] || curl -fsSL -o "$file" "$url"
-  [[ -s $file.sig ]] || curl -fsSL -o "$file.sig" "$url.sig"
-  pacman-key --verify "$file.sig" "$file" >/dev/null 2>&1 || fail "${file##*/}: bad signature"
+  # Kept only once it verifies: a download cut short would otherwise fail every
+  # later run.
+  if ! pacman-key --verify "$file.sig" "$file" >/dev/null 2>&1; then
+    rm -f "$file" "$file.sig"
+    curl -fsSL -o "$file.part" "$url" || fail "can't download $url"
+    curl -fsSL -o "$file.sig.part" "$url.sig" || fail "can't download $url.sig"
+    if ! pacman-key --verify "$file.sig.part" "$file.part" >/dev/null 2>&1; then
+      rm -f "$file.part" "$file.sig.part"
+      fail "${file##*/}: bad signature"
+    fi
+    mv "$file.sig.part" "$file.sig"
+    mv "$file.part" "$file"
+  fi
   echo "$file"
 }
 
 # Build the DKMS sources in the given package files against the newest headers
-# (of channel $KERNEL_CHANNEL when set, see latest_headers).
+# (of channel $KERNEL_CHANNEL when set, see latest_headers). Returns 2 when the
+# test couldn't run. The explicit returns matter: set -e is off in here when
+# called from an if or $(...), and a failed download went on to a guard run with
+# no sources, which passes (found 2026-11-24).
 test_dkms() {
   local headers src pkg
-  headers=$(latest_headers "${KERNEL_CHANNEL:-}")
+  headers=$(latest_headers "${KERNEL_CHANNEL:-}") || return 2
   src=$WORK/dkms-src
   rm -rf "$src"
   mkdir -p "$src"
   for pkg in "$@"; do
-    bsdtar -xf "$pkg" -C "$src" --strip-components=2 'usr/src/*' 2>/dev/null || true
+    bsdtar -xf "$pkg" -C "$src" --strip-components=2 'usr/src/*' 2>/dev/null ||
+      { warn "no DKMS sources in ${pkg##*/}"; return 2; }
   done
+  grep -q '^# t2-arch-packages' "$src"/*/dkms.conf 2>/dev/null || { warn "no DKMS sources to test"; return 2; }
   say "building the DKMS modules against ${headers##*/}"
   T2_DKMS_GUARD_SKIP= T2_DKMS_GUARD_SRC=$src bash "$GUARD" "$headers"
 }
@@ -265,7 +280,8 @@ release_fetch() {
   rm -rf "$dir"
   mkdir -p "$dir"
   gh release download "$RELEASE" -R "$GH_REPO" -D "$dir" \
-    -p "$DB.db.tar.zst" -p "$DB.db.tar.zst.sig" -p "$DB.files.tar.zst" -p "$DB.files.tar.zst.sig" "$@"
+    -p "$DB.db.tar.zst" -p "$DB.db.tar.zst.sig" -p "$DB.files.tar.zst" -p "$DB.files.tar.zst.sig" "$@" ||
+    fail "can't download the $RELEASE release of $GH_REPO"
   gpg --verify "$dir/$DB.db.tar.zst.sig" "$dir/$DB.db.tar.zst" 2>/dev/null || fail "the published $DB.db has a bad signature"
   echo "$dir"
 }
@@ -273,7 +289,7 @@ release_fetch() {
 cmd_kernel() {
   local dir
   KERNEL_CHANNEL=${1:-}
-  dir=$(release_fetch -p '*-dkms-*.pkg.tar.zst')
+  dir=$(release_fetch -p '*-dkms-*.pkg.tar.zst') || return 2
   test_dkms "$dir"/*-dkms-*.pkg.tar.zst
 }
 
@@ -310,7 +326,7 @@ cmd_apply() {
   fi
 
   local rel old
-  rel=$(release_fetch)
+  rel=$(release_fetch) || return 2
   cp "${built[@]}" "${built[@]/%/.sig}" "$rel/"
   (cd "$rel" && repo-add --sign --key "$KEY" --verify "$DB.db.tar.zst" "${built[@]##*/}" >/dev/null)
   for f in "$DB.db" "$DB.files"; do
@@ -335,6 +351,18 @@ cmd_apply() {
   say "published: ${pins[*]}"
 }
 
+# Waits up to $1 seconds (plus a last try's 10) until GitHub answers. Not
+# nm-online: right after a wake NetworkManager reports CONNECTED_LOCAL (a local
+# bridge such as virbr0 is up), which nm-online takes as online, so it returned
+# 6 s before Wi-Fi was back (2026-11-24). A captive portal fails the TLS check.
+wait_online() {
+  local end=$((SECONDS + $1))
+  until curl -fsS -o /dev/null --max-time 10 https://github.com 2>/dev/null; do
+    (( SECONDS < end )) || return 1
+    sleep 3
+  done
+}
+
 # For a timer: check, omarchy-patch-check, and kernel for this machine's
 # channel and the early ones whenever one has headers not tested yet; a
 # desktop notification for anything to act on.
@@ -343,7 +371,7 @@ cmd_notify() {
   # A run missed during sleep starts the moment the Mac wakes, before Wi-Fi is
   # back: wait for the network, and if it doesn't come, skip today quietly
   # (tomorrow's run catches up) rather than report failed fetches.
-  if command -v nm-online >/dev/null && ! nm-online -q -t 120; then
+  if ! wait_online 120; then
     echo "kait2en-sync notify: no network after 2 minutes; skipping this run" >&2
     return 0
   fi
@@ -366,10 +394,17 @@ cmd_notify() {
   # whose newest headers are listed (rc between release cycles carries
   # stable's) costs nothing.
   for channel in "" $EARLY_CHANNELS; do
-    headers=$(latest_headers "$channel" 2>/dev/null) || continue
+    if ! headers=$(latest_headers "$channel" 2>&1); then
+      notify-send -a kait2en-sync "T2 modules: couldn't get the ${channel:-current} kernel headers to test" "$(tail -1 <<<"$headers")"
+      continue
+    fi
     grep -qxF "${headers##*/}" "$stamp" 2>/dev/null && continue
-    if out=$(cmd_kernel "$channel" 2>&1); then
+    rc=0; out=$(cmd_kernel "$channel" 2>&1) || rc=$?
+    if (( rc == 0 )); then
       echo "${headers##*/}" >> "$stamp"
+    elif (( rc == 2 )); then
+      notify-send -a kait2en-sync "T2 modules: couldn't test them against ${headers##*/}" \
+        "$(tail -2 <<<"$out") — tomorrow's run tries again"
     else
       where=${channel:+"Omarchy's $channel channel has"}
       notify-send -a kait2en-sync -u critical "T2 modules aren't ready for ${headers##*/}" \

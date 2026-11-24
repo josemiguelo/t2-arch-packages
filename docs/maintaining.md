@@ -23,7 +23,7 @@ commits back if ever wanted.
 - `kait2en-sync kernel [channel]`: builds every published DKMS package against
   the newest `linux-omarchy-headers` of this machine's `[omarchy]` channel, or
   of the named one (`stable`, `rc`, `edge`), ahead of Omarchy shipping that
-  kernel. Exit 1 when one doesn't build.
+  kernel. Exit 1 when one doesn't build, 2 when the test couldn't run.
 - `kait2en-sync notify`: for a timer: `check`, `omarchy-patch-check`, and
   `kernel` for this machine's channel and for `KAIT2EN_EARLY_CHANNELS`
   (default `rc`) whenever one has headers it hasn't tested yet; desktop

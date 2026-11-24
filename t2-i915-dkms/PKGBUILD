@@ -21,11 +21,12 @@
 # amdgpu: 0001 only changes a quirk table, no symbol, so amdgpu keeps loading.
 #
 # The sources must match the kernel the modules load into: linux-omarchy 7.2.x
-# is kernel.org 7.2.15 plus patches of its own; its 12 i915 ones (0400-0406,
-# 0420, 0430, 0440, 0443, 0475; none in drm/display) are not carried: they're
-# for Lunar/Panther Lake, Panel Replay, Dell XPS panels, DSB and PSR2 (which
-# 0004 turns off here), nothing the UHD 630 driving the eDP panel uses (audited
-# 2026-11-16 at omarchy-pkgs bbe598b4; bin/omarchy-patch-check flags new ones).
+# is kernel.org 7.2.15 plus patches of its own; its 17 i915 ones (0400-0410,
+# 0420, 0430, 0440, 0443, 0475, 0477; none in drm/display) are not carried:
+# they're for Lunar/Panther Lake, Panel Replay, Dell and HP panels, DSB and PSR2
+# (which 0004 turns off here), or wake the panel at probe, where this one answers
+# anyway (0477); nothing the UHD 630 driving the eDP panel needs (audited
+# 2026-11-24 at omarchy-pkgs 2b949611; bin/omarchy-patch-check flags new ones).
 # BUILD_EXCLUSIVE_KERNEL keeps it to 7.2.x -omarchy kernels. KaiT2en's out-of-tree build fix: the trace headers'
 # include paths made relative (and the KUnit tests left out where listed).
 #

@@ -26,16 +26,19 @@
 # Applied with no fuzz; builds without warnings in about 4 minutes (988 objects).
 #
 # The sources must match the kernel the module loads into: linux-omarchy 7.2.x
-# is kernel.org 7.2.15 plus patches of its own, ~16 of them in amdgpu (none
-# needed to build or for the eDP panel). Four are carried, applied first
-# (omarchy-*.patch, from omarchy-pkgs pkgbuilds/linux-omarchy at bbe598b4,
+# is kernel.org 7.2.15 plus patches of its own, 23 of them in amdgpu (none
+# needed to build or for the eDP panel). Three are carried, applied first
+# (omarchy-*.patch, from omarchy-pkgs pkgbuilds/linux-omarchy at 2b949611,
 # only their drivers/gpu/drm/amd part: the DRM core part is in the kernel):
 #   0460  DisplayID DSC bpp, 0461  DSC passthrough mode match (DSC monitors)
 #   0476  YCbCr 4:2:0-only modes (e.g. 4K60 TVs over USB-C adapters)
-#   0478  FreeSync's VCP code check on HDMI converters (PCON)
-# Not carried: 0450-0456, 0479 (native HDMI 2.1/FRL ports), 0472 (user queues),
-# 0474 (OLED eDP backlight), 0481 (DCN31), 0712 (AMD APUs). bin/omarchy-patch-check
-# flags new ones. BUILD_EXCLUSIVE_KERNEL keeps it to 7.2.x -omarchy kernels
+# Not carried: 0450-0456, 0479, 0482-0485 (native HDMI 2.1/FRL ports), 0462 (DSC
+# rate control, for a VR headset), 0472 (user queues), 0474 (OLED eDP backlight),
+# 0480 (nothing gained on DCN 2.0), 0481 (DCN31), 0486-0488 (VRR gate the
+# FreeSync module applies anyway), 0712 (AMD APUs). 0478 (FreeSync's VCP code
+# check, carried until pkgrel 2) is gone from linux-omarchy: Navi 14 (no DMUB)
+# never reads that code, so it could only turn VRR off behind an HDMI converter.
+# bin/omarchy-patch-check flags new ones. BUILD_EXCLUSIVE_KERNEL keeps it to 7.2.x -omarchy kernels
 # (t2-dkms-guard holds a 7.3 kernel back until this moves).
 # Only amdgpu.ko is rebuilt: every patch lands in amdgpu/, display/ or pm/,
 # all linked into it. The build tree takes ~3 GB while DKMS builds.
@@ -46,7 +49,7 @@ pkgname=t2-amdgpu-dkms
 _kver=7.2.15
 _modname=t2-amdgpu
 pkgver=7.2.15.r1
-pkgrel=2
+pkgrel=3
 pkgdesc="amdgpu with KaiT2en's Apple GMUX runtime PM (the dGPU off in hybrid mode) for dual-GPU T2 Macs, DKMS"
 arch=('any')
 url="https://github.com/kaiT2en/KaiT2en-Fedora"
@@ -63,13 +66,12 @@ _patches=(0002-drm-amdgpu-Add-Apple-GMUX-runtime-PM-support.patch
           0012-drm-amd-display-avoid-MPC-pipe-split-on-the-MacBookPro16-1.patch)
 _omarchy=(omarchy-0460-vesa-displayid-dsc-bpp.patch
           omarchy-0461-vesa-dsc-passthru-mode-match-fix.patch
-          omarchy-0476-amd-display-ycbcr420-only-modes.patch
-          omarchy-0478-amd-freesync-vcp-code-check-hdmi-pcon.patch)
+          omarchy-0476-amd-display-ycbcr420-only-modes.patch)
 source=("https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-${_kver}.tar.xz"
         "${_omarchy[@]}" "${_patches[@]}")
 noextract=("linux-${_kver}.tar.xz")
 sha256sums=('d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab'
-            SKIP SKIP SKIP SKIP
+            SKIP SKIP SKIP
             SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP)
 
 prepare() {
